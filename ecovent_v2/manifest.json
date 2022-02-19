@@ -1,0 +1,15 @@
+{
+  "domain": "ecovent_v2",
+  "name": "EcoVentV2",
+  "config_flow": true,
+  "documentation": "https://www.home-assistant.io/integrations/ecovent_v2",
+  "requirements": ["pyEcoventV2==0.9.2"],
+  "ssdp": [],
+  "zeroconf": [],
+  "homekit": {},
+  "dependencies": [],
+  "codeowners": [
+    "@gody01"
+  ],
+  "iot_class": "local_polling"
+}

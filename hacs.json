@@ -3,6 +3,6 @@
   "content_in_root": false,
   "domains": ["fan"],  
   "homeassistant": "2022.2.1",
-  "iot_class": "local_poll"
+  "iot_class": "local_poll",
+  "render_readme": true
 }
-

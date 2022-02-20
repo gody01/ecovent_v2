@@ -1,5 +1,3 @@
-from ecoventv2 import Fan
-
 from homeassistant.components.fan import (
     SUPPORT_DIRECTION,
     SUPPORT_OSCILLATE,
@@ -7,10 +5,14 @@ from homeassistant.components.fan import (
     SUPPORT_SET_SPEED,
     FanEntity,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
+from homeassistant.helpers.typing import ConfigType
+
+from . import VentoFan
+from .const import DOMAIN
 
 # _LOGGER = logging.getLogger(__name__)
 
@@ -26,7 +28,10 @@ DIRECTIONS = ["ventilation", "air_supply", "heat_recovery"]
 
 
 async def async_setup_platform(
-    hass, config, async_add_entities, discovery_info=None
+    hass: HomeAssistant,
+    config: ConfigType,
+    async_add_entities: AddEntitiesCallback,
+    discovery_info=None,
 ) -> None:
     """Set up the Ecovent fan platform."""
     async_add_entities([VentoExpertFan(hass, config)])
@@ -38,31 +43,41 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Ecovent Fan config entry."""
-    await async_setup_platform(hass, config_entry, async_add_entities)
+    await async_setup_platform(hass, config_entry, async_add_entities, None)
 
 
-class VentoExpertFan(Fan, FanEntity):
+class VentoExpertFan(FanEntity):
     def __init__(self, hass, config) -> None:
         """Initialize fan."""
-        host = config.data["host"]
-        port = config.data["port"]
-        password = config.data["password"]
-        fan_id = config.data["fan_id"]
-        name = config.data["name"]
-        super().__init__(host, password, fan_id, name, port)
-        self.update()
-        self._percentage = self.man_speed
-        self._supported_features = FULL_SUPPORT
+
+        component: VentoFan = hass.data[DOMAIN][config.entry_id]
+        self._fan = component._fan
+        self._percentage = self._fan.man_speed
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self._fan.id)},
+            "name": self._fan.name,
+            "model": self._fan.unit_type,
+            "sw_version": self._fan.firmware,
+            "manufacturer": "Balauberg",
+        }
 
     @property
     def name(self) -> str:
         """Get entity name."""
-        return self._name
+        return self._fan.name
 
     @property
     def unique_id(self):
         """Return the unique id."""
-        return self._id
+        return self._fan.id
+
+    @property
+    def state(self):
+        """Return state."""
+        return self._fan.state
 
     @property
     def percentage(self):
@@ -82,22 +97,26 @@ class VentoExpertFan(Fan, FanEntity):
     @property
     def preset_mode(self) -> str:
         """Return the current preset mode, e.g., auto, smart, interval, favorite."""
-        return self.speed
+        return self._fan.speed
 
     @property
     def current_direction(self) -> str:
         """Fan direction."""
-        return self.airflow
+        return self._fan.airflow
 
     @property
     def oscillating(self) -> bool:
         """Oscillating."""
-        return self.airflow == "heat_recovery"
+        return self._fan.airflow == "heat_recovery"
 
     @property
     def supported_features(self) -> int:
         """Flag supported features."""
         return FULL_SUPPORT
+
+    async def async_update(self):
+        self._fan.update()
+        self._percentage = self._fan.man_speed
 
     # pylint: disable=arguments-differ
     def turn_on(
@@ -108,20 +127,20 @@ class VentoExpertFan(Fan, FanEntity):
         **kwargs,
     ) -> None:
         """Turn on the entity."""
-        self.set_param("state", "on")
+        self._fan.set_param("state", "on")
         self.schedule_update_ha_state()
 
     def turn_off(self, **kwargs) -> None:
         """Turn off the entity."""
-        self.set_param("state", "off")
+        self._fan.set_param("state", "off")
         self.schedule_update_ha_state()
 
     def set_preset_mode(self, preset_mode: str):
         """Set the preset mode of the fan."""
         if preset_mode in self.preset_modes:
-            self.set_param("speed", preset_mode)
+            self._fan.set_param("speed", preset_mode)
             if preset_mode == "manual":
-                self.set_man_speed_percent(self.percentage)
+                self._fan.set_man_speed_percent(self.percentage)
             self.schedule_update_ha_state()
         else:
             raise ValueError(f"Invalid preset mode: {preset_mode}")
@@ -129,40 +148,41 @@ class VentoExpertFan(Fan, FanEntity):
     def set_percentage(self, percentage: int):
         """Set the speed of the fan, as a percentage."""
         self._percentage = percentage
-        if self.speed == "manual":
-            self.set_man_speed_percent(percentage)
+        if self._fan.speed == "manual":
+            self._fan.set_man_speed_percent(percentage)
 
     def set_direction(self, direction: str) -> None:
         """Set the direction of the fan."""
         if direction == "forward":
-            self.set_param("airflow", "ventilation")
+            self._fan.set_param("airflow", "ventilation")
         if direction == "reverse":
-            self.set_param("airflow", "air_supply")
+            self._fan.set_param("airflow", "air_supply")
         self.schedule_update_ha_state()
 
     def oscillate(self, oscillating: bool) -> None:
         """Set oscillation."""
         if oscillating:
-            self.set_param("airflow", "heat_recovery")
+            self._fan.set_param("airflow", "heat_recovery")
         else:
             self.set_direction("forward")
-            self.update()
         self.schedule_update_ha_state()
 
     # async def async_increase_speed(self, percentage_step: int):
+    # pylint: disable=arguments-differ
     async def async_increase_speed(self, percentage_step: int) -> None:
         new_percentage = int(self.percentage) + percentage_step
         if new_percentage > 100:
             new_percentage = 100
         self._percentage = new_percentage
-        if self.set_speed == "manual":
-            self.set_man_speed_percent(new_percentage)
+        if self._fan.set_speed == "manual":
+            self._fan.set_man_speed_percent(new_percentage)
 
     # async def async_decrease_speed(self, percentage_step: int):
+    # pylint: disable=arguments-differ
     async def async_decrease_speed(self, percentage_step: int) -> None:
         new_percentage = int(self.percentage) - percentage_step
         if new_percentage < 5:
             new_percentage = 5
         self._percentage = new_percentage
-        if self.speed == "manual":
-            self.set_man_speed_percent(new_percentage)
+        if self._fan.speed == "manual":
+            self._fan.set_man_speed_percent(new_percentage)

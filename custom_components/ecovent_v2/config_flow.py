@@ -13,6 +13,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 
+from homeassistant.const import (
+    CONF_DEVICE_ID,
+    CONF_IP_ADDRESS,
+    CONF_PORT,
+    CONF_NAME,
+    CONF_PASSWORD,
+)
+
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -20,11 +28,11 @@ _LOGGER = logging.getLogger(__name__)
 # TODO adjust the data schema to the data that you need
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        vol.Required("host"): str,
-        vol.Optional("port", default=4000): int,
-        vol.Optional("fan_id", default="DEFAULT_DEVICEID"): str,
-        vol.Required("password", default="1111"): str,
-        vol.Optional("name", default="Vento Expert Fan"): str,
+        vol.Required(CONF_IP_ADDRESS, default="10.94.0.255"): str,
+        vol.Optional(CONF_PORT, default=4000): int,
+        vol.Optional(CONF_DEVICE_ID, default="DEFAULT_DEVICEID"): str,
+        vol.Required(CONF_PASSWORD, default="1111"): str,
+        vol.Optional(CONF_NAME, default="Vento Expert Fan"): str,
     }
 )
 
@@ -39,10 +47,12 @@ class PlaceholderHub:
         self.host = host
         self.port = port
         self.fan_id = fan_id
+        self.fan = None
         self.name = name
 
     async def authenticate(self, password: str) -> bool:
         self.fan = Fan(self.host, password, self.fan_id, self.name, self.port)
+        self.fan.init_device()
         self.fan_id = self.fan.id
         self.name = self.name + " " + self.fan_id
         return self.fan.id != "DEFAULT_DEVICEID"
@@ -61,9 +71,11 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     #     your_validate_func, data["username"], data["password"]
     # )
 
-    hub = PlaceholderHub(data["host"], data["port"], data["fan_id"], data["name"])
+    hub = PlaceholderHub(
+        data[CONF_IP_ADDRESS], data[CONF_PORT], data[CONF_DEVICE_ID], data[CONF_NAME]
+    )
 
-    if not await hub.authenticate(data["password"]):
+    if not await hub.authenticate(data[CONF_PASSWORD]):
         raise InvalidAuth
 
     # If you cannot connect:

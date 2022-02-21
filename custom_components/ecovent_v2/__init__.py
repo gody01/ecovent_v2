@@ -1,6 +1,6 @@
 """The EcoVent_v2 integration."""
 from __future__ import annotations
-
+from datetime import timedelta
 import asyncio
 import logging
 import voluptuous as vol
@@ -8,7 +8,11 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_component import EntityComponent
-
+from homeassistant.helpers.update_coordinator import (
+    CoordinatorEntity,
+    DataUpdateCoordinator,
+    UpdateFailed,
+)
 from .const import DOMAIN
 
 from ecoventv2 import Fan
@@ -32,10 +36,16 @@ PLATFORMS: list[str] = ["fan", "sensor"]
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up EcoVent_v2 from a config entry."""
 
-    if DOMAIN not in hass.data:
-        hass.data[DOMAIN] = {}
+    coordinator = VentoFanDataUpdateCoordinator(
+        hass,
+        entry,
+    )
 
-    hass.data[DOMAIN][entry.entry_id] = VentoFan(hass, entry)
+    await coordinator.async_config_entry_first_refresh()
+
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN][entry.entry_id] = coordinator
+
     hass.config_entries.async_setup_platforms(entry, PLATFORMS)
 
     return True
@@ -49,11 +59,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unload_ok
 
 
-class VentoFan(EntityComponent):
-    """We only want to have common instance of Fan."""
-
-    def __init__(self, hass, config: ConfigEntry):
-        super().__init__(_LOGGER, config.domain, hass)
+class VentoFanDataUpdateCoordinator(DataUpdateCoordinator):
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        config: ConfigEntry,
+    ) -> None:
+        """Initialize global Venstar data updater."""
         self._fan = Fan(
             config.data[CONF_IP_ADDRESS],
             config.data[CONF_PASSWORD],
@@ -62,7 +74,18 @@ class VentoFan(EntityComponent):
             config.data[CONF_PORT],
         )
         self._fan.init_device()
-        self._fan.update()
 
-    async def async_update(self):
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=DOMAIN,
+            update_interval=timedelta(seconds=60),
+            update_method=self._fan.update(),
+        )
+
+    async def _async_update_data(self) -> None:
+        """Fetch data from API endpoint.
+        This is the place to pre-process the data to lookup tables
+        so entities can quickly look up their data.
+        """
         self._fan.update()

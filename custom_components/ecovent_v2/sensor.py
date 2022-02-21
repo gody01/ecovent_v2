@@ -6,25 +6,17 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorStateClass,
 )
-
 from homeassistant.config_entries import ConfigEntry
-
-from homeassistant.const import (
-    ATTR_BATTERY_LEVEL,
-    CONCENTRATION_PARTS_PER_MILLION,
-    ENERGY_KILO_WATT_HOUR,
-    PERCENTAGE,
-    FREQUENCY_HERTZ,
-    POWER_WATT,
-    TEMP_CELSIUS,
-    DEVICE_CLASS_HUMIDITY,
-)
-
+from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType, StateType
-from . import VentoFan
+from homeassistant.helpers.update_coordinator import (
+    CoordinatorEntity,
+    DataUpdateCoordinator,
+)
+
 from .const import DOMAIN
 
 
@@ -54,34 +46,30 @@ async def async_setup_entry(
     await async_setup_platform(hass, config_entry, async_add_entities)
 
 
-class HumiditySensor(SensorEntity):
+class HumiditySensor(CoordinatorEntity, SensorEntity):
     """Representation of a Humidity sensor."""
 
-    _attr_should_poll = True
+    _attr_device_class = SensorDeviceClass.HUMIDITY
+    # _attr_state_class = SensorStateClass.MEASUREMENT
+    # _attr_device_class = None
+    _attr_native_unit_of_measurement = PERCENTAGE
 
     def __init__(self, hass, config) -> None:
         """Initialize the sensor."""
-
-        component: VentoFan = hass.data[DOMAIN][config.entry_id]
-        self._fan = component._fan
-
-        self._attr_name = "Humidity"
-        self._attr_native_unit_of_measurement = PERCENTAGE
-        self._attr_device_class = SensorDeviceClass.HUMIDITY
-        self._attr_state_class = SensorStateClass.MEASUREMENT
+        coordinator: DataUpdateCoordinator = hass.data[DOMAIN][config.entry_id]
+        super().__init__(coordinator)
+        self._fan = coordinator._fan
 
         self._attr_name = self._fan.name + "_humidity"
         self._attr_unique_id = self._fan.id + "_humidity"
-        self._attr_native_value = self._fan.humidity
-        self._humidity = self._fan.humidity
 
-    async def async_update(self) -> None:
-        """Fetch new state data for the sensor.
-        This is the only method that should fetch new data for Home Assistant.
-        """
-        self._fan.update()
-        self._humidity = self._fan.humidity
-        self._attr_native_value = self._fan.humidity
+    @property
+    def native_value(self):
+        return self._fan.humidity
+
+    # @property
+    # def humidity(self):
+    #    return self._fan.humidity
 
     @property
     def device_info(self):
@@ -91,30 +79,24 @@ class HumiditySensor(SensorEntity):
         }
 
 
-class Fan1SpeedSensor(SensorEntity):
-    """Fan Speed 1."""
+class Fan1SpeedSensor(CoordinatorEntity, SensorEntity):
 
-    _attr_should_poll = True
+    _attr_device_class = None
+    _attr_state_class = None
+    # _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "rpm"
 
     def __init__(self, hass, config) -> None:
-        """Initialize the sensor."""
+        coordinator: DataUpdateCoordinator = hass.data[DOMAIN][config.entry_id]
+        super().__init__(coordinator)
 
-        component: VentoFan = hass.data[DOMAIN][config.entry_id]
-        self._fan = component._fan
-
-        self._attr_native_unit_of_measurement = "rpm"
-        self._attr_device_class = None
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_name = self._fan.name + "_speed1"
+        self._fan = coordinator._fan
         self._attr_unique_id = self._fan.id + "_speed1"
-        self._attr_native_value = self._fan.fan1_speed
+        self._attr_name = self._fan.name + "_speed1"
 
-    async def async_update(self) -> None:
-        """Fetch new state data for the sensor.
-        This is the only method that should fetch new data for Home Assistant.
-        """
-        self._fan.update()
-        self._attr_native_value = self._fan.fan1_speed
+    @property
+    def native_value(self):
+        return self._fan.fan1_speed
 
     @property
     def device_info(self):
@@ -124,30 +106,24 @@ class Fan1SpeedSensor(SensorEntity):
         }
 
 
-class Fan2SpeedSensor(SensorEntity):
-    """Fan Speed 2."""
+class Fan2SpeedSensor(CoordinatorEntity, SensorEntity):
 
-    _attr_should_poll = True
+    _attr_device_class = None
+    _attr_state_class = None
+    # _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "rpm"
 
     def __init__(self, hass, config) -> None:
-        """Initialize the sensor."""
+        coordinator: DataUpdateCoordinator = hass.data[DOMAIN][config.entry_id]
+        super().__init__(coordinator)
+        self._fan = coordinator._fan
 
-        component: VentoFan = hass.data[DOMAIN][config.entry_id]
-        self._fan = component._fan
-
-        self._attr_native_unit_of_measurement = "rpm"
-        self._attr_device_class = None
-        self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_name = self._fan.name + "_speed2"
         self._attr_unique_id = self._fan.id + "_speed2"
-        self._attr_native_value = self._fan.fan2_speed
 
-    async def async_update(self) -> None:
-        """Fetch new state data for the sensor.
-        This is the only method that should fetch new data for Home Assistant.
-        """
-        self._fan.update()
-        self._attr_native_value = self._fan.fan2_speed
+    @property
+    def native_value(self):
+        return self._fan.fan2_speed
 
     @property
     def device_info(self):
@@ -157,30 +133,21 @@ class Fan2SpeedSensor(SensorEntity):
         }
 
 
-class AirflowSensor(SensorEntity):
-    """Airflow sensor."""
-
-    _attr_should_poll = True
+class AirflowSensor(CoordinatorEntity, SensorEntity):
+    _attr_native_unit_of_measurement = None
+    _attr_device_class = None
+    _attr_state_class = None
 
     def __init__(self, hass, config) -> None:
-        """Initialize the sensor."""
-
-        component: VentoFan = hass.data[DOMAIN][config.entry_id]
-        self._fan = component._fan
-
-        self._attr_native_unit_of_measurement = None
-        self._attr_device_class = None
-        self._attr_state_class = None
+        coordinator: DataUpdateCoordinator = hass.data[DOMAIN][config.entry_id]
+        super().__init__(coordinator)
+        self._fan = coordinator._fan
         self._attr_name = self._fan.name + "_airflow"
         self._attr_unique_id = self._fan.id + "_airflow"
-        self._attr_native_value = self._fan.airflow
 
-    async def async_update(self) -> None:
-        """Fetch new state data for the sensor.
-        This is the only method that should fetch new data for Home Assistant.
-        """
-        self._fan.update()
-        self._attr_native_value = self._fan.airflow
+    @property
+    def native_value(self):
+        return self._fan.airflow
 
     @property
     def device_info(self):

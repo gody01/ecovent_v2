@@ -21,3 +21,11 @@ Currently supported:
 -- "forward" means 'ventilation' airflow
 -- "reverse" means 'air_supply' airflow
 
+version 0.0.5:
+- Added sensors:
+-- Humidity
+-- Fan1 speed
+-- Fan2 speed
+-- Airflow
+- Changed
+-- Update method to DataUpdateCoordinator for reduced request to FAN device

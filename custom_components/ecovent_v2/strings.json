@@ -3,9 +3,11 @@
     "step": {
       "user": {
         "data": {
-          "host": "[%key:common::config_flow::data::host%]",
-          "username": "[%key:common::config_flow::data::username%]",
-          "password": "[%key:common::config_flow::data::password%]"
+          "ip_address": "[%key:common::config_flow::data::ip_address%]",
+          "port": "[%key:common::config_flow::data::port%]",
+          "password": "[%key:common::config_flow::data::password%]",
+          "device_id": "[%key:common::config_flow::data::device_id%]",
+          "name": "[%key:common::config_flow::data::name%]"
         }
       }
     },

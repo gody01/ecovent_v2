@@ -1,22 +1,26 @@
 """EcoVentV2 platform sensors."""
 from __future__ import annotations
+from xml.sax.handler import property_encoding
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
     SensorStateClass,
 )
+
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.const import PERCENTAGE
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType, StateType
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
 )
 
+from ecoventv2 import Fan
 from .const import DOMAIN
 
 
@@ -29,10 +33,138 @@ async def async_setup_platform(
     """Set up the Demo sensors."""
     async_add_entities(
         [
-            HumiditySensor(hass, config),
-            Fan1SpeedSensor(hass, config),
-            Fan2SpeedSensor(hass, config),
-            AirflowSensor(hass, config),
+            VentoSensor(
+                hass,
+                config,
+                "_humidity",
+                "humidity",
+                PERCENTAGE,
+                SensorDeviceClass.HUMIDITY,
+                SensorStateClass.MEASUREMENT,
+                None,
+                True,
+            ),
+            VentoSensor(
+                hass,
+                config,
+                "_speed1",
+                "fan1_speed",
+                None,
+                None,
+                None,
+                EntityCategory.DIAGNOSTIC,
+                False,
+            ),
+            VentoSensor(
+                hass,
+                config,
+                "_speed2",
+                "fan2_speed",
+                None,
+                None,
+                None,
+                EntityCategory.DIAGNOSTIC,
+                False,
+            ),
+            VentoSensor(
+                hass,
+                config,
+                "_airflow",
+                "airflow",
+                None,
+                None,
+                None,
+                None,
+                True,
+            ),
+            VentoSensor(
+                hass,
+                config,
+                "_timer_counter",
+                "timer_counter",
+                None,
+                None,
+                None,
+                EntityCategory.DIAGNOSTIC,
+                False,
+            ),
+            VentoSensor(
+                hass,
+                config,
+                "_battery",
+                "battery_voltage",
+                PERCENTAGE,
+                SensorDeviceClass.BATTERY,
+                SensorStateClass.MEASUREMENT,
+                EntityCategory.SYSTEM,
+                False,
+            ),
+            VentoSensor(
+                hass,
+                config,
+                "_humidity_treshold",
+                "humidity_treshold",
+                PERCENTAGE,
+                None,
+                None,
+                EntityCategory.CONFIG,
+                False,
+            ),
+            VentoSensor(
+                hass,
+                config,
+                "_filter_change_in",
+                "filter_timer_countdown",
+                None,
+                None,
+                None,
+                EntityCategory.DIAGNOSTIC,
+                True,
+            ),
+            VentoSensor(
+                hass,
+                config,
+                "_boost_time",
+                "boost_time",
+                None,
+                None,
+                None,
+                EntityCategory.CONFIG,
+                True,
+            ),
+            VentoSensor(
+                hass,
+                config,
+                "_analogV",
+                "analogV",
+                None,
+                None,
+                None,
+                EntityCategory.DIAGNOSTIC,
+                True,
+            ),
+            VentoSensor(
+                hass,
+                config,
+                "_machine_hours",
+                "machine_hours",
+                None,
+                None,
+                None,
+                EntityCategory.DIAGNOSTIC,
+                True,
+            ),
+            VentoSensor(
+                hass,
+                config,
+                "_analogV_treshold",
+                "analogV_treshold",
+                None,
+                None,
+                None,
+                EntityCategory.CONFIG,
+                True,
+            ),
         ],
     )
 
@@ -46,108 +178,76 @@ async def async_setup_entry(
     await async_setup_platform(hass, config_entry, async_add_entities)
 
 
-class HumiditySensor(CoordinatorEntity, SensorEntity):
-    """Representation of a Humidity sensor."""
-
-    _attr_device_class = SensorDeviceClass.HUMIDITY
-    # _attr_state_class = SensorStateClass.MEASUREMENT
-    # _attr_device_class = None
-    _attr_native_unit_of_measurement = PERCENTAGE
-
-    def __init__(self, hass, config) -> None:
-        """Initialize the sensor."""
+class VentoSensor(CoordinatorEntity, SensorEntity):
+    def __init__(
+        self,
+        hass,
+        config,
+        name="VentoSensor",
+        method=None,
+        native_unit_of_measurement=None,
+        device_class=None,
+        state_class=None,
+        entity_category=EntityCategory.SYSTEM,
+        enable_by_default=True,
+    ) -> None:
         coordinator: DataUpdateCoordinator = hass.data[DOMAIN][config.entry_id]
         super().__init__(coordinator)
-        self._fan = coordinator._fan
-
-        self._attr_name = self._fan.name + "_humidity"
-        self._attr_unique_id = self._fan.id + "_humidity"
+        self._fan: Fan = coordinator._fan
+        self._attr_native_unit_of_measurement = native_unit_of_measurement
+        self._attr_device_class = device_class
+        self._attr_state_class = state_class
+        self._attr_entity_category = entity_category
+        self._attr_name = self._fan.name + name
+        self._attr_unique_id = self._fan.id + name
+        self._attr_entity_registry_enabled_default = enable_by_default
+        self._method = getattr(self, method)
 
     @property
     def native_value(self):
+        self._attr_native_value = self._method()
+        return self._attr_native_value
+
+    def get_native_value(self):
+        val = self._fan.get_param(self._method)
+        return val
+
+    def humidity(self):
         return self._fan.humidity
 
-    # @property
-    # def humidity(self):
-    #    return self._fan.humidity
-
-    @property
-    def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self._fan.id)},
-            "name": self._attr_name,
-        }
-
-
-class Fan1SpeedSensor(CoordinatorEntity, SensorEntity):
-
-    _attr_device_class = None
-    _attr_state_class = None
-    # _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_native_unit_of_measurement = "rpm"
-
-    def __init__(self, hass, config) -> None:
-        coordinator: DataUpdateCoordinator = hass.data[DOMAIN][config.entry_id]
-        super().__init__(coordinator)
-
-        self._fan = coordinator._fan
-        self._attr_unique_id = self._fan.id + "_speed1"
-        self._attr_name = self._fan.name + "_speed1"
-
-    @property
-    def native_value(self):
+    def fan1_speed(self):
         return self._fan.fan1_speed
 
-    @property
-    def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self._fan.id)},
-            "name": self._attr_name,
-        }
-
-
-class Fan2SpeedSensor(CoordinatorEntity, SensorEntity):
-
-    _attr_device_class = None
-    _attr_state_class = None
-    # _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_native_unit_of_measurement = "rpm"
-
-    def __init__(self, hass, config) -> None:
-        coordinator: DataUpdateCoordinator = hass.data[DOMAIN][config.entry_id]
-        super().__init__(coordinator)
-        self._fan = coordinator._fan
-
-        self._attr_name = self._fan.name + "_speed2"
-        self._attr_unique_id = self._fan.id + "_speed2"
-
-    @property
-    def native_value(self):
+    def fan2_speed(self):
         return self._fan.fan2_speed
 
-    @property
-    def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self._fan.id)},
-            "name": self._attr_name,
-        }
-
-
-class AirflowSensor(CoordinatorEntity, SensorEntity):
-    _attr_native_unit_of_measurement = None
-    _attr_device_class = None
-    _attr_state_class = None
-
-    def __init__(self, hass, config) -> None:
-        coordinator: DataUpdateCoordinator = hass.data[DOMAIN][config.entry_id]
-        super().__init__(coordinator)
-        self._fan = coordinator._fan
-        self._attr_name = self._fan.name + "_airflow"
-        self._attr_unique_id = self._fan.id + "_airflow"
-
-    @property
-    def native_value(self):
+    def airflow(self):
         return self._fan.airflow
+
+    def battery_voltage(self):
+        voltage = int(self._fan.battery_voltage.split()[0]) / 1000
+        return voltage
+
+    def timer_counter(self):
+        return self._fan.timer_counter
+
+    def humidity_treshold(self):
+        return self._fan.humidity_treshold
+
+    def filter_timer_countdown(self):
+        return self._fan.filter_timer_countdown
+
+    def boost_time(self):
+        return self._fan.boost_time
+
+    def machine_hours(self):
+        return self._fan.machine_hours
+
+    def analogV(self):
+        return self._fan.analogV
+
+    def analogV_treshold(self):
+        return self._fan.analogV_treshold
 
     @property
     def device_info(self):

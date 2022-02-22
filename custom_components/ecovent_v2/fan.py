@@ -145,8 +145,8 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             self._fan.set_param("speed", preset_mode)
             if preset_mode == "manual":
                 self._fan.set_man_speed_percent(self.percentage)
-                await self.coordinator.async_refresh()
-                self.schedule_update_ha_state()
+            await self.coordinator.async_refresh()
+            self.schedule_update_ha_state()
         else:
             raise ValueError(f"Invalid preset mode: {preset_mode}")
 

@@ -1,0 +1,23 @@
+{
+    "config": {
+        "abort": {
+            "already_configured": "Ventilator je že konfiguriran"
+        },
+        "error": {
+            "cannot_connect": "Povezaba ni uspela",
+            "invalid_auth": "Neuspešna priajava/napačno geslo",
+            "unknown": "Nepričakovana napaka"
+        },
+        "step": {
+            "user": {
+                "data": {
+                    "ip_address": "IP",
+                    "password": "Geslo",
+                    "port": "Vrata",
+                    "device_id": "ID",
+                    "name": "Naziv"
+                }
+            }
+        }
+    }
+}

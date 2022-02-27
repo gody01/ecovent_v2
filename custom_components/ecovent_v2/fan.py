@@ -59,6 +59,8 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         super().__init__(coordinator)
         self._fan = coordinator._fan
         self._percentage = self._fan.man_speed
+        self._attr_unique_id: self._fan.id
+        self._attr_name = self._fan.name
 
     @property
     def device_info(self):
@@ -67,7 +69,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             "name": self._fan.name,
             "model": self._fan.unit_type,
             "sw_version": self._fan.firmware,
-            "manufacturer": "Balauberg",
+            "manufacturer": "Blauberg",
         }
 
     @property

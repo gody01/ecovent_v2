@@ -2,6 +2,8 @@
 from __future__ import annotations
 from xml.sax.handler import property_encoding
 
+from numpy import False_
+
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
@@ -43,6 +45,7 @@ async def async_setup_platform(
                 SensorStateClass.MEASUREMENT,
                 None,
                 True,
+                "mdi:water-percent",
             ),
             VentoSensor(
                 hass,
@@ -53,7 +56,8 @@ async def async_setup_platform(
                 None,
                 None,
                 EntityCategory.DIAGNOSTIC,
-                False,
+                True,
+                "mdi:fan-speed-1",
             ),
             VentoSensor(
                 hass,
@@ -65,6 +69,7 @@ async def async_setup_platform(
                 None,
                 EntityCategory.DIAGNOSTIC,
                 False,
+                "mdi:fan-speed-2",
             ),
             VentoSensor(
                 hass,
@@ -96,8 +101,9 @@ async def async_setup_platform(
                 PERCENTAGE,
                 SensorDeviceClass.BATTERY,
                 SensorStateClass.MEASUREMENT,
-                EntityCategory.SYSTEM,
-                False,
+                EntityCategory.DIAGNOSTIC,
+                True,
+                "mdi:battery",
             ),
             VentoSensor(
                 hass,
@@ -108,7 +114,8 @@ async def async_setup_platform(
                 None,
                 None,
                 EntityCategory.CONFIG,
-                False,
+                True,
+                "mdi:water-percent-alert",
             ),
             VentoSensor(
                 hass,
@@ -120,6 +127,7 @@ async def async_setup_platform(
                 None,
                 EntityCategory.DIAGNOSTIC,
                 True,
+                "mdi:timer-sand",
             ),
             VentoSensor(
                 hass,
@@ -130,7 +138,8 @@ async def async_setup_platform(
                 None,
                 None,
                 EntityCategory.CONFIG,
-                True,
+                False,
+                "mdi:timer-outline",
             ),
             VentoSensor(
                 hass,
@@ -141,18 +150,8 @@ async def async_setup_platform(
                 None,
                 None,
                 EntityCategory.DIAGNOSTIC,
-                True,
-            ),
-            VentoSensor(
-                hass,
-                config,
-                "_machine_hours",
-                "machine_hours",
-                None,
-                None,
-                None,
-                EntityCategory.DIAGNOSTIC,
-                True,
+                False,
+                "mdi:flash",
             ),
             VentoSensor(
                 hass,
@@ -163,7 +162,20 @@ async def async_setup_platform(
                 None,
                 None,
                 EntityCategory.CONFIG,
-                True,
+                False,
+                "mdi:flash-alert",
+            ),
+            VentoSensor(
+                hass,
+                config,
+                "_machine_hours",
+                "machine_hours",
+                None,
+                None,
+                None,
+                EntityCategory.DIAGNOSTIC,
+                False,
+                "mdi:timer-outline",
             ),
         ],
     )
@@ -188,8 +200,9 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         native_unit_of_measurement=None,
         device_class=None,
         state_class=None,
-        entity_category=EntityCategory.SYSTEM,
+        entity_category=None,
         enable_by_default=True,
+        icon=None,
     ) -> None:
         coordinator: DataUpdateCoordinator = hass.data[DOMAIN][config.entry_id]
         super().__init__(coordinator)
@@ -202,6 +215,7 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         self._attr_unique_id = self._fan.id + name
         self._attr_entity_registry_enabled_default = enable_by_default
         self._method = getattr(self, method)
+        self._attr_icon = icon
 
     @property
     def native_value(self):
@@ -225,7 +239,10 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         return self._fan.airflow
 
     def battery_voltage(self):
-        voltage = int(self._fan.battery_voltage.split()[0]) / 1000
+        high = 3300
+        low = 2500
+        voltage = int(self._fan.battery_voltage.split()[0])
+        voltage = round(((voltage - low) / (high - low)) * 100)
         return voltage
 
     def timer_counter(self):
@@ -253,5 +270,4 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
     def device_info(self):
         return {
             "identifiers": {(DOMAIN, self._fan.id)},
-            "name": self._attr_name,
         }

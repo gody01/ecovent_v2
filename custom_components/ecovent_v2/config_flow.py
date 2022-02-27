@@ -28,7 +28,7 @@ _LOGGER = logging.getLogger(__name__)
 # TODO adjust the data schema to the data that you need
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_IP_ADDRESS, default="10.94.0.255"): str,
+        vol.Required(CONF_IP_ADDRESS, default=""): str,
         vol.Optional(CONF_PORT, default=4000): int,
         vol.Optional(CONF_DEVICE_ID, default="DEFAULT_DEVICEID"): str,
         vol.Required(CONF_PASSWORD, default="1111"): str,

@@ -1,0 +1,23 @@
+{
+    "config": {
+        "abort": {
+            "already_configured": "Der Lüfter ist bereits konfiguriert."
+        },
+        "error": {
+            "cannot_connect": "Es kann keine Verbindung zum Lüfter aufgebaut werden",
+            "invalid_auth": "Keine validen Authentifizierungsdaten.",
+            "unknown": "Unbekannter Fehler."
+        },
+        "step": {
+            "user": {
+                "data": {
+                    "ip_address": "IP",
+                    "password": "Passwort",
+                    "port": "Port",
+                    "device_id": "ID",
+                    "name": "Name"
+                }
+            }
+        }
+    }
+}

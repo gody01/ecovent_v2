@@ -1,8 +1,8 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 
-# Home Assistant Integration for Blauberg EcoVent VENTO Expert A50/80/100 V.2 Fans
+# Blauberg EcoVent VENTO Expert A50/80/100 V.2 Fans
+Home Assistant Integration. Integration for newest Fans with api version 2
 
-Integration for newest fans with api version 2
 
 # Tested on:
 * Blauberg VENTO Expert A50-1 W V.2
@@ -17,7 +17,7 @@ Integration for newest fans with api version 2
   - manual
 * In manual mode speed percentage
 * Oscillating
-* When on Fan are in 'heat_recovery' airflow
+  - When on, Fans are in 'heat_recovery' airflow
 * Direction
   - "forward" means 'ventilation' airflow
   - "reverse" means 'air_supply' airflow
@@ -65,3 +65,15 @@ All sensors are categorised and some are disabled by default.
   - Removed default IP address from config input field Host
   - Added some icon defintions to sensors
   - Battery percent caluclation
+
+version 0.2.0:
+* Added services
+  - filter_timer_reset (Reset air filter timer)
+  - reset_alarms (Reset fan Vento alarms)
+* Changed:
+  - From binary sensor to switch:
+    - humidity_sensor_state
+    - relay_sensor_state
+    - analogV_sensor_state
+
+  -

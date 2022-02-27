@@ -177,6 +177,18 @@ async def async_setup_platform(
                 False,
                 "mdi:timer-outline",
             ),
+            VentoSensor(
+                hass,
+                config,
+                "_ip",
+                "current_wifi_ip",
+                None,
+                None,
+                None,
+                EntityCategory.DIAGNOSTIC,
+                True,
+                "mdi:ip-network",
+            ),
         ],
     )
 
@@ -265,6 +277,9 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
 
     def analogV_treshold(self):
         return self._fan.analogV_treshold
+
+    def current_wifi_ip(self):
+        return self._fan.curent_wifi_ip
 
     @property
     def device_info(self):

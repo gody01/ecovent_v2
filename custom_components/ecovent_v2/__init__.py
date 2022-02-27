@@ -8,6 +8,7 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_component import EntityComponent
+from homeassistant.helpers import config_validation as cv, entity_platform, service
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
@@ -29,7 +30,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # TODO List the platforms that you want to support.
 # For your initial PR, limit it to 1 platform.
-PLATFORMS: list[str] = ["sensor", "binary_sensor", "fan"]
+PLATFORMS: list[str] = ["sensor", "binary_sensor", "switch", "fan"]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

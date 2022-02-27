@@ -33,22 +33,22 @@ async def async_setup_platform(
                 hass, config, "_boost_status", "boost_status", False, None
             ),
             VentoBinarySensor(hass, config, "_timer_mode", "timer_mode", False, None),
-            VentoBinarySensor(
-                hass,
-                config,
-                "_humidity_sensor_state",
-                "humidity_sensor_state",
-                False,
-                None,
-            ),
-            VentoBinarySensor(
-                hass,
-                config,
-                "_relay_sensor_state",
-                "relay_sensor_state",
-                False,
-                None,
-            ),
+            # VentoBinarySensor(
+            #    hass,
+            #    config,
+            #    "_humidity_sensor_state",
+            #    "humidity_sensor_state",
+            #    False,
+            #    None,
+            # ),
+            # VentoBinarySensor(
+            #    hass,
+            #    config,
+            #    "_relay_sensor_state",
+            #    "relay_sensor_state",
+            #    False,
+            #    None,
+            # ),
             VentoBinarySensor(
                 hass, config, "_relay_status", "relay_status", False, None
             ),
@@ -128,8 +128,8 @@ class VentoBinarySensor(CoordinatorEntity, BinarySensorEntity):
     def timer_mode(self):
         return self._fan.timer_mode
 
-    def humidity_sensor_state(self):
-        return self._fan.humidity_sensor_state
+    # def humidity_sensor_state(self):
+    #    return self._fan.humidity_sensor_state
 
     def relay_sensor_state(self):
         return self._fan.relay_sensor_state

@@ -11,13 +11,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.helpers import config_validation as cv, entity_platform, service
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
 )
 
 
-from .const import DOMAIN
+from .const import DOMAIN, SERVICE_FILTER_TIMER_RESET, SERVICE_RESET_ALARMS
 
 # _LOGGER = logging.getLogger(__name__)
 
@@ -50,6 +51,17 @@ async def async_setup_entry(
     """Set up the Ecovent Fan config entry."""
     await async_setup_platform(hass, config_entry, async_add_entities, None)
 
+    platform = entity_platform.async_get_current_platform()
+
+    # This will call VentoExpertFan.async_reset_filter_timer()
+    platform.async_register_entity_service(
+        SERVICE_FILTER_TIMER_RESET, {}, VentoExpertFan.async_reset_filter_timer
+    )
+    # This will call VentoExpertFana.sync_reset_alarms()
+    platform.async_register_entity_service(
+        SERVICE_RESET_ALARMS, {}, VentoExpertFan.async_reset_alarms
+    )
+
 
 class VentoExpertFan(CoordinatorEntity, FanEntity):
     def __init__(self, hass, config) -> None:
@@ -61,16 +73,23 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         self._percentage = self._fan.man_speed
         self._attr_unique_id: self._fan.id
         self._attr_name = self._fan.name
+        self._attr_extra_state_attributes = {"ipv4_address": self._fan.curent_wifi_ip}
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, self._fan.id)},
+            name=self._fan.name,
+            model=self._fan.unit_type,
+            sw_version=self._fan.firmware,
+            manufacturer="Blauberg",
+            configuration_url=f"http://{self._fan.curent_wifi_ip}",
+        )
 
     @property
     def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self._fan.id)},
-            "name": self._fan.name,
-            "model": self._fan.unit_type,
-            "sw_version": self._fan.firmware,
-            "manufacturer": "Blauberg",
-        }
+        return self._attr_device_info
+
+    @property
+    def extra_state_attributes(self):
+        return self._attr_extra_state_attributes
 
     @property
     def name(self) -> str:
@@ -199,3 +218,12 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         if self._fan.speed == "manual":
             self._fan.set_man_speed_percent(new_percentage)
             self.schedule_update_ha_state()
+
+    # Custom services
+    # Reset filter timer
+    async def async_reset_filter_timer(self, fan_target) -> None:
+        self._fan.set_param("filter_timer_reset", "")
+
+    # Reset alarms
+    async def async_reset_alarms(self, fan_target) -> None:
+        self._fan.set_param("reset_alarms", "")

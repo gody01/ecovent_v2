@@ -1,0 +1,15 @@
+filter_timer_reset:
+  name: Reset air filter timer
+  description: Reset the Vento Air Filter Timer.
+  target:
+    entity:
+      integration: ecovent_v2
+      domain: fan
+
+reset_alarms:
+  name: Reset fan Vento alarms
+  description: Reset Vento alarms.
+  target:
+    entity:
+      integration: ecovent_v2
+      domain: fan

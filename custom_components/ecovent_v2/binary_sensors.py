@@ -1,5 +1,0 @@
-boost_status
-timer_mode
-humidity_sensor_state
-relay_sensor_state
-analogV_sensor_state

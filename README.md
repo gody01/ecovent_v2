@@ -76,4 +76,9 @@ version 0.2.0:
     - relay_sensor_state
     - analogV_sensor_state
 
-  -
+version 0.4.0
+* Added broadcast devices search
+  - hack, that searches on network, if string: <broadcast> is entered
+    instead of IP address
+  - this is not yer proper HomaAssistant Auto Discovery, but it seems to
+    work on my network

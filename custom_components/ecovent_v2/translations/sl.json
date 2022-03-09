@@ -5,7 +5,7 @@
         },
         "error": {
             "cannot_connect": "Povezava ni uspela",
-            "invalid_auth": "Neuspešna prijava/napačno geslo",
+            "invalid_auth": "Neuspešna priajava/napačno geslo",
             "unknown": "Nepričakovana napaka"
         },
         "step": {

@@ -1,17 +1,16 @@
 """Config flow for EcoVent_v2 integration."""
 from __future__ import annotations
 
-from email.policy import default
 import logging
 from typing import Any
 
 from ecoventv2 import Fan
 import voluptuous as vol
 
-from homeassistant import config_entries
+from homeassistant import config_entries, exceptions
 from homeassistant.core import HomeAssistant
+from homeassistant.components import network
 from homeassistant.data_entry_flow import FlowResult
-from homeassistant.exceptions import HomeAssistantError
 
 from homeassistant.const import (
     CONF_DEVICE_ID,
@@ -28,7 +27,7 @@ _LOGGER = logging.getLogger(__name__)
 # TODO adjust the data schema to the data that you need
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_IP_ADDRESS, default=""): str,
+        vol.Required(CONF_IP_ADDRESS, default="<broadcast>"): str,
         vol.Optional(CONF_PORT, default=4000): int,
         vol.Optional(CONF_DEVICE_ID, default="DEFAULT_DEVICEID"): str,
         vol.Required(CONF_PASSWORD, default="1111"): str,
@@ -102,8 +101,37 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
 
         errors = {}
+        self._fan = Fan(
+            user_input[CONF_IP_ADDRESS],
+            user_input[CONF_PASSWORD],
+            user_input[CONF_DEVICE_ID],
+            user_input[CONF_NAME],
+            user_input[CONF_PORT],
+        )
 
         try:
+            if user_input[CONF_IP_ADDRESS] == "<broadcast>":
+                ip = None
+                ips = self._fan.search_devices("0.0.0.0")
+                # ips = ["10.94.0.105", "10.94.0.106", "10.94.0.107", "10.94.0.108"]
+                unique_ids = []
+                for entry in self._async_current_entries(include_ignore=True):
+                    unique_ids.append(entry.unique_id)
+                for ip in ips:
+                    self._fan._host = ip
+                    self._fan._id = user_input[CONF_DEVICE_ID]
+                    self._fan._password = user_input[CONF_PASSWORD]
+                    self._fan._name = user_input[CONF_NAME]
+                    self._fan._port = user_input[CONF_PORT]
+                    self._fan.init_device()
+                    if self._fan.id in unique_ids:
+                        continue
+                    else:
+                        user_input[CONF_IP_ADDRESS] = ip
+                        break
+                if user_input[CONF_IP_ADDRESS] == "<broadcast>":
+                    raise CannotConnect
+
             info = await validate_input(self.hass, user_input)
             await self.async_set_unique_id(info["id"])
             self._abort_if_unique_id_configured()
@@ -122,9 +150,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
 
-class CannotConnect(HomeAssistantError):
+class CannotConnect(exceptions.HomeAssistantError):
     """Error to indicate we cannot connect."""
 
 
-class InvalidAuth(HomeAssistantError):
+class InvalidAuth(exceptions.HomeAssistantError):
     """Error to indicate there is invalid auth."""

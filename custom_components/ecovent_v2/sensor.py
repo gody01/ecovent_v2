@@ -1,28 +1,24 @@
 """EcoVentV2 platform sensors."""
 from __future__ import annotations
-from xml.sax.handler import property_encoding
 
-from numpy import False_
+from ecoventv2 import Fan
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
     SensorStateClass,
 )
-
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
 from homeassistant.const import PERCENTAGE
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType, StateType
+from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
 )
 
-from ecoventv2 import Fan
 from .const import DOMAIN
 
 
@@ -108,8 +104,8 @@ async def async_setup_platform(
             VentoSensor(
                 hass,
                 config,
-                "_humidity_treshold",
-                "humidity_treshold",
+                "_humidity_threshold",
+                "humidity_threshold",
                 PERCENTAGE,
                 None,
                 None,
@@ -144,8 +140,8 @@ async def async_setup_platform(
             VentoSensor(
                 hass,
                 config,
-                "_analogV",
-                "analogV",
+                "_analogv",
+                "analogv",
                 None,
                 None,
                 None,
@@ -156,8 +152,8 @@ async def async_setup_platform(
             VentoSensor(
                 hass,
                 config,
-                "_analogV_treshold",
-                "analogV_treshold",
+                "_analogv_threshold",
+                "analogv_threshold",
                 None,
                 None,
                 None,
@@ -202,7 +198,10 @@ async def async_setup_entry(
     await async_setup_platform(hass, config_entry, async_add_entities)
 
 
+# VentoSensor class
 class VentoSensor(CoordinatorEntity, SensorEntity):
+    """Class for Vento Fan Sensors."""
+
     def __init__(
         self,
         hass,
@@ -216,6 +215,7 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         enable_by_default=True,
         icon=None,
     ) -> None:
+        """Initialize fan."""
         coordinator: DataUpdateCoordinator = hass.data[DOMAIN][config.entry_id]
         super().__init__(coordinator)
         self._fan: Fan = coordinator._fan
@@ -231,58 +231,77 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self):
+        """Get native value property from method."""
         self._attr_native_value = self._method()
         return self._attr_native_value
 
     def get_native_value(self):
+        """Get native value method."""
         val = self._fan.get_param(self._method)
         return val
 
     def humidity(self):
+        """Get humidity sensor value."""
         return self._fan.humidity
 
     def fan1_speed(self):
+        """Get fan1 speed value."""
         return self._fan.fan1_speed
 
     def fan2_speed(self):
+        """Get fan2 speed value."""
         return self._fan.fan2_speed
 
     def airflow(self):
+        """Get airflow value."""
         return self._fan.airflow
 
     def battery_voltage(self):
+        """Get battery used percentage."""
         high = 3300
         low = 2500
-        voltage = int(self._fan.battery_voltage.split()[0])
-        voltage = round(((voltage - low) / (high - low)) * 100)
+        if self._fan.battery_voltage is None:
+            voltage = 0
+        else:
+            voltage = int(self._fan.battery_voltage.split()[0])
+            voltage = round(((voltage - low) / (high - low)) * 100)
         return voltage
 
     def timer_counter(self):
+        """Get timer counter value."""
         return self._fan.timer_counter
 
-    def humidity_treshold(self):
+    def humidity_threshold(self):
+        """Get humidity threshold value."""
         return self._fan.humidity_treshold
 
     def filter_timer_countdown(self):
+        """Get filter timer countdown value."""
         return self._fan.filter_timer_countdown
 
     def boost_time(self):
+        """Get boost time value."""
         return self._fan.boost_time
 
     def machine_hours(self):
+        """Get machine hours value."""
         return self._fan.machine_hours
 
-    def analogV(self):
+    def analogv(self):
+        """Get analog Voltage value."""
         return self._fan.analogV
 
-    def analogV_treshold(self):
+    def analogv_threshold(self):
+        """Get analog Voltage threshold value."""
         return self._fan.analogV_treshold
 
     def current_wifi_ip(self):
+        """Get current wifi IP value."""
         return self._fan.curent_wifi_ip
 
     @property
     def device_info(self):
+        """Get device info."""
         return {
             "identifiers": {(DOMAIN, self._fan.id)},
         }

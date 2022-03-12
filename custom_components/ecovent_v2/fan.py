@@ -1,4 +1,7 @@
-import time
+"""Support for Blauberg Vento Expert Fans with api v.2."""
+
+from __future__ import annotations
+
 from homeassistant.components.fan import (
     SUPPORT_DIRECTION,
     SUPPORT_OSCILLATE,
@@ -8,15 +11,14 @@ from homeassistant.components.fan import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import ConfigType
-from homeassistant.helpers import config_validation as cv, entity_platform, service
+from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
 )
-
 
 from .const import DOMAIN, SERVICE_FILTER_TIMER_RESET, SERVICE_RESET_ALARMS
 
@@ -37,7 +39,7 @@ async def async_setup_platform(
     hass: HomeAssistant,
     config: ConfigType,
     async_add_entities: AddEntitiesCallback,
-    discovery_info=None,
+    discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
     """Set up the Ecovent fan platform."""
     async_add_entities([VentoExpertFan(hass, config)])
@@ -64,6 +66,8 @@ async def async_setup_entry(
 
 
 class VentoExpertFan(CoordinatorEntity, FanEntity):
+    """Cento Expert Coordinator Class."""
+
     def __init__(self, hass, config) -> None:
         """Initialize fan."""
 
@@ -85,10 +89,12 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
 
     @property
     def device_info(self):
+        """Return device info."""
         return self._attr_device_info
 
     @property
     def extra_state_attributes(self):
+        """Return extra state attributes."""
         return self._attr_extra_state_attributes
 
     @property
@@ -102,9 +108,9 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         return self._fan.id
 
     @property
-    def state(self):
+    def is_on(self):
         """Return state."""
-        return self._fan.state
+        return self._fan.state == "on"
 
     @property
     def percentage(self):
@@ -144,20 +150,17 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
     # pylint: disable=arguments-differ
     async def async_turn_on(
         self,
-        speed: str,
-        percentage: int,
-        preset_mode: str,
         **kwargs,
     ) -> None:
         """Turn on the entity."""
         self._fan.set_param("state", "on")
-        await self.coordinator.async_refresh()
+        # await self.coordinator.async_refresh()
         self.schedule_update_ha_state()
 
     async def async_turn_off(self, **kwargs) -> None:
         """Turn off the entity."""
         self._fan.set_param("state", "off")
-        await self.coordinator.async_refresh()
+        # await self.coordinator.async_refresh()
         self.schedule_update_ha_state()
 
     async def async_set_preset_mode(self, preset_mode: str):
@@ -166,7 +169,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             self._fan.set_param("speed", preset_mode)
             if preset_mode == "manual":
                 self._fan.set_man_speed_percent(self.percentage)
-            await self.coordinator.async_refresh()
+            # await self.coordinator.async_refresh()
             self.schedule_update_ha_state()
         else:
             raise ValueError(f"Invalid preset mode: {preset_mode}")
@@ -176,7 +179,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         self._percentage = percentage
         if self._fan.speed == "manual":
             self._fan.set_man_speed_percent(percentage)
-            await self.coordinator.async_refresh()
+            # await self.coordinator.async_refresh()
             self.schedule_update_ha_state()
 
     async def async_set_direction(self, direction: str) -> None:
@@ -185,7 +188,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             self._fan.set_param("airflow", "ventilation")
         if direction == "reverse" and self._fan.airflow != "air_supply":
             self._fan.set_param("airflow", "air_supply")
-        await self.coordinator.async_refresh()
+        # await self.coordinator.async_refresh()
         self.schedule_update_ha_state()
 
     async def async_oscillate(self, oscillating: bool) -> None:
@@ -194,36 +197,17 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             self._fan.set_param("airflow", "heat_recovery")
         else:
             self._fan.set_param("airflow", "ventilation")
-        await self.coordinator.async_refresh()
+        # await self.coordinator.async_refresh()
         self.schedule_update_ha_state()
 
-    # async def async_increase_speed(self, percentage_step: int):
-    # pylint: disable=arguments-differ
-    async def async_increase_speed(self, percentage_step: int) -> None:
-        new_percentage = int(self.percentage) + percentage_step
-        if new_percentage > 100:
-            new_percentage = 100
-        self._percentage = new_percentage
-        if self._fan.set_speed == "manual":
-            self._fan.set_man_speed_percent(new_percentage)
-            self.schedule_update_ha_state()
+        # Custom services
 
-    # async def async_decrease_speed(self, percentage_step: int):
-    # pylint: disable=arguments-differ
-    async def async_decrease_speed(self, percentage_step: int) -> None:
-        new_percentage = int(self.percentage) - percentage_step
-        if new_percentage < 5:
-            new_percentage = 5
-        self._percentage = new_percentage
-        if self._fan.speed == "manual":
-            self._fan.set_man_speed_percent(new_percentage)
-            self.schedule_update_ha_state()
-
-    # Custom services
     # Reset filter timer
     async def async_reset_filter_timer(self, fan_target) -> None:
+        """Reset Fan's filter timer."""
         self._fan.set_param("filter_timer_reset", "")
 
     # Reset alarms
     async def async_reset_alarms(self, fan_target) -> None:
+        """Reset Fan's Alarms."""
         self._fan.set_param("reset_alarms", "")

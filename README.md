@@ -82,3 +82,11 @@ version 0.4.0
     instead of IP address
   - this is not yer proper HomaAssistant Auto Discovery, but it seems to
     work on my network
+
+version 0.5.0
+* Mainly fixes from autmated checks and hopefuly some latency improvements
+  - Removed await coordinator in turn_on/turn_off and other interactive
+    functions
+  - Some cleanup in config_flow
+  - Removed deprecated set_speed functions
+  - Fix error if _battery_voltage is None

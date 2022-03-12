@@ -8,23 +8,21 @@ from ecoventv2 import Fan
 import voluptuous as vol
 
 from homeassistant import config_entries, exceptions
-from homeassistant.core import HomeAssistant
-from homeassistant.components import network
-from homeassistant.data_entry_flow import FlowResult
-
 from homeassistant.const import (
     CONF_DEVICE_ID,
     CONF_IP_ADDRESS,
-    CONF_PORT,
     CONF_NAME,
     CONF_PASSWORD,
+    CONF_PORT,
 )
+from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import FlowResult
 
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-# TODO adjust the data schema to the data that you need
+# adjust the data schema to the data that you need
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_IP_ADDRESS, default="<broadcast>"): str,
@@ -36,13 +34,11 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 )
 
 
-class PlaceholderHub:
-    """Placeholder class to make tests pass.
-
-    TODO Remove this placeholder class and replace with things from your PyPI package.
-    """
+class VentoHub:
+    """Vento Hub Class."""
 
     def __init__(self, host: str, port: int, fan_id: str, name: str) -> None:
+        """Initialize."""
         self.host = host
         self.port = port
         self.fan_id = fan_id
@@ -50,6 +46,7 @@ class PlaceholderHub:
         self.name = name
 
     async def authenticate(self, password: str) -> bool:
+        """Authenticate."""
         self.fan = Fan(self.host, password, self.fan_id, self.name, self.port)
         self.fan.init_device()
         self.fan_id = self.fan.id
@@ -62,7 +59,6 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
     Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
     """
-    # TODO validate the data can be used to set up a connection.
 
     # If your PyPI package is not built with async, pass your methods
     # to the executor:
@@ -70,7 +66,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     #     your_validate_func, data["username"], data["password"]
     # )
 
-    hub = PlaceholderHub(
+    hub = VentoHub(
         data[CONF_IP_ADDRESS], data[CONF_PORT], data[CONF_DEVICE_ID], data[CONF_NAME]
     )
 
@@ -91,6 +87,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    def __init__(self):
+        """Initialite ConfigFlow."""
+        self._fan = Fan(
+            "<broadcast>", "1111", "DEFAULT_DEVICEID", "Vento Express", 4000
+        )
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -101,13 +103,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
 
         errors = {}
-        self._fan = Fan(
-            user_input[CONF_IP_ADDRESS],
-            user_input[CONF_PASSWORD],
-            user_input[CONF_DEVICE_ID],
-            user_input[CONF_NAME],
-            user_input[CONF_PORT],
-        )
 
         try:
             if user_input[CONF_IP_ADDRESS] == "<broadcast>":
@@ -118,15 +113,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 for entry in self._async_current_entries(include_ignore=True):
                     unique_ids.append(entry.unique_id)
                 for ip in ips:
-                    self._fan._host = ip
-                    self._fan._id = user_input[CONF_DEVICE_ID]
-                    self._fan._password = user_input[CONF_PASSWORD]
-                    self._fan._name = user_input[CONF_NAME]
-                    self._fan._port = user_input[CONF_PORT]
+                    self._fan.host = ip
+                    self._fan.id = user_input[CONF_DEVICE_ID]
+                    self._fan.password = user_input[CONF_PASSWORD]
+                    self._fan.name = user_input[CONF_NAME]
+                    self._fan.port = user_input[CONF_PORT]
                     self._fan.init_device()
-                    if self._fan.id in unique_ids:
-                        continue
-                    else:
+                    if self._fan.id not in unique_ids:
                         user_input[CONF_IP_ADDRESS] = ip
                         break
                 if user_input[CONF_IP_ADDRESS] == "<broadcast>":

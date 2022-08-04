@@ -154,14 +154,14 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
     ) -> None:
         """Turn on the entity."""
         self._fan.set_param("state", "on")
-        # await self.coordinator.async_refresh()
-        self.schedule_update_ha_state()
+        await self.coordinator.async_refresh()
+        # self.schedule_update_ha_state()
 
     async def async_turn_off(self, **kwargs) -> None:
         """Turn off the entity."""
         self._fan.set_param("state", "off")
-        # await self.coordinator.async_refresh()
-        self.schedule_update_ha_state()
+        await self.coordinator.async_refresh()
+        # self.schedule_update_ha_state()
 
     async def async_set_preset_mode(self, preset_mode: str):
         """Set the preset mode of the fan."""
@@ -169,8 +169,8 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             self._fan.set_param("speed", preset_mode)
             if preset_mode == "manual":
                 self._fan.set_man_speed_percent(self.percentage)
-            # await self.coordinator.async_refresh()
-            self.schedule_update_ha_state()
+            await self.coordinator.async_refresh()
+            # self.schedule_update_ha_state()
         else:
             raise ValueError(f"Invalid preset mode: {preset_mode}")
 
@@ -179,8 +179,8 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         self._percentage = percentage
         if self._fan.speed == "manual":
             self._fan.set_man_speed_percent(percentage)
-            # await self.coordinator.async_refresh()
-            self.schedule_update_ha_state()
+            await self.coordinator.async_refresh()
+            # self.schedule_update_ha_state()
 
     async def async_set_direction(self, direction: str) -> None:
         """Set the direction of the fan."""
@@ -188,8 +188,8 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             self._fan.set_param("airflow", "ventilation")
         if direction == "reverse" and self._fan.airflow != "air_supply":
             self._fan.set_param("airflow", "air_supply")
-        # await self.coordinator.async_refresh()
-        self.schedule_update_ha_state()
+        await self.coordinator.async_refresh()
+        # self.schedule_update_ha_state()
 
     async def async_oscillate(self, oscillating: bool) -> None:
         """Set oscillation."""
@@ -197,8 +197,8 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             self._fan.set_param("airflow", "heat_recovery")
         else:
             self._fan.set_param("airflow", "ventilation")
-        # await self.coordinator.async_refresh()
-        self.schedule_update_ha_state()
+        await self.coordinator.async_refresh()
+        # self.schedule_update_ha_state()
 
         # Custom services
 

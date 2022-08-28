@@ -1,10 +1,10 @@
 {
   "domain": "ecovent_v2",
   "name": "EcoVentV2",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "config_flow": true,
   "documentation": "https://www.home-assistant.io/integrations/ecovent_v2",
-  "requirements": ["pyEcoventV2==0.9.12"],
+  "requirements": ["pyEcoventV2==0.9.14"],
   "ssdp": [],
   "zeroconf": [],
   "homekit": {},

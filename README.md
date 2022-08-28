@@ -90,3 +90,9 @@ version 0.5.0
   - Some cleanup in config_flow
   - Removed deprecated set_speed functions
   - Fix error if _battery_voltage is None
+
+version 0.6.0
+* Timeout Loop bailout
+
+version 0.7.0
+* Fix manifest, to require correct pyEcovent version (0.9.14)

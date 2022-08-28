@@ -96,3 +96,7 @@ version 0.6.0
 
 version 0.7.0
 * Fix manifest, to require correct pyEcovent version (0.9.14)
+
+version 0.8.0
+* Removed calling blocking sleep in event loop
+

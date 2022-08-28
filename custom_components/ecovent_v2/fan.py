@@ -1,14 +1,9 @@
 """Support for Blauberg Vento Expert Fans with api v.2."""
 
 from __future__ import annotations
+from typing import Any
 
-from homeassistant.components.fan import (
-    SUPPORT_DIRECTION,
-    SUPPORT_OSCILLATE,
-    SUPPORT_PRESET_MODE,
-    SUPPORT_SET_SPEED,
-    FanEntity,
-)
+from homeassistant.components.fan import FanEntity, FanEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_platform
@@ -28,7 +23,10 @@ DEFAULT_ON_PERCENTAGE = 5
 SPEED_RANGE = (1, 3)  # off is not included
 
 FULL_SUPPORT = (
-    SUPPORT_SET_SPEED | SUPPORT_OSCILLATE | SUPPORT_DIRECTION | SUPPORT_PRESET_MODE
+    FanEntityFeature.SET_SPEED
+    | FanEntityFeature.PRESET_MODE
+    | FanEntityFeature.OSCILLATE
+    | FanEntityFeature.DIRECTION
 )
 
 PRESET_MODES = ["low", "medium", "high", "manual"]
@@ -88,12 +86,12 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         )
 
     @property
-    def device_info(self):
+    def device_info(self) -> DeviceInfo:
         """Return device info."""
         return self._attr_device_info
 
     @property
-    def extra_state_attributes(self):
+    def extra_state_attributes(self) -> None:
         """Return extra state attributes."""
         return self._attr_extra_state_attributes
 
@@ -103,17 +101,17 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         return self._fan.name
 
     @property
-    def unique_id(self):
+    def unique_id(self) -> str:
         """Return the unique id."""
         return self._fan.id
 
     @property
-    def is_on(self):
+    def is_on(self) -> bool:
         """Return state."""
         return self._fan.state == "on"
 
     @property
-    def percentage(self):
+    def percentage(self) -> int:
         """Return the current speed."""
         return self._percentage
 
@@ -150,20 +148,20 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
     # pylint: disable=arguments-differ
     async def async_turn_on(
         self,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         """Turn on the entity."""
         self._fan.set_param("state", "on")
         await self.coordinator.async_refresh()
         # self.schedule_update_ha_state()
 
-    async def async_turn_off(self, **kwargs) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the entity."""
         self._fan.set_param("state", "off")
         await self.coordinator.async_refresh()
         # self.schedule_update_ha_state()
 
-    async def async_set_preset_mode(self, preset_mode: str):
+    async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set the preset mode of the fan."""
         if preset_mode in self.preset_modes:
             self._fan.set_param("speed", preset_mode)
@@ -174,7 +172,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         else:
             raise ValueError(f"Invalid preset mode: {preset_mode}")
 
-    async def async_set_percentage(self, percentage: int):
+    async def async_set_percentage(self, percentage: int) -> None:
         """Set the speed of the fan, as a percentage."""
         self._percentage = percentage
         if self._fan.speed == "manual":

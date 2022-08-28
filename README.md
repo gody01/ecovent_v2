@@ -100,3 +100,6 @@ version 0.7.0
 version 0.8.0
 * Removed calling blocking sleep in event loop
 
+version 0.9.0
+* Cleanup some definitions for HA checks
+

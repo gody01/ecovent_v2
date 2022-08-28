@@ -1,7 +1,7 @@
 {
   "domain": "ecovent_v2",
   "name": "EcoVentV2",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "config_flow": true,
   "documentation": "https://www.home-assistant.io/integrations/ecovent_v2",
   "requirements": ["pyEcoventV2==0.9.15"],

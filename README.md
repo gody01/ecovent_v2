@@ -103,3 +103,6 @@ version 0.8.0
 version 0.9.0
 * Cleanup some definitions for HA checks
 
+version 0.9.1
+* replaced hass.config_entries.async_setup_platforms with await hass.config_entries.async_forward_entry_setups
+* thanks to @berndulum for issue report

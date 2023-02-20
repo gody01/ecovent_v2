@@ -11,11 +11,11 @@
         "step": {
             "user": {
                 "data": {
-                    "ip_address": "Host",
+                    "device_id": "[device_id]",
+                    "ip_address": "ip_address",
+                    "name": "Name",
                     "password": "Password",
-                    "port": "Port",
-                    "device_id": "ID",
-                    "name": "Name"
+                    "port": "Port"
                 }
             }
         }

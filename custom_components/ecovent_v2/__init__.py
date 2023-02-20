@@ -1,36 +1,34 @@
 """The EcoVent_v2 integration."""
-from __future__ import annotations
+# from __future__ import annotations
 from datetime import timedelta
-import asyncio
 import logging
-import voluptuous as vol
-
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_component import EntityComponent
-from homeassistant.helpers import config_validation as cv, entity_platform, service
-from homeassistant.helpers.update_coordinator import (
-    CoordinatorEntity,
-    DataUpdateCoordinator,
-    UpdateFailed,
-)
-from .const import DOMAIN
 
 from ecoventv2 import Fan
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONF_DEVICE_ID,
     CONF_IP_ADDRESS,
-    CONF_PORT,
     CONF_NAME,
     CONF_PASSWORD,
+    CONF_PORT,
+    Platform,
 )
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-# TODO List the platforms that you want to support.
-# For your initial PR, limit it to 1 platform.
-PLATFORMS: list[str] = ["sensor", "binary_sensor", "switch", "fan"]
+# PLATFORMS: list[str] = ["sensor", "binary_sensor", "switch", "fan"]
+
+PLATFORMS = [
+    Platform.SENSOR,
+    Platform.BINARY_SENSOR,
+    Platform.SWITCH,
+    Platform.FAN,
+]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -46,7 +44,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
-    hass.config_entries.async_setup_platforms(entry, PLATFORMS)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
 

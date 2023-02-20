@@ -1,6 +1,8 @@
 """Vento fan binary sensors."""
 from __future__ import annotations
 
+from ecoventv2 import Fan
+
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
@@ -8,15 +10,15 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
+
+# from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
-
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
 )
 
-from ecoventv2 import Fan
 from .const import DOMAIN
 
 
@@ -113,50 +115,50 @@ class VentoBinarySensor(CoordinatorEntity, BinarySensorEntity):
         self._attr_icon = icon
 
     @property
-    def is_on(self):
+    def is_on(self) -> bool:
         self._state = self._method() == "on"
         return self._state
 
     @property
-    def should_poll(self):
+    def should_poll(self) -> bool:
         """No polling needed for a demo binary sensor."""
         return True
 
-    def boost_status(self):
+    def boost_status(self) -> bool:
         return self._fan.boost_status
 
-    def timer_mode(self):
+    def timer_mode(self) -> bool:
         return self._fan.timer_mode
 
     # def humidity_sensor_state(self):
     #    return self._fan.humidity_sensor_state
 
-    def relay_sensor_state(self):
+    def relay_sensor_state(self) -> bool:
         return self._fan.relay_sensor_state
 
-    def humidity_treshold(self):
+    def humidity_treshold(self) -> bool:
         return self._fan.humidity_treshold
 
-    def filter_replacement_status(self):
+    def filter_replacement_status(self) -> bool:
         return self._fan.filter_replacement_status
 
-    def relay_status(self):
+    def relay_status(self) -> bool:
         return self._fan.relay_status
 
-    def alarm_status(self):
+    def alarm_status(self) -> bool:
         return self._fan.alarm_status
 
-    def cloud_server_state(self):
+    def cloud_server_state(self) -> bool:
         return self._fan.cloud_server_state
 
-    def humidity_status(self):
+    def humidity_status(self) -> bool:
         return self._fan.humidity_status
 
-    def analogV_status(self):
+    def analogV_status(self) -> bool:
         return self._fan.analogV_status
 
     @property
-    def device_info(self):
+    def device_info(self) -> DeviceInfo | None:
         return {
             "identifiers": {(DOMAIN, self._fan.id)},
             "name": self._attr_name,

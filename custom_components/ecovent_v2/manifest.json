@@ -1,14 +1,11 @@
 {
   "domain": "ecovent_v2",
-  "name": "EcoVentV2",
-  "version": "0.9.0",
+  "name": "Vento Eco Vent v 2.0",
+  "version": "0.9.1",
+  "codeowners": ["@gody01"],
   "config_flow": true,
   "documentation": "https://www.home-assistant.io/integrations/ecovent_v2",
-  "requirements": ["pyEcoventV2==0.9.15"],
-  "ssdp": [],
-  "zeroconf": [],
-  "homekit": {},
-  "dependencies": [],
-  "codeowners": ["@gody01"],
-  "iot_class": "local_polling"
+  "iot_class": "local_polling",
+  "loggers": ["pyEcoventV2"],
+  "requirements": ["pyEcoventV2==0.9.15"]
 }

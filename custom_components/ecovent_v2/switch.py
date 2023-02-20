@@ -77,7 +77,6 @@ async def async_setup_entry(
 
 
 class VentoSwitch(CoordinatorEntity, SwitchEntity):
-
     _attr_should_poll = False
 
     def __init__(
@@ -107,7 +106,7 @@ class VentoSwitch(CoordinatorEntity, SwitchEntity):
         self._attr_is_on = state
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._fan.id)},
-            name=self.name,
+            name=self._fan.name,
         )
 
     async def async_turn_on(self, **kwargs):

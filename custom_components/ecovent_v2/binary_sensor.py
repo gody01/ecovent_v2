@@ -93,6 +93,8 @@ async def async_setup_entry(
 
 
 class VentoBinarySensor(CoordinatorEntity, BinarySensorEntity):
+    """Vento Binary Sensor class"""
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -125,41 +127,52 @@ class VentoBinarySensor(CoordinatorEntity, BinarySensorEntity):
         return True
 
     def boost_status(self) -> bool:
+        """Boost status."""
         return self._fan.boost_status
 
     def timer_mode(self) -> bool:
+        """Timer mode status."""
         return self._fan.timer_mode
 
     # def humidity_sensor_state(self):
+    #    """Huimidity sensor state."""
     #    return self._fan.humidity_sensor_state
 
     def relay_sensor_state(self) -> bool:
+        """Relay sensoir state."""
         return self._fan.relay_sensor_state
 
     def humidity_treshold(self) -> bool:
+        """Humidity treshold state."""
         return self._fan.humidity_treshold
 
     def filter_replacement_status(self) -> bool:
+        """Filter replacement state state."""
         return self._fan.filter_replacement_status
 
     def relay_status(self) -> bool:
+        """Relay status."""
         return self._fan.relay_status
 
     def alarm_status(self) -> bool:
+        """Alarm status."""
         return self._fan.alarm_status
 
     def cloud_server_state(self) -> bool:
+        """Cloud server state."""
         return self._fan.cloud_server_state
 
     def humidity_status(self) -> bool:
+        """Humidity status."""
         return self._fan.humidity_status
 
     def analogV_status(self) -> bool:
+        """analogV status."""
         return self._fan.analogV_status
 
     @property
     def device_info(self) -> DeviceInfo | None:
         return {
             "identifiers": {(DOMAIN, self._fan.id)},
-            "name": self._attr_name,
+            "name": self._fan.name,
         }

@@ -106,3 +106,6 @@ version 0.9.0
 version 0.9.1
 * replaced hass.config_entries.async_setup_platforms with await hass.config_entries.async_forward_entry_setups
 * thanks to @berndulum for issue report
+
+version 0.9.2
+* fix name of sensor leaking to device name (hopefuly)

@@ -1,7 +1,7 @@
 {
   "domain": "ecovent_v2",
   "name": "Vento Eco Vent v 2.0",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "codeowners": ["@gody01"],
   "config_flow": true,
   "documentation": "https://www.home-assistant.io/integrations/ecovent_v2",

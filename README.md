@@ -109,3 +109,6 @@ version 0.9.1
 
 version 0.9.2
 * fix name of sensor leaking to device name (hopefuly)
+
+version 0.9.3
+* bump requirements to pyEcoventV2==0.9.16 (fixed boost_status reading)

@@ -112,3 +112,6 @@ version 0.9.2
 
 version 0.9.3
 * bump requirements to pyEcoventV2==0.9.16 (fixed boost_status reading)
+
+version 0.9.5
+* Merged pull request for file "protocol.md" by @Styx85.

@@ -115,3 +115,8 @@ version 0.9.3
 
 version 0.9.5
 * Merged pull request for file "protocol.md" by @Styx85.
+
+version 0.9.6
+* Fix: Humidy Threshold creates errors trouble in newest HA #21
+* humidity_treshold, analogV_treshold, boost_timer changed from sensor to number.
+** Now they can be configured via HomeAssistant.

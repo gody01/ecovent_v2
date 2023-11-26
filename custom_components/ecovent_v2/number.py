@@ -81,7 +81,7 @@ class VentoNumber(CoordinatorEntity, NumberEntity):
         self,
         hass: HomeAssistant,
         config: ConfigType,
-        unique_id: str,
+        name: str,
         method: str,
         state: float,
         icon: str,
@@ -107,9 +107,9 @@ class VentoNumber(CoordinatorEntity, NumberEntity):
         self._attr_icon = icon
         self._attr_mode = mode
         self._attr_native_unit_of_measurement = unit_of_measurement
-        self._attr_unique_id = unique_id
+        self._attr_unique_id = self._fan.id + name
         self._attr_native_value = getattr(self._fan, method)
-        self._attr_name = self._attr_unique_id
+        self._attr_name = name
 
         # self._method = getattr(self, method)
         self._func = method
@@ -126,7 +126,7 @@ class VentoNumber(CoordinatorEntity, NumberEntity):
                 # Serial numbers are unique identifiers within a specific domain
                 (DOMAIN, self._fan.id)
             },
-            name=self._attr_name,
+            name=self._fan.name + self._attr_name,
         )
 
     async def async_set_native_value(self, value: float) -> None:

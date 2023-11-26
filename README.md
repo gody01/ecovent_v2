@@ -119,3 +119,6 @@ version 0.9.5
 version 0.9.6
 * Fix: Humidy Threshold creates errors trouble in newest HA #21
 * humidity_treshold, analogV_treshold, boost_timer changed from sensor to number. Now they can be configured via HomeAssistant.
+
+Version 0.9.7
+* Updatet README.md

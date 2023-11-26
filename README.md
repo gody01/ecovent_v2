@@ -122,3 +122,8 @@ version 0.9.6
 
 Version 0.9.7
 * Updatet README.md
+
+
+Version 0.9.8
+* Fix number entities names.
+

@@ -27,7 +27,7 @@ async def async_setup_entry(
             VentoNumber(
                 hass,
                 config,
-                "_humidity_threshold_set",
+                "_humidity_threshold",
                 "humidity_treshold",
                 None,
                 "mdi:water-percent",
@@ -41,7 +41,7 @@ async def async_setup_entry(
             VentoNumber(
                 hass,
                 config,
-                "_analogV_treshold_set",
+                "_analogV_treshold",
                 "analogV_treshold",
                 None,
                 "mdi:flash-triangle-outline",
@@ -55,7 +55,7 @@ async def async_setup_entry(
             VentoNumber(
                 hass,
                 config,
-                "_boost_time_set",
+                "_boost_time",
                 "boost_time",
                 None,
                 "mdi:fan-clock",
@@ -107,7 +107,7 @@ class VentoNumber(CoordinatorEntity, NumberEntity):
         self._attr_icon = icon
         self._attr_mode = mode
         self._attr_native_unit_of_measurement = unit_of_measurement
-        self._attr_unique_id = self._fan.name + unique_id
+        self._attr_unique_id = unique_id
         self._attr_native_value = getattr(self._fan, method)
         self._attr_name = self._attr_unique_id
 

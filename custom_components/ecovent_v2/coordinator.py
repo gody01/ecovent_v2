@@ -1,4 +1,3 @@
-"""The EcoVent_v2 integration."""
 # from __future__ import annotations
 from datetime import timedelta
 import logging
@@ -12,7 +11,6 @@ from homeassistant.const import (
     CONF_NAME,
     CONF_PASSWORD,
     CONF_PORT,
-    Platform,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -21,42 +19,6 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-# PLATFORMS: list[str] = ["sensor", "binary_sensor", "switch", "fan"]
-
-PLATFORMS = [
-    Platform.SENSOR,
-    Platform.BINARY_SENSOR,
-    Platform.SWITCH,
-    Platform.FAN,
-    Platform.NUMBER,
-]
-
-
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up EcoVent_v2 from a config entry."""
-
-    coordinator = VentoFanDataUpdateCoordinator(
-        hass,
-        entry,
-    )
-
-    await coordinator.async_config_entry_first_refresh()
-
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = coordinator
-
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
-    return True
-
-
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
-
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-
-    return unload_ok
-
 
 class VentoFanDataUpdateCoordinator(DataUpdateCoordinator):
     def __init__(
@@ -64,7 +26,7 @@ class VentoFanDataUpdateCoordinator(DataUpdateCoordinator):
         hass: HomeAssistant,
         config: ConfigEntry,
     ) -> None:
-        """Initialize global Venstar data updater."""
+        """Initialize global Vento data updater."""
         self._fan = Fan(
             config.data[CONF_IP_ADDRESS],
             config.data[CONF_PASSWORD],

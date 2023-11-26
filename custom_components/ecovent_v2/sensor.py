@@ -104,18 +104,6 @@ async def async_setup_platform(
             VentoSensor(
                 hass,
                 config,
-                "_humidity_threshold",
-                "humidity_threshold",
-                PERCENTAGE,
-                None,
-                None,
-                EntityCategory.CONFIG,
-                True,
-                "mdi:water-percent-alert",
-            ),
-            VentoSensor(
-                hass,
-                config,
                 "_filter_change_in",
                 "filter_timer_countdown",
                 None,
@@ -128,18 +116,6 @@ async def async_setup_platform(
             VentoSensor(
                 hass,
                 config,
-                "_boost_time",
-                "boost_time",
-                None,
-                None,
-                None,
-                EntityCategory.CONFIG,
-                False,
-                "mdi:timer-outline",
-            ),
-            VentoSensor(
-                hass,
-                config,
                 "_analogv",
                 "analogv",
                 None,
@@ -148,18 +124,6 @@ async def async_setup_platform(
                 EntityCategory.DIAGNOSTIC,
                 False,
                 "mdi:flash",
-            ),
-            VentoSensor(
-                hass,
-                config,
-                "_analogv_threshold",
-                "analogv_threshold",
-                None,
-                None,
-                None,
-                EntityCategory.CONFIG,
-                False,
-                "mdi:flash-alert",
             ),
             VentoSensor(
                 hass,
@@ -272,6 +236,10 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         return self._fan.timer_counter
 
     def humidity_threshold(self):
+        """Get humidity threshold value."""
+        return self._fan.humidity_treshold
+
+    def humidity_treshold(self):
         """Get humidity threshold value."""
         return self._fan.humidity_treshold
 

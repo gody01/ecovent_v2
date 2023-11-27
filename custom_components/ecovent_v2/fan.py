@@ -125,7 +125,21 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         """Oscillating."""
         return self._fan.airflow == "heat_recovery"
 
-    # pylint: disable=arguments-differ
+    @property
+    def boost_time(self) -> int:
+        """Boost time."""
+        return self._fan.boost_time
+
+    @property
+    def humidity_treshold(self) -> int:
+        """Boost time."""
+        return self._fan.humidity_treshold
+
+    @property
+    def analogV_treshold(self) -> int:
+        """Boost time."""
+        return self._fan.analogV_treshold
+
     async def async_turn_on(
         self,
         percentage: int | None = None,

@@ -133,3 +133,6 @@ Version 1.0.0
 * some more name fixes
 * fix code to be more compliant with latest HA
 * some code cleanup
+
+Version 1.0.1
+* Values for humidity_threshold, analogV_threshold and boost ime read from device on initialization.

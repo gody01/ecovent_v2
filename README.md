@@ -129,4 +129,7 @@ Version 0.9.8
 Version 0.9.9
 * more  entities names fixes.
 
-
+Version 1.0.0
+* some more name fixes
+* fix code to be more compliant with latest HA
+* some code cleanup

@@ -5,29 +5,29 @@ from __future__ import annotations
 from ecoventv2 import Fan
 
 from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberMode
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import ConfigType
-from homeassistant.helpers.update_coordinator import (
-    CoordinatorEntity,
-    DataUpdateCoordinator,
-)
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import DOMAIN
+from .coordinator import VentoFanDataUpdateCoordinator
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, config: ConfigType, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    config: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the Vento number platform."""
+    """Set up the Demo config entry."""
     async_add_entities(
         [
             VentoNumber(
                 hass,
                 config,
-                "_humidity_threshold",
+                "Humidity threshold",
                 "humidity_treshold",
                 None,
                 "mdi:water-percent",
@@ -41,7 +41,7 @@ async def async_setup_entry(
             VentoNumber(
                 hass,
                 config,
-                "_analogV_treshold",
+                "Analog Voltage threshold",
                 "analogV_treshold",
                 None,
                 "mdi:flash-triangle-outline",
@@ -55,7 +55,7 @@ async def async_setup_entry(
             VentoNumber(
                 hass,
                 config,
-                "_boost_time",
+                "Boost time",
                 "boost_time",
                 None,
                 "mdi:fan-clock",
@@ -80,12 +80,12 @@ class VentoNumber(CoordinatorEntity, NumberEntity):
     def __init__(
         self,
         hass: HomeAssistant,
-        config: ConfigType,
-        name: str,
-        method: str,
-        state: float,
-        icon: str,
-        assumed_state: bool,
+        config: ConfigEntry,
+        name="VentoNumber",
+        method="",
+        state=None,
+        icon=None,
+        assumed_state=False,
         *,
         device_class: NumberDeviceClass | None = None,
         mode: NumberMode = NumberMode.AUTO,
@@ -97,7 +97,7 @@ class VentoNumber(CoordinatorEntity, NumberEntity):
     ) -> None:
         """Initialize the Vento Number entity."""
 
-        coordinator: DataUpdateCoordinator = hass.data[DOMAIN][config.entry_id]
+        coordinator: VentoFanDataUpdateCoordinator = hass.data[DOMAIN][config.entry_id]
         super().__init__(coordinator)
 
         self._fan: Fan = coordinator._fan
@@ -107,10 +107,10 @@ class VentoNumber(CoordinatorEntity, NumberEntity):
         self._attr_icon = icon
         self._attr_mode = mode
         self._attr_native_unit_of_measurement = unit_of_measurement
-        self._attr_unique_id = self._fan.id + name
-        self._attr_native_value = getattr(self._fan, method)
+        # self._attr_name = self._fan.name + name
         self._attr_name = name
-
+        self._attr_unique_id = self._fan.id + method
+        self._attr_native_value = getattr(self._fan, method)
         # self._method = getattr(self, method)
         self._func = method
 
@@ -120,13 +120,9 @@ class VentoNumber(CoordinatorEntity, NumberEntity):
             self._attr_native_max_value = native_max_value
         if native_step is not None:
             self._attr_native_step = native_step
-
         self._attr_device_info = DeviceInfo(
-            identifiers={
-                # Serial numbers are unique identifiers within a specific domain
-                (DOMAIN, self._fan.id)
-            },
-            name=self._fan.name + self._attr_name,
+            identifiers={(DOMAIN, self._fan.id)},
+            name=self._fan.name,
         )
 
     async def async_set_native_value(self, value: float) -> None:
@@ -136,10 +132,3 @@ class VentoNumber(CoordinatorEntity, NumberEntity):
         self._fan.set_param(self._func, hex(intval).replace("0x", "").zfill(2))
         self.async_write_ha_state()
         await self.coordinator.async_refresh()
-
-    @property
-    def device_info(self):
-        """Get device info."""
-        return {
-            "identifiers": {(DOMAIN, self._fan.id)},
-        }

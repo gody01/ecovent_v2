@@ -9,26 +9,22 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE
+from homeassistant.const import PERCENTAGE, EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import EntityCategory
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
-from homeassistant.helpers.update_coordinator import (
-    CoordinatorEntity,
-    DataUpdateCoordinator,
-)
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
+from .coordinator import VentoFanDataUpdateCoordinator
 
 
-async def async_setup_platform(
+async def async_setup_entry(
     hass: HomeAssistant,
-    config: ConfigType,
+    config: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
-    discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
-    """Set up the Demo sensors."""
+    """Set up Vento Sensors."""
     async_add_entities(
         [
             VentoSensor(
@@ -149,17 +145,8 @@ async def async_setup_platform(
                 True,
                 "mdi:ip-network",
             ),
-        ],
+        ]
     )
-
-
-async def async_setup_entry(
-    hass: HomeAssistant,
-    config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
-) -> None:
-    """Set up the Demo config entry."""
-    await async_setup_platform(hass, config_entry, async_add_entities)
 
 
 # VentoSensor class
@@ -168,8 +155,8 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
 
     def __init__(
         self,
-        hass,
-        config,
+        hass: HomeAssistant,
+        config: ConfigEntry,
         name="VentoSensor",
         method=None,
         native_unit_of_measurement=None,
@@ -179,8 +166,8 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         enable_by_default=True,
         icon=None,
     ) -> None:
-        """Initialize fan."""
-        coordinator: DataUpdateCoordinator = hass.data[DOMAIN][config.entry_id]
+        """Initialize fan sensors."""
+        coordinator: VentoFanDataUpdateCoordinator = hass.data[DOMAIN][config.entry_id]
         super().__init__(coordinator)
         self._fan: Fan = coordinator._fan
         self._attr_native_unit_of_measurement = native_unit_of_measurement
@@ -192,6 +179,10 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         self._attr_entity_registry_enabled_default = enable_by_default
         self._method = getattr(self, method)
         self._attr_icon = icon
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, self._fan.id)},
+            name=name,
+        )
 
     @property
     def native_value(self):
@@ -235,21 +226,9 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         """Get timer counter value."""
         return self._fan.timer_counter
 
-    def humidity_threshold(self):
-        """Get humidity threshold value."""
-        return self._fan.humidity_treshold
-
-    def humidity_treshold(self):
-        """Get humidity threshold value."""
-        return self._fan.humidity_treshold
-
     def filter_timer_countdown(self):
         """Get filter timer countdown value."""
         return self._fan.filter_timer_countdown
-
-    def boost_time(self):
-        """Get boost time value."""
-        return self._fan.boost_time
 
     def machine_hours(self):
         """Get machine hours value."""
@@ -259,17 +238,6 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         """Get analog Voltage value."""
         return self._fan.analogV
 
-    def analogv_threshold(self):
-        """Get analog Voltage threshold value."""
-        return self._fan.analogV_treshold
-
     def current_wifi_ip(self):
         """Get current wifi IP value."""
         return self._fan.curent_wifi_ip
-
-    @property
-    def device_info(self):
-        """Get device info."""
-        return {
-            "identifiers": {(DOMAIN, self._fan.id)},
-        }

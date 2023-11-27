@@ -1,21 +1,19 @@
 """Support for Blauberg Vento Expert Fans with api v.2."""
 
 from __future__ import annotations
+
 from typing import Any
 
 from homeassistant.components.fan import FanEntity, FanEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_platform
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
-from homeassistant.helpers.update_coordinator import (
-    CoordinatorEntity,
-    DataUpdateCoordinator,
-)
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, SERVICE_FILTER_TIMER_RESET, SERVICE_RESET_ALARMS
+from .coordinator import VentoFanDataUpdateCoordinator
 
 # _LOGGER = logging.getLogger(__name__)
 
@@ -33,23 +31,13 @@ PRESET_MODES = ["low", "medium", "high", "manual"]
 DIRECTIONS = ["ventilation", "air_supply", "heat_recovery"]
 
 
-async def async_setup_platform(
-    hass: HomeAssistant,
-    config: ConfigType,
-    async_add_entities: AddEntitiesCallback,
-    discovery_info: DiscoveryInfoType | None = None,
-) -> None:
-    """Set up the Ecovent fan platform."""
-    async_add_entities([VentoExpertFan(hass, config)])
-
-
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Ecovent Fan config entry."""
-    await async_setup_platform(hass, config_entry, async_add_entities, None)
+    async_add_entities([VentoExpertFan(hass, config)])
 
     platform = entity_platform.async_get_current_platform()
 
@@ -66,16 +54,18 @@ async def async_setup_entry(
 class VentoExpertFan(CoordinatorEntity, FanEntity):
     """Cento Expert Coordinator Class."""
 
-    def __init__(self, hass, config) -> None:
+    def __init__(self, hass: HomeAssistant, config: ConfigEntry) -> None:
         """Initialize fan."""
 
-        coordinator: DataUpdateCoordinator = hass.data[DOMAIN][config.entry_id]
+        coordinator: VentoFanDataUpdateCoordinator = hass.data[DOMAIN][config.entry_id]
         super().__init__(coordinator)
+
         self._fan = coordinator._fan
         self._percentage = self._fan.man_speed
-        self._attr_unique_id: self._fan.id
+        self._attr_unique_id = self._fan.id
         self._attr_name = self._fan.name
         self._attr_extra_state_attributes = {"ipv4_address": self._fan.curent_wifi_ip}
+        self._attr_supported_features = FULL_SUPPORT
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._fan.id)},
             name=self._fan.name,
@@ -86,12 +76,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         )
 
     @property
-    def device_info(self) -> DeviceInfo:
-        """Return device info."""
-        return self._attr_device_info
-
-    @property
-    def extra_state_attributes(self) -> None:
+    def extra_state_attributes(self):
         """Return extra state attributes."""
         return self._attr_extra_state_attributes
 
@@ -140,17 +125,18 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         """Oscillating."""
         return self._fan.airflow == "heat_recovery"
 
-    @property
-    def supported_features(self) -> int:
-        """Flag supported features."""
-        return FULL_SUPPORT
-
     # pylint: disable=arguments-differ
     async def async_turn_on(
         self,
+        percentage: int | None = None,
+        preset_mode: str | None = None,
         **kwargs: Any,
     ) -> None:
         """Turn on the entity."""
+        if preset_mode is not None:
+            self.set_preset_mode(preset_mode)
+        if percentage is not None:
+            self.set_percentage(percentage)
         self._fan.set_param("state", "on")
         await self.coordinator.async_refresh()
         # self.schedule_update_ha_state()
@@ -161,24 +147,30 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         await self.coordinator.async_refresh()
         # self.schedule_update_ha_state()
 
-    async def async_set_preset_mode(self, preset_mode: str) -> None:
+    def set_preset_mode(self, preset_mode: str) -> None:
         """Set the preset mode of the fan."""
         if preset_mode in self.preset_modes:
             self._fan.set_param("speed", preset_mode)
             if preset_mode == "manual":
                 self._fan.set_man_speed_percent(self.percentage)
-            await self.coordinator.async_refresh()
-            # self.schedule_update_ha_state()
         else:
             raise ValueError(f"Invalid preset mode: {preset_mode}")
 
-    async def async_set_percentage(self, percentage: int) -> None:
+    async def async_set_preset_mode(self, preset_mode: str) -> None:
+        """Set the preset mode of the fan."""
+        self.set_preset_mode(preset_mode)
+        await self.coordinator.async_refresh()
+
+    def set_percentage(self, percentage: int) -> None:
         """Set the speed of the fan, as a percentage."""
         self._percentage = percentage
         if self._fan.speed == "manual":
             self._fan.set_man_speed_percent(percentage)
-            await self.coordinator.async_refresh()
-            # self.schedule_update_ha_state()
+
+    async def async_set_percentage(self, percentage: int) -> None:
+        """Set the speed of the fan, as a percentage."""
+        self.set_percentage(percentage)
+        await self.coordinator.async_refresh()
 
     async def async_set_direction(self, direction: str) -> None:
         """Set the direction of the fan."""

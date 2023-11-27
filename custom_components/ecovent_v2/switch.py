@@ -1,28 +1,24 @@
 """Switches on Fan device."""
 from __future__ import annotations
 
+from ecoventv2 import Fan
+
 from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
 from homeassistant.config_entries import ConfigEntry
-
-# from homeassistant.const import DEVICE_DEFAULT_NAME
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo, EntityCategory
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
-from homeassistant.helpers.update_coordinator import (
-    CoordinatorEntity,
-    DataUpdateCoordinator,
-)
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from ecoventv2 import Fan
 from .const import DOMAIN
+from .coordinator import VentoFanDataUpdateCoordinator
 
 
-async def async_setup_platform(
+async def async_setup_entry(
     hass: HomeAssistant,
-    config: ConfigType,
+    config: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
-    discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
     """Set up the fan switches."""
     async_add_entities(
@@ -67,32 +63,26 @@ async def async_setup_platform(
     )
 
 
-async def async_setup_entry(
-    hass: HomeAssistant,
-    config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
-) -> None:
-    """Set up the fan config entry."""
-    await async_setup_platform(hass, config_entry, async_add_entities)
-
-
 class VentoSwitch(CoordinatorEntity, SwitchEntity):
+    """Class for Vento Fan Switches."""
+
     _attr_should_poll = False
 
     def __init__(
         self,
-        hass,
-        config,
+        hass: HomeAssistant,
+        config: ConfigEntry,
         name="VentoSwitch",
         method=None,
         device_class: SwitchDeviceClass | None = None,
         state: bool = False,
         entity_category=None,
         enable_by_default=False,
-        icon: str = None,
+        icon=None,
         assumed: bool = False,
     ) -> None:
-        coordinator: DataUpdateCoordinator = hass.data[DOMAIN][config.entry_id]
+        """Init switches."""
+        coordinator: VentoFanDataUpdateCoordinator = hass.data[DOMAIN][config.entry_id]
         super().__init__(coordinator)
         self._fan: Fan = coordinator._fan
         self._attr_device_class = device_class
@@ -122,15 +112,19 @@ class VentoSwitch(CoordinatorEntity, SwitchEntity):
         self.schedule_update_ha_state()
 
     def humidity_sensor_state(self):
+        """Humidity sensor state."""
         return self._fan.humidity_sensor_state
 
     def relay_sensor_state(self):
+        """Relay sensor state."""
         return self._fan.relay_sensor_state
 
     def analogV_sensor_state(self):
+        """Analog Voltage sensor state."""
         return self._fan.analogV_sensor_state
 
     @property
     def is_on(self) -> bool | None:
+        """Is switch on."""
         self._attr_is_on = self._method() == "on"
         return self._attr_is_on

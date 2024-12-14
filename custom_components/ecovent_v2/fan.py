@@ -9,13 +9,17 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
-
-from .const import DOMAIN, SERVICE_FILTER_TIMER_RESET, SERVICE_RESET_ALARMS
+from .const import SERVICE_FILTER_TIMER_RESET
+from .const import SERVICE_RESET_ALARMS
+from .const import DOMAIN
 from .coordinator import VentoFanDataUpdateCoordinator
 
-# _LOGGER = logging.getLogger(__name__)
+from homeassistant.helpers.update_coordinator import (
+    CoordinatorEntity,
+    DataUpdateCoordinator,
+    UpdateFailed,
+)
+
 
 DEFAULT_ON_PERCENTAGE = 5
 SPEED_RANGE = (1, 3)  # off is not included
@@ -25,7 +29,10 @@ FULL_SUPPORT = (
     | FanEntityFeature.PRESET_MODE
     | FanEntityFeature.OSCILLATE
     | FanEntityFeature.DIRECTION
+    | FanEntityFeature.TURN_OFF
+    | FanEntityFeature.TURN_ON
 )
+
 
 PRESET_MODES = ["low", "medium", "high", "manual"]
 DIRECTIONS = ["ventilation", "air_supply", "heat_recovery"]

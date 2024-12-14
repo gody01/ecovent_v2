@@ -1,3 +1,5 @@
+"""VentoUpdateCoordinator class."""
+
 # from __future__ import annotations
 from datetime import timedelta
 import logging
@@ -13,7 +15,11 @@ from homeassistant.const import (
     CONF_PORT,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.update_coordinator import (
+    CoordinatorEntity,
+    DataUpdateCoordinator,
+    UpdateFailed,
+)
 
 from .const import DOMAIN
 
@@ -21,6 +27,8 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class VentoFanDataUpdateCoordinator(DataUpdateCoordinator):
+    """Class for Vento Fan Update Coordinator."""
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -46,6 +54,7 @@ class VentoFanDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self) -> None:
         """Fetch data from API endpoint.
+
         This is the place to pre-process the data to lookup tables
         so entities can quickly look up their data.
         """

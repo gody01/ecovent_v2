@@ -181,7 +181,7 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         self._attr_icon = icon
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._fan.id)},
-            name=name,
+            name=self._fan.name,
         )
 
     @property

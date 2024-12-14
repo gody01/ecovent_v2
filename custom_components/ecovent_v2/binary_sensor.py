@@ -1,4 +1,5 @@
 """Vento fan binary sensors."""
+
 from __future__ import annotations
 
 from ecoventv2 import Fan
@@ -11,7 +12,11 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.update_coordinator import (
+    CoordinatorEntity,
+    DataUpdateCoordinator,
+    UpdateFailed,
+)
 
 from .const import DOMAIN
 from .coordinator import VentoFanDataUpdateCoordinator

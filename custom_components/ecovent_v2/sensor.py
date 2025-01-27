@@ -9,7 +9,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE, EntityCategory
+from homeassistant.const import PERCENTAGE, REVOLUTIONS_PER_MINUTE, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -18,6 +18,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import VentoFanDataUpdateCoordinator
 
+import re
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -44,9 +45,9 @@ async def async_setup_entry(
                 config,
                 "_speed1",
                 "fan1_speed",
+                REVOLUTIONS_PER_MINUTE,
                 None,
-                None,
-                None,
+                SensorStateClass.MEASUREMENT,
                 EntityCategory.DIAGNOSTIC,
                 True,
                 "mdi:fan-speed-1",
@@ -56,9 +57,9 @@ async def async_setup_entry(
                 config,
                 "_speed2",
                 "fan2_speed",
+                REVOLUTIONS_PER_MINUTE,
                 None,
-                None,
-                None,
+                SensorStateClass.MEASUREMENT,
                 EntityCategory.DIAGNOSTIC,
                 False,
                 "mdi:fan-speed-2",
@@ -79,9 +80,9 @@ async def async_setup_entry(
                 config,
                 "_timer_counter",
                 "timer_counter",
-                None,
-                None,
-                None,
+                "h",
+                SensorDeviceClass.DURATION,
+                SensorStateClass.MEASUREMENT,
                 EntityCategory.DIAGNOSTIC,
                 False,
             ),
@@ -102,9 +103,9 @@ async def async_setup_entry(
                 config,
                 "_filter_change_in",
                 "filter_timer_countdown",
-                None,
-                None,
-                None,
+                "h",
+                SensorDeviceClass.DURATION,
+                SensorStateClass.MEASUREMENT,
                 EntityCategory.DIAGNOSTIC,
                 True,
                 "mdi:timer-sand",
@@ -126,9 +127,9 @@ async def async_setup_entry(
                 config,
                 "_machine_hours",
                 "machine_hours",
-                None,
-                None,
-                None,
+                "h",
+                SensorDeviceClass.DURATION,
+                SensorStateClass.MEASUREMENT,
                 EntityCategory.DIAGNOSTIC,
                 False,
                 "mdi:timer-outline",
@@ -223,16 +224,53 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         return voltage
 
     def timer_counter(self):
-        """Get timer counter value."""
-        return self._fan.timer_counter
+        """Get timer counter value as total hours."""
+        timer_counter_str = self._fan.timer_counter
+
+        # Use regex to extract days, hours, and minutes
+        match = re.match(r"(\d+)h (\d+)m (\d+)s", timer_counter_str)
+        if match:
+            hours = int(match.group(1))
+            minutes = int(match.group(2))
+            seconds = int(match.group(3))
+
+            # Convert everything to total hours
+            total_hours = hours + minutes / 60 + seconds / 3600
+            return total_hours
+        return None  # In case the string format is unexpected
 
     def filter_timer_countdown(self):
-        """Get filter timer countdown value."""
-        return self._fan.filter_timer_countdown
+        """Get filter time countdown as total hours."""
+        remaining_time_str = self._fan.filter_timer_countdown
+
+        # Use regex to extract days, hours, and minutes
+        match = re.match(r"(\d+)d (\d+)h (\d+)m", remaining_time_str)
+        if match:
+            days = int(match.group(1))
+            hours = int(match.group(2))
+            minutes = int(match.group(3))
+
+            # Convert everything to total hours
+            total_hours = days * 24 + hours + minutes / 60
+            return total_hours
+        return None  # In case the string format is unexpected
 
     def machine_hours(self):
-        """Get machine hours value."""
-        return self._fan.machine_hours
+        """Get machine hours value as total hours."""
+        machine_hours_str = self._fan.machine_hours
+
+        # Use regex to extract days, hours, and minutes
+        match = re.match(r"(\d+)d (\d+)h (\d+)m", machine_hours_str)
+        if match:
+            days = int(match.group(1))
+            hours = int(match.group(2))
+            minutes = int(match.group(3))
+
+            # Convert everything to total hours
+            total_hours = days * 24 + hours + minutes / 60
+            return total_hours
+        return None  # In case the string format is unexpected
+
 
     def analogv(self):
         """Get analog Voltage value."""

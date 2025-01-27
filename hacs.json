@@ -2,7 +2,7 @@
   "name": "EcoVent VENTO Expert A50/80/100 V.2 Fans",
   "content_in_root": false,
   "domains": ["fan"],  
-  "homeassistant": "2022.3.0",
+  "homeassistant": "2025.1.0",
   "iot_class": "local_poll",
   "render_readme": true
 }

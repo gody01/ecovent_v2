@@ -150,3 +150,7 @@ Version 1.0.5
 
 Version 1.0.6
 * Bump pyEcoventV2 requirements to 0.9.21, trying to resolve different lengths of returned value for filter_timer_counter
+
+Version 1.0.7
+* Bump pyyecoventv2 requirements to 0.9.22, still trying to fix 4 byte return of filter_timer_counter function
+

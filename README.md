@@ -136,3 +136,17 @@ Version 1.0.0
 
 Version 1.0.1
 * Values for humidity_threshold, analogV_threshold and boost ime read from device on initialization.
+
+Version 1.0.2
+* Fix for issue #25 VentoExpertFan does not set FanEntityFeature.TURN_OFF but implements the thurn_off method
+
+Version 1.0.3
+* Merge pull request #28 from SantaFox/main: Amended some sensors for better automations
+
+Version 1.0.4
+
+Version 1.0.5
+* Bump pyEcoventV2 requirements to 0.9.19
+
+Version 1.0.6
+* Bump pyEcoventV2 requirements to 0.9.21, trying to resolve different lengths of returned value for filter_timer_counter

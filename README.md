@@ -154,3 +154,6 @@ Version 1.0.6
 Version 1.0.7 / 1.0.8
 * Bump pyyecoventv2 requirements to 0.9.22, still trying to fix 4 byte return of filter_timer_counter function
 
+Version 1.0.9
+* Bump pyyecoventv2 requirements to 0.9.23, remove beeper gueswork
+

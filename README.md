@@ -159,3 +159,6 @@ Version 1.0.9
 
 Version 1.1.0
 * Merged fixes from github contributors
+
+Version 1.1.1
+* Fix typos

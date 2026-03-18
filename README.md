@@ -157,3 +157,5 @@ Version 1.0.7 / 1.0.8
 Version 1.0.9
 * Bump pyyecoventv2 requirements to 0.9.23, remove beeper gueswork
 
+Version 1.1.0
+* Merged fixes from github contributors

@@ -15,11 +15,7 @@ from homeassistant.const import (
     CONF_PORT,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import (
-    CoordinatorEntity,
-    DataUpdateCoordinator,
-    UpdateFailed,
-)
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import DOMAIN
 
@@ -49,13 +45,13 @@ class VentoFanDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER,
             name=DOMAIN,
             update_interval=timedelta(seconds=60),
-            update_method=self._fan.update(),
+            config_entry=config,
         )
 
-    async def _async_update_data(self) -> None:
+    async def _async_update_data(self):
         """Fetch data from API endpoint.
 
         This is the place to pre-process the data to lookup tables
         so entities can quickly look up their data.
         """
-        self._fan.update()
+        return self._fan.update()

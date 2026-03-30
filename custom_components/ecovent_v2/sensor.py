@@ -191,10 +191,13 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         self._attr_native_value = self._method()
         return self._attr_native_value
 
-    def get_native_value(self):
-        """Get native value method."""
-        val = self._fan.get_param(self._method)
-        return val
+    async def get_native_value(self, param):
+        return await self._hass.async_add_executor_job(self._fan.get_param(self._method))
+
+#    def get_native_value(self):
+#        """Get native value method."""
+#        val = self._fan.get_param(self._method)
+#        return val
 
     def humidity(self):
         """Get humidity sensor value."""

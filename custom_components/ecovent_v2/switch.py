@@ -1,7 +1,7 @@
 """Switches on Fan device."""
 from __future__ import annotations
 
-from ecoventv2 import Fan
+from .ecoventv2 import Fan
 
 from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
 from homeassistant.config_entries import ConfigEntry
@@ -12,7 +12,9 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .coordinator import VentoFanDataUpdateCoordinator
+from .coordinator import EcoVentCoordinator
+import logging
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -82,7 +84,7 @@ class VentoSwitch(CoordinatorEntity, SwitchEntity):
         assumed: bool = False,
     ) -> None:
         """Init switches."""
-        coordinator: VentoFanDataUpdateCoordinator = hass.data[DOMAIN][config.entry_id]
+        coordinator: EcoVentCoordinator = hass.data[DOMAIN][config.entry_id]
         super().__init__(coordinator)
         self._fan: Fan = coordinator._fan
         self._attr_device_class = device_class
@@ -91,6 +93,7 @@ class VentoSwitch(CoordinatorEntity, SwitchEntity):
         self._attr_unique_id = self._fan.id + name
         self._attr_entity_registry_enabled_default = enable_by_default
         self._method = getattr(self, method)
+        #  self._attribute2 = getattr(self._fan, method)  crazy cannot be done here, only works for binary sensor.
         self._func = method
         self._attr_icon = icon
         self._attr_is_on = state
@@ -102,14 +105,18 @@ class VentoSwitch(CoordinatorEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs):
         """Turn the switch on."""
         self._attr_is_on = True
-        self._fan.set_param(self._func, "on")
-        self.schedule_update_ha_state()
+        await self.hass.async_add_executor_job(self._fan.set_param, self._func, "on")
+        # self._fan.set_param(self._func, "on")
+        # self.schedule_update_ha_state()
+        self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs):
         """Turn the device off."""
         self._attr_is_on = False
-        self._fan.set_param(self._func, "off")
-        self.schedule_update_ha_state()
+        await self.hass.async_add_executor_job(self._fan.set_param, self._func, "off")
+        # self._fan.set_param(self._func, "off")
+        # self.schedule_update_ha_state()
+        self.async_write_ha_state()
 
     def humidity_sensor_state(self):
         """Humidity sensor state."""
@@ -121,10 +128,15 @@ class VentoSwitch(CoordinatorEntity, SwitchEntity):
 
     def analogV_sensor_state(self):
         """Analog Voltage sensor state."""
+        # _LOGGER.debug(f"Getting analogV_sensor_state: {self._fan.analogV_sensor_state}")
+        # _LOGGER.debug(f"Attribute2 value: {self._attribute2}")
         return self._fan.analogV_sensor_state
 
     @property
     def is_on(self) -> bool | None:
         """Is switch on."""
-        self._attr_is_on = self._method() == "on"
+        self._attr_is_on = (self._method() == "on")
+        # self._attr_is_on = (self._attribute == "on")  # do not work reliably, use method instead
+        # _LOGGER.debug(f"Switch {self._attr_name}, val [{self._attribute2}] is_on: {self._attr_is_on}")
+        _LOGGER.debug(f"Switch {self._attr_name} is_on: {self._attr_is_on}")
         return self._attr_is_on

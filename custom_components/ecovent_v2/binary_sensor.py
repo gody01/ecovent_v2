@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ecoventv2 import Fan
+from .ecoventv2 import Fan
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
@@ -14,13 +14,12 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
-    DataUpdateCoordinator,
-    UpdateFailed,
 )
 
 from .const import DOMAIN
-from .coordinator import VentoFanDataUpdateCoordinator
-
+from .coordinator import EcoVentCoordinator
+import logging
+_LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -66,7 +65,7 @@ async def async_setup_entry(
     )
 
 
-class VentoBinarySensor(CoordinatorEntity, BinarySensorEntity):
+class VentoBinarySensor(CoordinatorEntity, BinarySensorEntity):   # CoordinatorEntity
     """Vento Binary Sensor class."""
 
     def __init__(
@@ -80,7 +79,7 @@ class VentoBinarySensor(CoordinatorEntity, BinarySensorEntity):
         device_class=BinarySensorDeviceClass,
     ) -> None:
         """Initialize fan binary sensors."""
-        coordinator: VentoFanDataUpdateCoordinator = hass.data[DOMAIN][config.entry_id]
+        coordinator: EcoVentCoordinator = hass.data[DOMAIN][config.entry_id]
         super().__init__(coordinator)
         self._fan: Fan = coordinator._fan
         self._attr_unique_id = self._fan.id + name
@@ -88,7 +87,7 @@ class VentoBinarySensor(CoordinatorEntity, BinarySensorEntity):
         self._state = None
         self._sensor_type = device_class
         self._attr_entity_registry_enabled_default = enable_by_default
-        self._method = getattr(self, method)
+        self._attribute = getattr(self._fan, method)
         self._attr_icon = icon
 
         self._attr_device_info = DeviceInfo(
@@ -98,46 +97,13 @@ class VentoBinarySensor(CoordinatorEntity, BinarySensorEntity):
     @property
     def is_on(self):
         """Is on."""
-        self._state = self._method() == "on"
+        self._state = (self._attribute == "on")
+        # self.async_write_ha_state() dangerous not allowed
+        # self.schedule_update_ha_state() # not needed
+        # _LOGGER.debug(f"VentoBinarySensor: {self._attr_name} state updated to {self._state}")
         return self._state
 
     @property
     def should_poll(self) -> bool:
-        """No polling needed for a demo binary sensor."""
-        return True
-
-    def boost_status(self) -> bool:
-        """Boost status."""
-        return self._fan.boost_status
-
-    def timer_mode(self) -> bool:
-        """Timer mode status."""
-        return self._fan.timer_mode
-
-    def relay_sensor_state(self) -> bool:
-        """Relay sensoir state."""
-        return self._fan.relay_sensor_state
-
-    def filter_replacement_status(self) -> bool:
-        """Filter replacement state state."""
-        return self._fan.filter_replacement_status
-
-    def relay_status(self) -> bool:
-        """Relay status."""
-        return self._fan.relay_status
-
-    def alarm_status(self) -> bool:
-        """Alarm status."""
-        return self._fan.alarm_status
-
-    def cloud_server_state(self) -> bool:
-        """Cloud server state."""
-        return self._fan.cloud_server_state
-
-    def humidity_status(self) -> bool:
-        """Humidity status."""
-        return self._fan.humidity_status
-
-    def analogV_status(self) -> bool:
-        """AnalogV status."""
-        return self._fan.analogV_status
+        """No polling needed for this sensors. Would multiply update calls. """
+        return False

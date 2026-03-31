@@ -1,8 +1,8 @@
-"""Demo platform that offers a fake Number entity."""
+"""Vento platform that offers a fake Number entity."""
 
 from __future__ import annotations
 
-from ecoventv2 import Fan
+from .ecoventv2 import Fan
 
 from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
@@ -12,8 +12,10 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from . import DOMAIN
-from .coordinator import VentoFanDataUpdateCoordinator
+from .const import DOMAIN
+from .coordinator import EcoVentCoordinator
+import logging
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -21,7 +23,7 @@ async def async_setup_entry(
     config: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the Demo config entry."""
+    """Set up the Vento config entry."""
     async_add_entities(
         [
             VentoNumber(
@@ -97,7 +99,7 @@ class VentoNumber(CoordinatorEntity, NumberEntity):
     ) -> None:
         """Initialize the Vento Number entity."""
 
-        coordinator: VentoFanDataUpdateCoordinator = hass.data[DOMAIN][config.entry_id]
+        coordinator: EcoVentCoordinator = hass.data[DOMAIN][config.entry_id]
         super().__init__(coordinator)
 
         self._fan: Fan = coordinator._fan
@@ -111,7 +113,6 @@ class VentoNumber(CoordinatorEntity, NumberEntity):
         self._attr_name = name
         self._attr_unique_id = self._fan.id + method
         self._attr_native_value = getattr(self._fan, method)
-        # self._method = getattr(self, method)
         self._func = method
 
         if native_min_value is not None:
@@ -129,6 +130,7 @@ class VentoNumber(CoordinatorEntity, NumberEntity):
         """Update the current value."""
         self._attr_native_value = value
         intval = int(value)
-        self._fan.set_param(self._func, hex(intval).replace("0x", "").zfill(2))
+        # self._fan.set_param(self._func, hex(intval).replace("0x", "").zfill(2))
+        await self.hass.async_add_executor_job(self._fan.set_param, self._func, hex(intval).replace("0x", "").zfill(2))
         self.async_write_ha_state()
         await self.coordinator.async_refresh()

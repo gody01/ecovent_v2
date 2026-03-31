@@ -4,7 +4,7 @@
 from datetime import timedelta
 import logging
 
-from ecoventv2 import Fan
+from .ecoventv2 import Fan
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
@@ -15,20 +15,23 @@ from homeassistant.const import (
     CONF_PORT,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.update_coordinator import (
+    DataUpdateCoordinator,
+)
 
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class VentoFanDataUpdateCoordinator(DataUpdateCoordinator):
+class EcoVentCoordinator(DataUpdateCoordinator):
     """Class for Vento Fan Update Coordinator."""
 
     def __init__(
         self,
         hass: HomeAssistant,
         config: ConfigEntry,
+        update_seconds: int = 30,
     ) -> None:
         """Initialize global Vento data updater."""
         self._fan = Fan(
@@ -39,19 +42,20 @@ class VentoFanDataUpdateCoordinator(DataUpdateCoordinator):
             config.data[CONF_PORT],
         )
         self._fan.init_device()
-
+        _LOGGER.debug("EcoVentCoordinator initialized with update rate: %d", update_seconds)
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=60),
             config_entry=config,
+            update_interval=timedelta(seconds=update_seconds),
         )
 
-    async def _async_update_data(self):
+    async def _async_update_data(self) -> None:
         """Fetch data from API endpoint.
 
-        This is the place to pre-process the data to lookup tables
-        so entities can quickly look up their data.
+        The concept is, we have one common update rate and read all data into the fan object, then the entities read from that object. This way we can avoid multiple API calls and have a single source of truth for the data.
         """
-        return self._fan.update()
+        _LOGGER.debug("EcoVentCoordinator: Starting data update...")
+        await self.hass.async_add_executor_job(self._fan.update)
+

@@ -1,7 +1,7 @@
 """EcoVentV2 platform sensors."""
 from __future__ import annotations
 
-from ecoventv2 import Fan
+from .ecoventv2 import Fan
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -16,7 +16,9 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .coordinator import VentoFanDataUpdateCoordinator
+from .coordinator import EcoVentCoordinator
+import logging
+_LOGGER = logging.getLogger(__name__)
 
 import re
 
@@ -153,6 +155,7 @@ async def async_setup_entry(
 # VentoSensor class
 class VentoSensor(CoordinatorEntity, SensorEntity):
     """Class for Vento Fan Sensors."""
+    _attr_should_poll = False
 
     def __init__(
         self,
@@ -168,7 +171,7 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         icon=None,
     ) -> None:
         """Initialize fan sensors."""
-        coordinator: VentoFanDataUpdateCoordinator = hass.data[DOMAIN][config.entry_id]
+        coordinator: EcoVentCoordinator = hass.data[DOMAIN][config.entry_id]
         super().__init__(coordinator)
         self._fan: Fan = coordinator._fan
         self._attr_native_unit_of_measurement = native_unit_of_measurement
@@ -191,13 +194,10 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         self._attr_native_value = self._method()
         return self._attr_native_value
 
-    async def get_native_value(self, param):
-        return await self._hass.async_add_executor_job(self._fan.get_param(self._method))
-
-#    def get_native_value(self):
-#        """Get native value method."""
-#        val = self._fan.get_param(self._method)
-#        return val
+    def get_native_value(self):
+        """Get native value method."""
+        val = self._fan.get_param(self._method)
+        return val
 
     def humidity(self):
         """Get humidity sensor value."""

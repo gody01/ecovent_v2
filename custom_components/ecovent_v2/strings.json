@@ -6,7 +6,7 @@
           "ip_address": "ip_address",
           "port": "[%key:common::config_flow::data::port%]",
           "password": "[%key:common::config_flow::data::password%]",
-          "device_id": "[device_id]",
+          "device_id": "Device ID of FAN (long number), leave DEFAULT_DEVICEID if not properly set. Will discover automatically.",
           "name": "[%key:common::config_flow::data::name%]"
         }
       }
@@ -18,6 +18,16 @@
     },
     "abort": {
       "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+    }
+  },
+  "services": {
+    "filter_timer_reset": {
+      "name": "Reset air filter timer",
+      "description": "Reset the Vento Air Filter Timer."
+    },
+    "reset_alarms": {
+      "name": "Reset fan Vento alarms",
+      "description": "Reset Vento alarms."
     }
   }
 }

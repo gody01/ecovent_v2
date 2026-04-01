@@ -162,3 +162,15 @@ Version 1.1.0
 
 Version 1.1.1
 * Fix typos
+
+Version 1.2.0
+
+* Merged @AndyNew2 pull request v1.2.0 Rework ecovent library #36
+** this is a massive rework of your integration:
+** moved your library into the integration to avoid confusions ;-)
+** There was a massive bug in the binary_sensor multiplying the update rate by 4 - 6. Therefore you had a real update rate around 10 seconds instead of the intended 1 minute ;-) This was on top of the double update before your last update ;-)
+** Added job executor to free HA timings. I checked UDP async IO but do not like it. Timeout handling is really difficult with it. Since we do the updates many less now, due to a few fixed, the overhead of an executor thread is fine. This allows now reenabling sleeps for retries. Works very well now.
+** Many bug fixes in the init and deinit code. Was no longer up to date for HA and would have created massive warnings soon. That is fixed now.
+** Few further fixes like not updating manual speed etc. Do not remember each of them, but there had been quite a lot of them.
+** Config flow has now update rate configurable and added reconfigure dialog. Set default update rate to 30 seconds (still is around 3x slower than before ;-))
+** Let me know, what you think about the changes. Runs a lot better than before. This unindented fast update created together with the fix of retries many HA issues. HA is not prepared to be blocked around 5 - 10 seconds...

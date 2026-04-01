@@ -46,14 +46,16 @@ class VentoHub:
         self.fan = None
         self.name = name
 
-    async def authenticate(self, password: str) -> bool:
+    async def authenticate(self, hass: HomeAssistant, password: str) -> bool:
         """Authenticate."""
         self.fan = Fan(self.host, password, self.fan_id, self.name, self.port)
-        self.fan.init_device()
+        await hass.async_add_executor_job(self.fan.init_device)
         self.fan_id = self.fan.id
-        self.name = self.name + " " + self.fan_id
-        return self.fan.id != "DEFAULT_DEVICEID"
-
+        _LOGGER.info("Config Flow: Authenticated fan with name:%s ID: %s", self.name, self.fan_id)
+        if self.fan_id is not None:
+            self.name = self.name + " " + self.fan_id
+        return (self.fan.id != "DEFAULT_DEVICEID") and (self.fan_id is not None) and (self.fan.curent_wifi_ip is not None)
+        # added check for current wifi IP to avoid unvalid fan id. There is no further check elsewhere to prevent progressing with wrong fan id.
 
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
     """Validate the user input allows us to connect.
@@ -71,7 +73,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         data[CONF_IP_ADDRESS], data[CONF_PORT], data[CONF_DEVICE_ID], data[CONF_NAME]
     )
 
-    if not await hub.authenticate(data[CONF_PASSWORD]):
+    if not await hub.authenticate(hass, data[CONF_PASSWORD]):
         raise InvalidAuth
 
     # If you cannot connect:
@@ -108,9 +110,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         try:
             if user_input[CONF_IP_ADDRESS] == "<broadcast>":
                 ip = None
-                ips = self._fan.search_devices("0.0.0.0")
+                ips = await self.hass.async_add_executor_job(self._fan.search_devices,"0.0.0.0")
                 # ips = ["10.94.0.105", "10.94.0.106", "10.94.0.107", "10.94.0.108"]
                 unique_ids = []
+                _LOGGER.debug("Config Flow: Found IPs: %s", ips)
                 for entry in self._async_current_entries(include_ignore=True):
                     unique_ids.append(entry.unique_id)
                 for ip in ips:
@@ -119,7 +122,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     self._fan.password = user_input[CONF_PASSWORD]
                     self._fan.name = user_input[CONF_NAME]
                     self._fan.port = user_input[CONF_PORT]
-                    self._fan.init_device()
+                    _LOGGER.debug("Config Flow: Initializing fan at IP: %s", ip)
+                    await self.hass.async_add_executor_job(self._fan.init_device)
                     if self._fan.id not in unique_ids:
                         user_input[CONF_IP_ADDRESS] = ip
                         break
@@ -158,7 +162,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             try:
                 if user_input[CONF_IP_ADDRESS] == "<broadcast>":
                     ip = None
-                    ips = self._fan.search_devices("0.0.0.0")
+                    ips = await self.hass.async_add_executor_job(self._fan.search_devices,"0.0.0.0")
                     # ips = ["10.94.0.105", "10.94.0.106", "10.94.0.107", "10.94.0.108"]
                     unique_ids = []
                     for entry in self._async_current_entries(include_ignore=True):
@@ -169,7 +173,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         self._fan.password = user_input[CONF_PASSWORD]
                         self._fan.name = user_input[CONF_NAME]
                         self._fan.port = user_input[CONF_PORT]
-                        self._fan.init_device()
+                        await self.hass.async_add_executor_job(self._fan.init_device)
                         if self._fan.id not in unique_ids:
                             user_input[CONF_IP_ADDRESS] = ip
                             break
@@ -179,9 +183,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         errors[UPDATE_INTERVAL] = "update interval must be at least 5 seconds to prevent overloading the device with requests."
                         raise exceptions.HomeAssistantError("update interval too low")
 
-                info = await validate_input(self.hass, user_input)
-                # await self.async_set_unique_id(info["id"])
-                # self._abort_if_unique_id_configured()
+                await validate_input(self.hass, user_input)
             except CannotConnect:
                 errors["base"] = "cannot_connect"
             except InvalidAuth:
@@ -217,7 +219,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 class CannotConnect(exceptions.HomeAssistantError):
     """Error to indicate we cannot connect."""
-
 
 class InvalidAuth(exceptions.HomeAssistantError):
     """Error to indicate there is invalid auth."""

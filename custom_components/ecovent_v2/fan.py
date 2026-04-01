@@ -68,7 +68,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         super().__init__(coordinator)
 
         self._fan = coordinator._fan
-        # self._percentage = self._fan.man_speed
+        # self._percentage = self._fan.man_speed we use fan object directly otherwise we would miss changes from fan changes via remote or direct control
         self._attr_unique_id = self._fan.id
         self._attr_name = self._fan.name
         self._attr_extra_state_attributes = {"ipv4_address": self._fan.curent_wifi_ip}
@@ -77,7 +77,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             identifiers={(DOMAIN, self._fan.id)},
             name=self._fan.name,
             model=self._fan.unit_type,
-            model_id="WIFI IP: "+self._fan.curent_wifi_ip,
+            model_id=f"WIFI IP: {self._fan.curent_wifi_ip}",
             sw_version=self._fan.firmware,
             manufacturer="Blauberg",
             configuration_url=f"http://{self._fan.curent_wifi_ip}",

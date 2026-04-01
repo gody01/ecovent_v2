@@ -11,13 +11,23 @@
         "step": {
             "user": {
                 "data": {
-                    "device_id": "[device_id]",
+                    "device_id": "Device ID of FAN (long number), leave DEFAULT_DEVICEID if not properly set. Will discover automatically.",
                     "ip_address": "ip_address",
                     "name": "Name",
                     "password": "Password",
                     "port": "Port"
                 }
             }
+        }
+    },
+    "services": {
+        "filter_timer_reset": {
+            "description": "Reset the Vento Air Filter Timer.",
+            "name": "Reset air filter timer"
+        },
+        "reset_alarms": {
+            "description": "Reset Vento alarms.",
+            "name": "Reset fan Vento alarms"
         }
     }
 }

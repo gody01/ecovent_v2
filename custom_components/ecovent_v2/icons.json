@@ -1,0 +1,10 @@
+{
+  "services": {
+    "filter_timer_reset": {
+      "service": "mdi:air-filter"
+    },
+    "reset_alarms": {
+      "service": "mdi:fan-alert"
+    }
+  }
+}

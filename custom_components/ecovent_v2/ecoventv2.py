@@ -679,7 +679,7 @@ class Fan(object):
     @relay_status.setter
     def relay_status(self, input):
         val = int (input, 16 )
-        self._relay_status = self.statuses[val]
+        self._relay_status = self.statuses.get(val, f'unknown({val})')
 
     @property
     def man_speed(self):
@@ -825,7 +825,7 @@ class Fan(object):
     @filter_replacement_status.setter
     def filter_replacement_status(self, input):
         val = int (input, 16 )
-        self._filter_replacement_status = self.statuses[val]
+        self._filter_replacement_status = self.statuses.get(val, f'unknown({val})')
 
     @property
     def wifi_operation_mode (self):
@@ -967,7 +967,7 @@ class Fan(object):
     @humidity_status.setter
     def humidity_status(self, input):
         val = int (input, 16 )
-        self._humidity_status = self.statuses[val]
+        self._humidity_status = self.statuses.get(val, f'unknown({val})')
 
     @property
     def analogV_status (self):
@@ -976,7 +976,7 @@ class Fan(object):
     @analogV_status.setter
     def analogV_status(self, input):
         val = int (input, 16 )
-        self._analogV_status = self.statuses[val]
+        self._analogV_status = self.statuses.get(val, f'unknown({val})')
 
     @property
     def beeper (self):
@@ -985,7 +985,7 @@ class Fan(object):
     @beeper.setter
     def beeper(self, input):
         val = int (input, 16 )
-        self._beeper = self.statuses[val]
+        self._beeper = self.statuses.get(val, f'unknown({val})')
 
     def reset_filter_timer(self):
         self.set_param('filter_timer_reset', "")

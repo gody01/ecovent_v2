@@ -41,7 +41,8 @@ class EcoVentCoordinator(DataUpdateCoordinator):
             config.data[CONF_NAME],
             config.data[CONF_PORT],
         )
-        self._fan.init_device()
+        # self._fan.init_device()  is a blocking call cannot be done in constructur ...
+        self.fan_initialized = False  # flag to indicate if the fan has been initialized
         _LOGGER.debug("EcoVentCoordinator initialized with update rate: %d", update_seconds)
         super().__init__(
             hass,
@@ -56,6 +57,13 @@ class EcoVentCoordinator(DataUpdateCoordinator):
 
         The concept is, we have one common update rate and read all data into the fan object, then the entities read from that object. This way we can avoid multiple API calls and have a single source of truth for the data.
         """
+        if (not self.fan_initialized):
+            _LOGGER.debug("EcoVentCoordinator: Initializing fan for the first time...")
+            await self.hass.async_add_executor_job(self._fan.init_device)
+            if self._fan.id is None or self._fan.id == "DEFAULT_DEVICEID":
+                _LOGGER.error("EcoVentCoordinator: Failed to initialize fan, check connection and configuration.")
+                raise ConnectionError("Failed to initialize fan, check connection and configuration.")
+            self.fan_initialized = True
         _LOGGER.debug("EcoVentCoordinator: Starting data update...")
         await self.hass.async_add_executor_job(self._fan.update)
 

@@ -6,7 +6,6 @@ import socket
 import sys
 import time
 import math
-# from homeassistant.core import HomeAssistant
 import logging
 _LOGGER = logging.getLogger(__name__)
 
@@ -237,6 +236,7 @@ class Fan(object):
         if self._id == "DEFAULT_DEVICEID":
             self.get_param( 'device_search' )
             self._id = self.device_search
+        _LOGGER.info("EcoventV2: Initialized fan with ID: %s", self._id)
         if not self._id:
             return False
         return self.update()
@@ -263,7 +263,7 @@ class Fan(object):
             if self._device_search != "DEFAULT_DEVICEID":
                 ips.append(addr[0])
                 ips=list(set(ips))
-            # time.sleep(0.1)
+            time.sleep(0.2)
         sock.close()
         return ips
 
@@ -336,6 +336,8 @@ class Fan(object):
             return None
         except OSError:  # this shall include all connection errors like Aborted, Refused and Reset
             return None
+        except TypeError:
+            return None  # this can happen if the socket connection fails and returns None
         else:
             return response
 

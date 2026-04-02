@@ -967,7 +967,7 @@ class Fan(object):
     @humidity_status.setter
     def humidity_status(self, input):
         val = int (input, 16 )
-        self.self.self._humidity_status = self.statuses.get(val, "Unknown status %s" % val)
+        self._humidity_status = self.statuses.get(val, "Unknown status %s" % val)
 
     @property
     def analogV_status (self):
@@ -976,7 +976,7 @@ class Fan(object):
     @analogV_status.setter
     def analogV_status(self, input):
         val = int (input, 16 )
-        self.self._analogV_status = self.statuses.get(val, "Unknown status %s" % val)
+        self._analogV_status = self.statuses.get(val, "Unknown status %s" % val)
 
     @property
     def beeper (self):

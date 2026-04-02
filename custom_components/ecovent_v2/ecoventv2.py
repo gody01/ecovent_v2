@@ -580,7 +580,7 @@ class Fan(object):
     @boost_status.setter
     def boost_status(self, input):
         val = int (input, 16 )
-        self._boost_status = self.boost_statuses[val]
+        self._boost_status = self.boost_statuses.get(val, "Unknown status %s" % val)
 
     @property
     def heater_status(self):
@@ -589,7 +589,7 @@ class Fan(object):
     @heater_status.setter
     def heater_status(self, input):
         val = int (input, 16 )
-        self._heater_status = self.heater_status[val]
+        self._heater_status = self.heater_status.get(val, "Unknown status %s" % val)
 
     @property
     def timer_mode(self):
@@ -616,7 +616,7 @@ class Fan(object):
     @humidity_sensor_state.setter
     def humidity_sensor_state(self, input):
         val = int (input, 16 )
-        self._humidity_sensor_state = self.states[val]
+        self._humidity_sensor_state = self.states.get(val, "Unknown state %s" % val)
 
     @property
     def relay_sensor_state(self):
@@ -625,7 +625,7 @@ class Fan(object):
     @relay_sensor_state.setter
     def relay_sensor_state(self, input):
         val = int (input, 16 )
-        self._relay_sensor_state = self.states[val]
+        self._relay_sensor_state = self.states.get(val, "Unknown state %s" % val)
 
     @property
     def analogV_sensor_state(self):
@@ -634,7 +634,7 @@ class Fan(object):
     @analogV_sensor_state.setter
     def analogV_sensor_state(self, input):
         val = int (input, 16 )
-        self._analogV_sensor_state = self.states[val]
+        self._analogV_sensor_state = self.states.get(val, "Unknown state %s" % val)
 
     @property
     def humidity_treshold (self):
@@ -679,7 +679,7 @@ class Fan(object):
     @relay_status.setter
     def relay_status(self, input):
         val = int (input, 16 )
-        self._relay_status = self.statuses[val]
+        self._relay_status = self.statuses.get(val, "Unknown status %s" % val)
 
     @property
     def man_speed(self):
@@ -798,7 +798,7 @@ class Fan(object):
     @alarm_status.setter
     def alarm_status(self, input):
         val = int (input, 16 )
-        self._alarm_status = self.alarms[val]
+        self._alarm_status = self.alarms.get(val, "Unknown status %s" % val)
 
     @property
     def cloud_server_state (self):
@@ -807,7 +807,7 @@ class Fan(object):
     @cloud_server_state.setter
     def cloud_server_state(self, input):
         val = int (input, 16 )
-        self._cloud_server_state = self.states[val]
+        self._cloud_server_state = self.states.get(val, "Unknown state %s" % val)
 
     @property
     def firmware (self):
@@ -825,7 +825,7 @@ class Fan(object):
     @filter_replacement_status.setter
     def filter_replacement_status(self, input):
         val = int (input, 16 )
-        self._filter_replacement_status = self.statuses[val]
+        self._filter_replacement_status = self.statuses.get(val, "Unknown status %s" % val)
 
     @property
     def wifi_operation_mode (self):
@@ -967,7 +967,7 @@ class Fan(object):
     @humidity_status.setter
     def humidity_status(self, input):
         val = int (input, 16 )
-        self._humidity_status = self.statuses[val]
+        self.self.self._humidity_status = self.statuses.get(val, "Unknown status %s" % val)
 
     @property
     def analogV_status (self):
@@ -976,7 +976,7 @@ class Fan(object):
     @analogV_status.setter
     def analogV_status(self, input):
         val = int (input, 16 )
-        self._analogV_status = self.statuses[val]
+        self.self._analogV_status = self.statuses.get(val, "Unknown status %s" % val)
 
     @property
     def beeper (self):

@@ -19,7 +19,9 @@ from homeassistant.helpers.update_coordinator import (
 from .const import DOMAIN
 from .coordinator import EcoVentCoordinator
 import logging
+
 _LOGGER = logging.getLogger(__name__)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -65,7 +67,7 @@ async def async_setup_entry(
     )
 
 
-class VentoBinarySensor(CoordinatorEntity, BinarySensorEntity):   # CoordinatorEntity
+class VentoBinarySensor(CoordinatorEntity, BinarySensorEntity):  # CoordinatorEntity
     """Vento Binary Sensor class."""
 
     def __init__(
@@ -97,7 +99,7 @@ class VentoBinarySensor(CoordinatorEntity, BinarySensorEntity):   # CoordinatorE
     @property
     def is_on(self):
         """Is on."""
-        self._state = (self._attribute == "on")
+        self._state = self._attribute == "on"
         # self.async_write_ha_state() dangerous not allowed
         # self.schedule_update_ha_state() # not needed
         # _LOGGER.debug(f"VentoBinarySensor: {self._attr_name} state updated to {self._state}")
@@ -105,5 +107,5 @@ class VentoBinarySensor(CoordinatorEntity, BinarySensorEntity):   # CoordinatorE
 
     @property
     def should_poll(self) -> bool:
-        """No polling needed for this sensors. Would multiply update calls. """
+        """No polling needed for this sensors. Would multiply update calls."""
         return False

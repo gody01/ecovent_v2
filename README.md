@@ -174,3 +174,6 @@ Version 1.2.0
 ** Few further fixes like not updating manual speed etc. Do not remember each of them, but there had been quite a lot of them.
 ** Config flow has now update rate configurable and added reconfigure dialog. Set default update rate to 30 seconds (still is around 3x slower than before ;-))
 ** Let me know, what you think about the changes. Runs a lot better than before. This unindented fast update created together with the fix of retries many HA issues. HA is not prepared to be blocked around 5 - 10 seconds...
+
+Version 1.2.1
+* Merged @AndyNew2 pull request bugfix for initialization not using job executor and some config flow fixes #37

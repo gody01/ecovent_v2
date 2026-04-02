@@ -985,7 +985,7 @@ class Fan(object):
     @beeper.setter
     def beeper(self, input):
         val = int (input, 16 )
-        self._beeper = self.statuses[val]
+        self._beeper = self.statuses.get(val, "Unknown status %s" % val)
 
     def reset_filter_timer(self):
         self.set_param('filter_timer_reset', "")

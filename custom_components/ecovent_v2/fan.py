@@ -19,6 +19,7 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 import logging
+
 _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_ON_PERCENTAGE = 5
@@ -71,16 +72,16 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         # self._percentage = self._fan.man_speed we use fan object directly otherwise we would miss changes from fan changes via remote or direct control
         self._attr_unique_id = self._fan.id
         self._attr_name = self._fan.name
-        self._attr_extra_state_attributes = {"ipv4_address": self._fan.curent_wifi_ip}
+        self._attr_extra_state_attributes = {"ipv4_address": self._fan.current_wifi_ip}
         self._attr_supported_features = FULL_SUPPORT
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._fan.id)},
             name=self._fan.name,
             model=self._fan.unit_type,
-            model_id=f"WIFI IP: {self._fan.curent_wifi_ip}",
+            model_id=f"WIFI IP: {self._fan.current_wifi_ip}, {self._fan.wifi_assigned_ip}",
             sw_version=self._fan.firmware,
             manufacturer="Blauberg",
-            configuration_url=f"http://{self._fan.curent_wifi_ip}",
+            configuration_url=f"http://{self._fan.current_wifi_ip}",
         )
 
     @property
@@ -106,7 +107,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
     @property
     def percentage(self) -> int:
         """Return the current speed."""
-        return self._fan.man_speed  # self._percentage
+        return self._fan.man_speed
 
     @property
     def preset_modes(self) -> list[str]:
@@ -196,31 +197,34 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
     async def async_set_direction(self, direction: str) -> None:
         """Set the direction of the fan."""
         if direction == "forward" and self._fan.airflow != "ventilation":
-            await self.hass.async_add_executor_job(self._fan.set_param, "airflow", "ventilation")
+            await self.hass.async_add_executor_job(
+                self._fan.set_param, "airflow", "ventilation"
+            )
         if direction == "reverse" and self._fan.airflow != "air_supply":
-            await self.hass.async_add_executor_job(self._fan.set_param, "airflow", "air_supply")
+            await self.hass.async_add_executor_job(
+                self._fan.set_param, "airflow", "air_supply"
+            )
         await self.coordinator.async_refresh()
 
     async def async_oscillate(self, oscillating: bool) -> None:
         """Set oscillation."""
         if oscillating:
-            await self.hass.async_add_executor_job(self._fan.set_param, "airflow", "heat_recovery")
+            await self.hass.async_add_executor_job( self._fan.set_param, "airflow", "heat_recovery" )
         else:
-            await self.hass.async_add_executor_job(self._fan.set_param, "airflow", "ventilation")
+            await self.hass.async_add_executor_job( self._fan.set_param, "airflow", "ventilation" )
         await self.coordinator.async_refresh()
         # self.schedule_update_ha_state()
 
-
- ###### Custom services
+    ###### Custom services
 
     # Reset filter timer
     async def async_reset_filter_timer(self, fan_target) -> None:
         """Reset Fan's filter timer."""
-        # self._fan.set_param("filter_timer_reset", "")
-        await self.hass.async_add_executor_job(self._fan.set_param, "filter_timer_reset", "")
+        await self.hass.async_add_executor_job( self._fan.set_param, "filter_timer_reset", "" )
+        # await self.hass.async_add_executor_job(self._fan.set_param, "beeper", "silent")
+        # just for a tryal
 
     # Reset alarms
     async def async_reset_alarms(self, fan_target) -> None:
         """Reset Fan's Alarms."""
-        # self._fan.set_param("reset_alarms", "")
         await self.hass.async_add_executor_job(self._fan.set_param, "reset_alarms", "")

@@ -1,4 +1,5 @@
 """EcoVentV2 platform sensors."""
+
 from __future__ import annotations
 
 from .ecoventv2 import Fan
@@ -18,9 +19,11 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import EcoVentCoordinator
 import logging
+
 _LOGGER = logging.getLogger(__name__)
 
 import re
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -155,6 +158,7 @@ async def async_setup_entry(
 # VentoSensor class
 class VentoSensor(CoordinatorEntity, SensorEntity):
     """Class for Vento Fan Sensors."""
+
     _attr_should_poll = False
 
     def __init__(
@@ -274,11 +278,10 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
             return total_hours
         return None  # In case the string format is unexpected
 
-
     def analogv(self):
         """Get analog Voltage value."""
         return self._fan.analogV
 
     def current_wifi_ip(self):
         """Get current wifi IP value."""
-        return self._fan.curent_wifi_ip
+        return self._fan.current_wifi_ip

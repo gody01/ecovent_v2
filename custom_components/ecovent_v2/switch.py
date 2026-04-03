@@ -1,4 +1,5 @@
 """Switches on Fan device."""
+
 from __future__ import annotations
 
 from .ecoventv2 import Fan
@@ -14,6 +15,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import EcoVentCoordinator
 import logging
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -135,7 +137,7 @@ class VentoSwitch(CoordinatorEntity, SwitchEntity):
     @property
     def is_on(self) -> bool | None:
         """Is switch on."""
-        self._attr_is_on = (self._method() == "on")
+        self._attr_is_on = self._method() == "on"
         # self._attr_is_on = (self._attribute == "on")  # do not work reliably, use method instead
         # _LOGGER.debug(f"Switch {self._attr_name}, val [{self._attribute2}] is_on: {self._attr_is_on}")
         _LOGGER.debug(f"Switch {self._attr_name} is_on: {self._attr_is_on}")

@@ -1,4 +1,5 @@
 """Config flow for EcoVent_v2 integration."""
+
 from __future__ import annotations
 
 import logging
@@ -25,9 +26,10 @@ _LOGGER = logging.getLogger(__name__)
 # adjust the data schema to the data that you need
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_IP_ADDRESS, default="<broadcast>"): str,
+        # vol.Required(CONF_IP_ADDRESS, default="<broadcast>"): str,
+        vol.Required(CONF_IP_ADDRESS): str,
         vol.Optional(CONF_PORT, default=4000): int,
-        vol.Optional(CONF_DEVICE_ID, default="DEFAULT_DEVICEID"): str,
+        # vol.Optional(CONF_DEVICE_ID, default="DEFAULT_DEVICEID"): str,   nothing useful to enter
         vol.Required(CONF_PASSWORD, default="1111"): str,
         vol.Optional(CONF_NAME, default="Vento Expert Fan"): str,
         vol.Optional(UPDATE_INTERVAL, default=30): int,
@@ -54,8 +56,13 @@ class VentoHub:
         _LOGGER.info("Config Flow: Authenticated fan with name:%s ID: %s", self.name, self.fan_id)
         if self.fan_id is not None:
             self.name = self.name + " " + self.fan_id
-        return (self.fan.id != "DEFAULT_DEVICEID") and (self.fan_id is not None) and (self.fan.curent_wifi_ip is not None)
+        return (
+            (self.fan.id != "DEFAULT_DEVICEID")
+            and (self.fan_id is not None)
+            and (self.fan.current_wifi_ip is not None)
+        )
         # added check for current wifi IP to avoid unvalid fan id. There is no further check elsewhere to prevent progressing with wrong fan id.
+
 
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
     """Validate the user input allows us to connect.
@@ -70,7 +77,8 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     # )
 
     hub = VentoHub(
-        data[CONF_IP_ADDRESS], data[CONF_PORT], data[CONF_DEVICE_ID], data[CONF_NAME]
+        # data[CONF_IP_ADDRESS], data[CONF_PORT], data[CONF_DEVICE_ID], data[CONF_NAME]
+        data[CONF_IP_ADDRESS], data[CONF_PORT], "DEFAULT_DEVICEID", data[CONF_NAME]
     )
 
     if not await hub.authenticate(hass, data[CONF_PASSWORD]):
@@ -108,9 +116,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
 
         try:
+            """
             if user_input[CONF_IP_ADDRESS] == "<broadcast>":
                 ip = None
-                ips = await self.hass.async_add_executor_job(self._fan.search_devices,"0.0.0.0")
+                ips = await self.hass.async_add_executor_job(
+                    self._fan.search_devices, "0.0.0.0"
+                )
                 # ips = ["10.94.0.105", "10.94.0.106", "10.94.0.107", "10.94.0.108"]
                 unique_ids = []
                 _LOGGER.debug("Config Flow: Found IPs: %s", ips)
@@ -129,9 +140,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         break
                 if user_input[CONF_IP_ADDRESS] == "<broadcast>":
                     raise CannotConnect
-            if user_input[UPDATE_INTERVAL] < 5:
-                    errors[UPDATE_INTERVAL] = "update interval must be at least 5 seconds to prevent overloading the device with requests."
-                    raise exceptions.HomeAssistantError("update interval too low")
+                    """
+            if user_input[UPDATE_INTERVAL] < 3:
+                errors[UPDATE_INTERVAL] = (
+                    "update interval must be at least 3 seconds to prevent overloading the device with requests."
+                )
+                raise exceptions.HomeAssistantError("update interval too low")
 
             info = await validate_input(self.hass, user_input)
             await self.async_set_unique_id(info["id"])
@@ -150,7 +164,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
         )
 
-
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -160,9 +173,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # _LOGGER.info("Reconfigure called with user input: %s", user_input)
         if user_input is not None:
             try:
+                """
                 if user_input[CONF_IP_ADDRESS] == "<broadcast>":
                     ip = None
-                    ips = await self.hass.async_add_executor_job(self._fan.search_devices,"0.0.0.0")
+                    ips = await self.hass.async_add_executor_job(
+                        self._fan.search_devices, "0.0.0.0"
+                    )
                     # ips = ["10.94.0.105", "10.94.0.106", "10.94.0.107", "10.94.0.108"]
                     unique_ids = []
                     for entry in self._async_current_entries(include_ignore=True):
@@ -179,9 +195,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             break
                     if user_input[CONF_IP_ADDRESS] == "<broadcast>":
                         raise CannotConnect
-                if user_input[UPDATE_INTERVAL] < 5:
-                        errors[UPDATE_INTERVAL] = "update interval must be at least 5 seconds to prevent overloading the device with requests."
-                        raise exceptions.HomeAssistantError("update interval too low")
+                    """
+                if user_input[UPDATE_INTERVAL] < 3:
+                    errors[UPDATE_INTERVAL] = (
+                        "update interval must be at least 3 seconds to prevent overloading the device with requests."
+                    )
+                    raise exceptions.HomeAssistantError("update interval too low")
 
                 await validate_input(self.hass, user_input)
             except CannotConnect:
@@ -193,32 +212,47 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "unknown"
             else:
                 return self.async_update_reload_and_abort(
-                        self._get_reconfigure_entry(),
-                        data_updates=user_input
-                    )
+                    self._get_reconfigure_entry(), data_updates=user_input
+                )
 
-        ip_configured = self._get_reconfigure_entry().data.get(CONF_IP_ADDRESS,"<broadcast>")
+        ip_configured = self._get_reconfigure_entry().data.get(
+            CONF_IP_ADDRESS, "<broadcast>"
+        )
         port_configured = self._get_reconfigure_entry().data.get(CONF_PORT, 4000)
-        devId_configured = self._get_reconfigure_entry().data.get(CONF_DEVICE_ID, "DEFAULT_DEVICEID")
-        password_configured = self._get_reconfigure_entry().data.get(CONF_PASSWORD, "1111")
-        name_configured = self._get_reconfigure_entry().data.get(CONF_NAME, "Vento Expert Fan")
-        update_interval_configured = self._get_reconfigure_entry().data.get(UPDATE_INTERVAL, 30)
+        # devId_configured = self._get_reconfigure_entry().data.get(
+        #    CONF_DEVICE_ID, "DEFAULT_DEVICEID"
+        # )
+        password_configured = self._get_reconfigure_entry().data.get(
+            CONF_PASSWORD, "1111"
+        )
+        name_configured = self._get_reconfigure_entry().data.get(
+            CONF_NAME, "Vento Expert Fan"
+        )
+        update_interval_configured = self._get_reconfigure_entry().data.get(
+            UPDATE_INTERVAL, 30
+        )
 
         return self.async_show_form(
-            step_id="reconfigure",data_schema=vol.Schema(
+            step_id="reconfigure",
+            data_schema=vol.Schema(
                 {
                     vol.Required(CONF_IP_ADDRESS, default=ip_configured): str,
                     vol.Optional(CONF_PORT, default=port_configured): int,
-                    vol.Optional(CONF_DEVICE_ID, default=devId_configured): str,
+                    # vol.Optional(CONF_DEVICE_ID, default=devId_configured): str,
                     vol.Required(CONF_PASSWORD, default=password_configured): str,
                     vol.Optional(CONF_NAME, default=name_configured): str,
-                    vol.Optional(UPDATE_INTERVAL, default=update_interval_configured): int,
+                    vol.Optional(
+                        UPDATE_INTERVAL, default=update_interval_configured
+                    ): int,
                 }
-            ), errors=errors
+            ),
+            errors=errors,
         )
+
 
 class CannotConnect(exceptions.HomeAssistantError):
     """Error to indicate we cannot connect."""
+
 
 class InvalidAuth(exceptions.HomeAssistantError):
     """Error to indicate there is invalid auth."""

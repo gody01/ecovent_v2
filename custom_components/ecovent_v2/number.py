@@ -15,6 +15,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import EcoVentCoordinator
 import logging
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -109,7 +110,6 @@ class VentoNumber(CoordinatorEntity, NumberEntity):
         self._attr_icon = icon
         self._attr_mode = mode
         self._attr_native_unit_of_measurement = unit_of_measurement
-        # self._attr_name = self._fan.name + name
         self._attr_name = name
         self._attr_unique_id = self._fan.id + method
         self._attr_native_value = getattr(self._fan, method)
@@ -130,7 +130,8 @@ class VentoNumber(CoordinatorEntity, NumberEntity):
         """Update the current value."""
         self._attr_native_value = value
         intval = int(value)
-        # self._fan.set_param(self._func, hex(intval).replace("0x", "").zfill(2))
-        await self.hass.async_add_executor_job(self._fan.set_param, self._func, hex(intval).replace("0x", "").zfill(2))
+        await self.hass.async_add_executor_job(
+            self._fan.set_param, self._func, hex(intval).replace("0x", "").zfill(2)
+        )
         self.async_write_ha_state()
         await self.coordinator.async_refresh()

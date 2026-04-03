@@ -1,4 +1,5 @@
 """The EcoVent_v2 integration."""
+
 # from __future__ import annotations
 import logging
 
@@ -34,7 +35,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.runtime_data = {
         CONF_IP_ADDRESS: entry.data.get(CONF_IP_ADDRESS, "<broadcast>"),
         CONF_PORT: entry.data.get(CONF_PORT, 4000),
-        CONF_DEVICE_ID: entry.data.get(CONF_DEVICE_ID, "DEFAULT_DEVICEID"),
+        # CONF_DEVICE_ID: entry.data.get(CONF_DEVICE_ID, "DEFAULT_DEVICEID"),
         CONF_PASSWORD: entry.data.get(CONF_PASSWORD, "1111"),
         CONF_NAME: entry.data.get(CONF_NAME, "Vento Expert Fan"),
         UPDATE_INTERVAL: entry.data.get(UPDATE_INTERVAL, 30),

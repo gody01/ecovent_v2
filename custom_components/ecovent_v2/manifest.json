@@ -2,7 +2,7 @@
   "domain": "ecovent_v2",
   "name": "Vento Eco Vent v 2.1",
   "codeowners": ["@gody01","@AndyNew2"],
-  "version": "1.2.3",
+  "version": "1.2.4",
   "config_flow": true,
   "documentation": "https://www.home-assistant.io/integrations/ecovent_v2",
   "iot_class": "local_polling",

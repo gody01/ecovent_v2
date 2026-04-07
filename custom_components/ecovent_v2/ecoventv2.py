@@ -1,6 +1,6 @@
 """Version"""
 
-__version__ = "loc_0.9.28"
+__version__ = "loc_0.9.29"
 
 """Library to handle communication with Wifi ecofan from TwinFresh / Blauberg"""
 import socket
@@ -48,7 +48,7 @@ F N     0x00B8: ["analogV_treshold", None],
 I       0x00B9: ["unit_type", unit_types],
         # Write only parameters
 FC      0x0065: ["filter_timer_reset", None],  # WRITE ONLY
-        0x0072: ["weekly_schedule_state", states],
+Sw      0x0072: ["weekly_schedule_state", states],
         0x0077: ["weekly_schedule_setup", None],
 FC      0x0080: ["reset_alarms", None],  # WRITE ONLY
         0x0094: ["wifi_operation_mode", wifi_operation_modes],
@@ -94,7 +94,7 @@ class Fan(object):
         "resp": "06",
     }
 
-    states = {0: "off", 1: "on", 2: "togle"}
+    states = {0: "off", 1: "on", 2: "toggle"}
 
     speeds = {0: "standby", 1: "low", 2: "medium", 3: "high", 0xFF: "manual"}
 
@@ -175,7 +175,7 @@ class Fan(object):
         0x00B9: ["unit_type", unit_types],
         # Write only parameters
         0x0065: ["filter_timer_reset", None],  # WRITE ONLY
-     #   0x0072: ["weekly_schedule_state", states], according stats not used in integration
+        0x0072: ["weekly_schedule_state", states],
      #   0x0077: ["weekly_schedule_setup", None], according stats not used in integration
         0x0080: ["reset_alarms", None],  # WRITE ONLY
         #        0x0087: [ 'factory_reset', None ],
@@ -445,16 +445,15 @@ class Fan(object):
         return self.do_func(self.func["read"], request)
 
     def quick_update(self):
-        request = "00060007000B000F00320016004A004B006403040305"
+        request = "0006000B002D003200440016004A004B03040305"
         # just update following states ...
         # 0x0006: ["boost_status", statuses],
-        # 0x0007: ["timer_mode", timer_modes],
         # 0x000B: ["timer_counter", None],
-        # 0x000F: ["humidity_sensor_state", states],
+        # 0x002D: ["analogV", None],
         # 0x0032: ["relay_status", statuses],
+        # 0x0044: ["man_speed", None],
         # 0x004A: ["fan1_speed", None],
         # 0x004B: ["fan2_speed", None],
-        # 0x0064: ["filter_timer_countdown", None],
         # 0x0304: ["humidity_status", statuses],
         # 0x0305: ["analogV_status", statuses],
         return self.do_func(self.func["read"], request)
@@ -533,9 +532,9 @@ class Fan(object):
         length = len(data) - 2
         pwd_size = data[pointer]
         pointer += 1
-        password = data[pointer:pwd_size]
+        # password = data[pointer:pwd_size]  not used
         pointer += pwd_size
-        function = data[pointer]
+        # function = data[pointer]  not used
         pointer += 1
         # from here parsing of parameters begin
         payload = data[pointer:length]
@@ -630,7 +629,7 @@ class Fan(object):
 
     @state.setter
     def state(self, val):
-        self._state = self.states[int(val)]
+        self._state = self.states.get(int(val),"Unknown %s" % val)
 
     @property
     def speed(self):
@@ -639,7 +638,7 @@ class Fan(object):
     @speed.setter
     def speed(self, input):
         val = int(input, 16)
-        self._speed = self.speeds[val]
+        self._speed = self.speeds.get(val,"Unknown %s" % val)
 
     @property
     def boost_status(self):
@@ -666,7 +665,7 @@ class Fan(object):
     @timer_mode.setter
     def timer_mode(self, input):
         val = int(input, 16)
-        self._timer_mode = self.timer_modes[val]
+        self._timer_mode = self.timer_modes.get(val, "Unknown %s" % val)
 
     @property
     def timer_counter(self):
@@ -751,7 +750,7 @@ class Fan(object):
     @relay_status.setter
     def relay_status(self, input):
         val = int(input, 16)
-        self._relay_status = self.statuses[val]
+        self._relay_status = self.statuses.get(val,"Unknown %s" % val)
 
     @property
     def man_speed(self):
@@ -841,7 +840,7 @@ class Fan(object):
 
     @weekly_schedule_state.setter
     def weekly_schedule_state(self, val):
-        self._weekly_schedule_state = self.states[int(val)]
+        self._weekly_schedule_state = self.states.get(int(val),"Unknown %s" % val)
 
     @property
     def weekly_schedule_setup(self):
@@ -901,7 +900,7 @@ class Fan(object):
     @alarm_status.setter
     def alarm_status(self, input):
         val = int(input, 16)
-        self._alarm_status = self.alarms[val]
+        self._alarm_status = self.alarms.get(val,"Unknown %s" % val)
 
     @property
     def cloud_server_state(self):
@@ -910,7 +909,7 @@ class Fan(object):
     @cloud_server_state.setter
     def cloud_server_state(self, input):
         val = int(input, 16)
-        self._cloud_server_state = self.states[val]
+        self._cloud_server_state = self.states.get(val,"Unknown %s" % val)
 
     @property
     def firmware(self):
@@ -938,7 +937,7 @@ class Fan(object):
     @filter_replacement_status.setter
     def filter_replacement_status(self, input):
         val = int(input, 16)
-        self._filter_replacement_status = self.statuses[val]
+        self._filter_replacement_status = self.statuses.get(val,"Unknown %s" % val)
 
     @property
     def wifi_operation_mode(self):
@@ -947,7 +946,7 @@ class Fan(object):
     @wifi_operation_mode.setter
     def wifi_operation_mode(self, input):
         val = int(input, 16)
-        self._wifi_operation_mode = self.wifi_operation_modes[val]
+        self._wifi_operation_mode = self.wifi_operation_modes.get(val,"Unknown %s" % val)
 
     @property
     def wifi_name(self):
@@ -972,7 +971,7 @@ class Fan(object):
     @wifi_enc_type.setter
     def wifi_enc_type(self, input):
         val = int(input, 16)
-        self._wifi_enc_type = self.wifi_enc_types[val]
+        self._wifi_enc_type = self.wifi_enc_types.get(val,"Unknown %s" % val)
 
     @property
     def wifi_freq_channel(self):
@@ -990,7 +989,7 @@ class Fan(object):
     @wifi_dhcp.setter
     def wifi_dhcp(self, input):
         val = int(input, 16)
-        self._wifi_dhcp = self.wifi_dhcps[val]
+        self._wifi_dhcp = self.wifi_dhcps.get(val,"Unknown %s" % val)
 
     @property
     def wifi_assigned_ip(self):
@@ -1043,7 +1042,7 @@ class Fan(object):
     @airflow.setter
     def airflow(self, input):
         val = int(input, 16)
-        self._airflow = self.airflows[val]
+        self._airflow = self.airflows.get(val,"Unknown %s" % val)
 
     @property
     def analogV_treshold(self):
@@ -1092,7 +1091,7 @@ class Fan(object):
     @humidity_status.setter
     def humidity_status(self, input):
         val = int(input, 16)
-        self._humidity_status = self.statuses[val]
+        self._humidity_status = self.statuses.get(val,"Unknown %s" % val)
 
     @property
     def analogV_status(self):
@@ -1101,7 +1100,7 @@ class Fan(object):
     @analogV_status.setter
     def analogV_status(self, input):
         val = int(input, 16)
-        self._analogV_status = self.statuses[val]
+        self._analogV_status = self.statuses.get(val,"Unknown %s" % val)
 
     @property
     def beeper(self):

@@ -177,3 +177,16 @@ Version 1.2.0
 
 Version 1.2.1
 * Merged @AndyNew2 pull request bugfix for initialization not using job executor and some config flow fixes #37
+
+Version 1.2.2
+* Beeper status error/write value of val varable
+* fix for case, where HW returns unknown value for some statuses/states
+
+Version 1.2.3
+* Merge pull request #39 from AndyNew2/AndyNew2-Rework   
+** v1.2.3 bugfix and stability improvement
+
+Version 1.2.4
+* Merge pull request #40 from AndyNew2
+** added weekly_schedule_state on request
+** Add weekly schedule state to VentoSwitch

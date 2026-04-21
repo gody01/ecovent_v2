@@ -28,5 +28,74 @@
             "description": "Reset Vento alarms.",
             "name": "Reset fan Vento alarms"
         }
+    },
+    "entity": {
+        "sensor": {
+            "airflow": {
+                "state": {
+                    "air_supply": "Air supply",
+                    "heat_recovery": "Heat recovery",
+                    "ventilation": "Ventilation"
+                }
+            },
+            "beeper": {
+                "state": {
+                    "off": "Off",
+                    "on": "On",
+                    "silent": "Silent"
+                }
+            },
+            "alarm_status": {
+                "state": {
+                    "alarm": "Alarm",
+                    "no": "No alarm",
+                    "warning": "Warning"
+                }
+            },
+            "boost_status": {
+                "state": {
+                    "delay": "Delay",
+                    "off": "Off",
+                    "on": "On"
+                }
+            },
+            "timer_mode": {
+                "state": {
+                    "night": "Night",
+                    "off": "Off",
+                    "party": "Party"
+                }
+            }
+        },
+        "fan": {
+            "vent": {
+                "state_attributes": {
+                    "direction": {
+                        "name": "Airflow",
+                        "state": {
+                            "forward": "Ventilation",
+                            "reverse": "Air supply"
+                        }
+                    },
+                    "oscillating": {
+                        "name": "Heat recovery",
+                        "state": {
+                            "false": "Off",
+                            "true": "On"
+                        }
+                    },
+                    "preset_mode": {
+                        "name": "Preset mode",
+                        "state": {
+                            "high": "High",
+                            "low": "Low",
+                            "manual": "Manual",
+                            "medium": "Medium",
+                            "off": "Off"
+                        }
+                    }
+                }
+            }
+        }
     }
 }

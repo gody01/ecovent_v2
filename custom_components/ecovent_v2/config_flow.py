@@ -10,7 +10,6 @@ import voluptuous as vol
 
 from homeassistant import config_entries, exceptions
 from homeassistant.const import (
-    CONF_DEVICE_ID,
     CONF_IP_ADDRESS,
     CONF_NAME,
     CONF_PASSWORD,
@@ -53,7 +52,9 @@ class VentoHub:
         self.fan = Fan(self.host, password, self.fan_id, self.name, self.port)
         await hass.async_add_executor_job(self.fan.init_device)
         self.fan_id = self.fan.id
-        _LOGGER.info("Config Flow: Authenticated fan with name:%s ID: %s", self.name, self.fan_id)
+        _LOGGER.info(
+            "Config Flow: Authenticated fan with name:%s ID: %s", self.name, self.fan_id
+        )
         if self.fan_id is not None:
             self.name = self.name + " " + self.fan_id
         return (
@@ -78,7 +79,10 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
     hub = VentoHub(
         # data[CONF_IP_ADDRESS], data[CONF_PORT], data[CONF_DEVICE_ID], data[CONF_NAME]
-        data[CONF_IP_ADDRESS], data[CONF_PORT], "DEFAULT_DEVICEID", data[CONF_NAME]
+        data[CONF_IP_ADDRESS],
+        data[CONF_PORT],
+        "DEFAULT_DEVICEID",
+        data[CONF_NAME],
     )
 
     if not await hub.authenticate(hass, data[CONF_PASSWORD]):
@@ -166,7 +170,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    ) -> FlowResult:
         """Handle reconfigure step."""
         errors: dict[str, str] = {}
 

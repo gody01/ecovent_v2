@@ -28,5 +28,74 @@
       "name": "Reset fan Vento alarms",
       "description": "Reset Vento alarms."
     }
+  },
+  "entity": {
+    "sensor": {
+      "airflow": {
+        "state": {
+          "ventilation": "Ventilation",
+          "heat_recovery": "Heat recovery",
+          "air_supply": "Air supply"
+        }
+      },
+      "beeper": {
+        "state": {
+          "off": "Off",
+          "on": "On",
+          "silent": "Silent"
+        }
+      },
+      "boost_status": {
+        "state": {
+          "off": "Off",
+          "on": "On",
+          "delay": "Delay"
+        }
+      },
+      "timer_mode": {
+        "state": {
+          "off": "Off",
+          "night": "Night",
+          "party": "Party"
+        }
+      },
+      "alarm_status": {
+        "state": {
+          "no": "No alarm",
+          "alarm": "Alarm",
+          "warning": "Warning"
+        }
+      }
+    },
+    "fan": {
+      "vent": {
+        "state_attributes": {
+          "direction": {
+            "name": "Airflow",
+            "state": {
+              "forward": "Ventilation",
+              "reverse": "Air supply"
+            }
+          },
+          "oscillating": {
+            "name": "Heat recovery",
+            "state": {
+              "false": "Off",
+              "true": "On"
+            }
+          },
+          "preset_mode": {
+            "name": "Preset mode",
+            "state": {
+              "off": "Off",
+              "low": "Low",
+              "medium": "Medium",
+              "high": "High",
+              "manual": "Manual"
+            }
+          }
+        }
+      }
+    }
   }
 }

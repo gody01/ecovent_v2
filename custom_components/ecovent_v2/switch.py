@@ -31,42 +31,46 @@ async def async_setup_entry(
                 hass,
                 config,
                 "_humidity_sensor_state",
+                "Humidity sensor",
                 "humidity_sensor_state",
                 SwitchDeviceClass.SWITCH,
                 False,
                 EntityCategory.CONFIG,
                 True,
-                "mdi:switch",
+                "mdi:water-percent-alert",
                 False,
             ),
             VentoSwitch(
                 hass,
                 config,
                 "_relay_sensor_state",
+                "Relay sensor",
                 "relay_sensor_state",
                 SwitchDeviceClass.SWITCH,
                 False,
                 EntityCategory.CONFIG,
                 True,
-                "mdi:switch",
+                "mdi:electric-switch",
                 False,
             ),
             VentoSwitch(
                 hass,
                 config,
                 "_analogV_sensor_state",
+                "Analog voltage sensor",
                 "analogV_sensor_state",
                 SwitchDeviceClass.SWITCH,
                 False,
                 EntityCategory.CONFIG,
                 True,
-                "mdi:switch",
+                "mdi:flash-alert-outline",
                 False,
             ),
             VentoSwitch(
                 hass,
                 config,
                 "_weekly_schedule_state",
+                "Weekly schedule",
                 "weekly_schedule_state",
                 SwitchDeviceClass.SWITCH,
                 False,
@@ -82,13 +86,15 @@ async def async_setup_entry(
 class VentoSwitch(CoordinatorEntity, SwitchEntity):
     """Class for Vento Fan Switches."""
 
+    _attr_has_entity_name = True
     _attr_should_poll = False
 
     def __init__(
         self,
         hass: HomeAssistant,
         config: ConfigEntry,
-        name="VentoSwitch",
+        key="VentoSwitch",
+        name=None,
         method=None,
         device_class: SwitchDeviceClass | None = None,
         state: bool = False,
@@ -103,8 +109,8 @@ class VentoSwitch(CoordinatorEntity, SwitchEntity):
         self._fan: Fan = coordinator._fan
         self._attr_device_class = device_class
         self._attr_entity_category = entity_category
-        self._attr_name = self._fan.name + name
-        self._attr_unique_id = self._fan.id + name
+        self._attr_name = name
+        self._attr_unique_id = self._fan.id + key
         self._attr_entity_registry_enabled_default = enable_by_default
         self._method = getattr(self, method)
         #  self._attribute2 = getattr(self._fan, method)  crazy cannot be done here, only works for binary sensor.

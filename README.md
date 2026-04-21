@@ -190,3 +190,21 @@ Version 1.2.4
 * Merge pull request #40 from AndyNew2
 ** added weekly_schedule_state on request
 ** Add weekly schedule state to VentoSwitch
+
+Version 1.2.5
+* Clean up Home Assistant entity names and categories
+* Move multi-state statuses from binary sensors to enum sensors
+* Expose observed beeper flag as a read-only diagnostic sensor
+* Add Airflow enum state translations for cleaner UI labels
+* Add fan attribute translations so the built-in direction/oscillation controls
+  read as Airflow and Heat recovery
+* Add Off as a Home Assistant pseudo preset mode that turns the fan off
+* Skip unchanged fan commands so automations can set desired final states
+  without re-sending already-active state, preset, direction, heat recovery, or
+  manual percentage writes
+* Switch to manual speed automatically when setting the fan percentage directly
+* Keep preset percentage synchronized from the device-reported low/medium/high
+  supply/exhaust setpoints instead of hiding it outside manual mode
+* Document live TwinFresh V.2 beeper testing: writing `0x0306=00` or `0x0306=02`
+  did not disable command beeps reliably on the tested device, so the integration
+  does not expose a writable beeper control.

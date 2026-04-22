@@ -113,7 +113,9 @@ class ParseResponseTest(unittest.TestCase):
         )
         self.assertEqual(
             Fan.device_models[0x0600].source_documents,
-            ("Smart Wifi b168_1en_01preview",),
+            (
+                "https://blaubergventilatoren.net/download/smart-wi-fi-manual-8533.pdf",
+            ),
         )
         self.assertEqual(Fan.device_models[0x0200].name, "Freshbox 100 WiFi")
         self.assertEqual(Fan.device_models[0x0200].profile_key, "freshbox")

@@ -15,7 +15,7 @@ table remains below this section.
 Source PDFs:
 
 - [Connection to a "Smart Home" system - connection guide (B133-4-1EN-02)](https://blaubergventilatoren.net/download/vento-inhome-manual-14758.pdf)
-- `Smart Wifi b168_1en_01preview`
+- [Smart Wi-Fi connection guide B168-1EN-01](https://blaubergventilatoren.net/download/smart-wi-fi-manual-8533.pdf)
 - [TwinFresh Style Wi-Fi manual 19765](https://ventilation-system.com/download/twinfresh-style-wi-fi-manual-19765.pdf)
 - [TwinFresh Style Wi-Fi mini manual 19765](https://ventilation-system.com/download/twinfresh-style-wi-fi-mini-manual-19765.pdf)
 - [Breezy Eco manual 21433](https://ventilation-system.com/download/breezy-eco-manual-21433.pdf)
@@ -36,10 +36,10 @@ unit type.
 | `0x0400` | Vento Expert Duo A30-1 W V.2 | TwinFresh Expert Duo RW1-30 V.2 | Same `vento` profile |
 | `0x0500` | Vento Expert A30 W V.2 | TwinFresh Expert RW-30 V.2 | Same `vento` profile |
 | `0x0E00` | TwinFresh Style Wifi V.2 | Oxxify smart 50 | Same `vento` profile |
-| `0x1100` | Breezy 160 | Freshpoint 160; Vents Breezy 160-E | Breezy/Freshpoint parameter variant, currently handled through the base `vento` profile |
-| `0x1400` | Breezy Eco 160 | Freshpoint Eco 160 | Breezy/Freshpoint parameter variant, currently handled through the base `vento` profile |
-| `0x1600` | Breezy 200 | Freshpoint 200 | Breezy/Freshpoint parameter variant, currently handled through the base `vento` profile |
-| `0x1800` | Breezy Eco 200 | Freshpoint Eco 200 | Breezy/Freshpoint parameter variant, currently handled through the base `vento` profile |
+| `0x1100` | Breezy 160 | Freshpoint 160; Vents Breezy 160-E | Breezy/Freshpoint parameter variant, handled through the dedicated `breezy` profile |
+| `0x1400` | Breezy Eco 160 | Freshpoint Eco 160 | Breezy/Freshpoint parameter variant, handled through the dedicated `breezy` profile |
+| `0x1600` | Breezy 200 | Freshpoint 200 | Breezy/Freshpoint parameter variant, handled through the dedicated `breezy` profile |
+| `0x1800` | Breezy Eco 200 | Freshpoint Eco 200 | Breezy/Freshpoint parameter variant, handled through the dedicated `breezy` profile |
 | `0x1A00` | TwinFresh Atmo / newer Blauberg Vento |  | Same `vento` profile |
 | `0x1B00` | Vento inHome S11 W | TwinFresh Atmo 100 in the 2026 TwinFresh PDF | Conflicting reports; keep existing code name until hardware reports clarify it |
 | `0x1C00` | TwinFresh Atmo 160 |  | Same `vento` profile |
@@ -138,7 +138,10 @@ remain intentionally unexposed for credential safety.
 
 ### Smart Wi-Fi extract-fan profile (`0x0600`)
 
-Implemented from `Smart Wifi b168_1en_01preview`.
+Implemented from [Smart Wi-Fi connection guide B168-1EN-01](https://blaubergventilatoren.net/download/smart-wi-fi-manual-8533.pdf).
+The guide uses the same UDP/BGCP framing and port 4000 as the Vento-family
+manuals, but its parameter table is a distinct extract-fan map. Unit type
+parameter `0x00B9` identifies these devices as `0x0600`.
 
 | Parameter | Code field | Source | Functions | Description | Size |
 | -- | -- | -- | -- | -- | -- |
@@ -254,7 +257,7 @@ gateway, and setup-mode commands. Those rows remain intentionally out of scope
 for HA exposure for the same credential-safety reasons as the other profiles.
 
 
-| Smart Home (Vento) b133_4_1en_02_preview |                  |                                                                                                                                                                                                                                                                                                                                                                                                                                                 |                                                                                                                                                                                                                                                                                                                                                                                                                                                            |                  |  | Smart Wifi b168_1en_01preview |                                                                   |                                                                                                                                      |              |
+| Smart Home (Vento) b133_4_1en_02_preview |                  |                                                                                                                                                                                                                                                                                                                                                                                                                                                 |                                                                                                                                                                                                                                                                                                                                                                                                                                                            |                  |  | Smart Wi-Fi B168-1EN-01 |                                                                   |                                                                                                                                      |              |
 | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- |
 | Parameter number [Dec./Hex.]             | Functions        | Description                                                                                                                                                                                                                                                                                                                                                                                                                                     | Possible values                                                                                                                                                                                                                                                                                                                                                                                                                                            | Size [bytes]     |  | Functions                     | Description                                                       | Possible values                                                                                                                      | Size [bytes] |
 | 1/0x0001                                 | R/W/RW           | Unit On/Of                                                                                                                                                                                                                                                                                                                                                                                                                                      | 0 — Off<br>1 — On<br>2 – Invert                                                                                                                                                                                                                                                                                                                                                                                                                            | 1                |  | R/W/RW                        | Fan On/Of                                                         | 0-Off<br>1-On<br>2-Invert                                                                                                            | 1            |

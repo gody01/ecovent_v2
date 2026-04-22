@@ -19,7 +19,9 @@ OPERATING_MODE_PRESETS = (
 VENTO_SMART_HOME_MANUAL_URL = (
     "https://blaubergventilatoren.net/download/vento-inhome-manual-14758.pdf"
 )
-SMART_WIFI_MANUAL_LABEL = "Smart Wifi b168_1en_01preview"
+SMART_WIFI_MANUAL_URL = (
+    "https://blaubergventilatoren.net/download/smart-wi-fi-manual-8533.pdf"
+)
 TWINFRESH_STYLE_MANUAL_URL = (
     "https://ventilation-system.com/download/twinfresh-style-wi-fi-manual-19765.pdf"
 )
@@ -264,7 +266,7 @@ DEVICE_MODELS = {
     0x0600: DeviceModel(
         "Blauberg Smart Wi-Fi extract fan",
         "extract_fan",
-        source_documents=(SMART_WIFI_MANUAL_LABEL,),
+        source_documents=(SMART_WIFI_MANUAL_URL,),
     ),
     # Freshbox uses the same BGCP/UDP framing but a different AHU parameter map.
     # Its unit type is documented as 0x0002; this parser stores the two response

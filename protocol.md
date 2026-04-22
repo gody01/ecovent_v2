@@ -52,6 +52,12 @@ special command bytes, and Vento-family parameter map used by the `vento`
 profile. They add useful model and capability lists that are easier to review
 separately from the side-by-side table below.
 
+Compared with the B133 Vento guide, the TwinFresh table has the same parameter
+IDs except for one documentation omission: B133 explicitly lists `0x0044`
+(manual fan speed), while the TwinFresh table still references parameter 68
+from speed mode `255` but does not include its own `0x0044` row. The shared
+`vento` profile keeps `0x0044` because both document the manual speed mode path.
+
 Documented unit type values from parameter `0x00B9`:
 
 | Value | Hex response | PDF model text | Code status |

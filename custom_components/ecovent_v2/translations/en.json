@@ -91,7 +91,21 @@
                             "low": "Low",
                             "manual": "Manual",
                             "medium": "Medium",
-                            "off": "Off"
+                            "off": "Off",
+                            "speed_1": "Speed 1",
+                            "speed_2": "Speed 2",
+                            "speed_3": "Speed 3",
+                            "speed_4": "Speed 4",
+                            "speed_5": "Speed 5",
+                            "all_day": "All day",
+                            "humidity_trigger": "Humidity auto",
+                            "humidity_manual": "Humidity manual",
+                            "temperature_trigger": "Temperature",
+                            "motion_trigger": "Motion",
+                            "external_switch_trigger": "External switch",
+                            "interval_ventilation": "Interval ventilation",
+                            "silent": "Silent",
+                            "boost": "Boost"
                         }
                     }
                 }

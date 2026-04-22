@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import importlib.util
+import json
 import socket
 import sys
 import unittest
@@ -54,6 +55,26 @@ class ParseResponseTest(unittest.TestCase):
             self.assertNotIn("smart_", source)
             self.assertNotIn("Smart Wi-Fi", source)
             self.assertNotIn("dual_fan_speed", source)
+
+    def test_fan_preset_labels_and_icons_cover_all_profiles(self):
+        strings = json.loads((COMPONENT_PATH / "strings.json").read_text())
+        icons = json.loads((COMPONENT_PATH / "icons.json").read_text())
+
+        labels = strings["entity"]["fan"]["vent"]["state_attributes"][
+            "preset_mode"
+        ]["state"]
+        preset_icons = icons["entity"]["fan"]["vent"]["state_attributes"][
+            "preset_mode"
+        ]["state"]
+
+        expected_modes = {
+            mode
+            for profile in Fan.device_profiles.values()
+            for mode in profile.preset_modes
+        }
+        for mode in expected_modes:
+            self.assertIn(mode, labels)
+            self.assertIn(mode, preset_icons)
 
     def test_unit_type_metadata_selects_device_profiles(self):
         self.assertEqual(
@@ -416,7 +437,7 @@ class ParseResponseTest(unittest.TestCase):
         self.assertEqual(fan.speed, "speed_5")
         self.assertEqual(
             fan.fan_preset_modes,
-            ["speed_1", "speed_2", "speed_3", "speed_4", "speed_5"],
+            ["off", "speed_1", "speed_2", "speed_3", "speed_4", "speed_5"],
         )
         self.assertFalse(fan.supports_percentage_control)
         self.assertEqual(

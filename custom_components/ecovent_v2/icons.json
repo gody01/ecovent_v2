@@ -10,6 +10,20 @@
               "low": "mdi:fan-speed-1",
               "medium": "mdi:fan-speed-2",
               "high": "mdi:fan-speed-3",
+              "speed_1": "mdi:fan-speed-1",
+              "speed_2": "mdi:fan-speed-2",
+              "speed_3": "mdi:fan-speed-3",
+              "speed_4": "mdi:fan-plus",
+              "speed_5": "mdi:fan-plus",
+              "all_day": "mdi:weather-sunny",
+              "humidity_trigger": "mdi:water-percent",
+              "humidity_manual": "mdi:water-percent-alert",
+              "temperature_trigger": "mdi:thermometer",
+              "motion_trigger": "mdi:motion-sensor",
+              "external_switch_trigger": "mdi:electric-switch",
+              "interval_ventilation": "mdi:fan-clock",
+              "silent": "mdi:volume-off",
+              "boost": "mdi:fan-chevron-up",
               "manual": "mdi:tune-variant"
             }
           }

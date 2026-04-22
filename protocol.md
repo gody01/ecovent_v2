@@ -21,6 +21,7 @@ Source PDFs:
 - [Breezy Eco manual 21433](https://ventilation-system.com/download/breezy-eco-manual-21433.pdf)
 - [Freshpoint manual 16999](https://blaubergventilatoren.net/download/freshpoint-manual-16999.pdf)
 - [Freshbox 100 WiFi connection guide B73-9-1EN-01](https://blaubergventilatoren.net/download/freshbox-100-wifi-datasheet-7508.pdf)
+- [Micra 100 WiFi Smart Home connection guide V73-9-1EN-01](https://ventilation-system.com/download/micra-100-wifi-manual-19886.pdf)
 - [Arc Smart Smart House CO2 connection guide](https://ventilation-system.com/download/arc-smart-manual-21863.pdf)
 - [O2 Supreme Smart Home connection guide B255-1EN-01](https://blaubergventilatoren.net/download/o2-supreme-manual-15274.pdf)
 
@@ -39,6 +40,7 @@ unit type.
 | `0x0500` | Vento Expert A30 W V.2 | TwinFresh Expert RW-30 V.2 | Same `vento` profile |
 | `0x0D00` | Arc Smart | O2 Supreme | Dedicated `arc` profile |
 | `0x0E00` | TwinFresh Style Wifi V.2 | Oxxify smart 50 | Same `vento` profile |
+| `0x0200` | Freshbox 100 WiFi | Micra 100 WiFi | Dedicated `freshbox` AHU profile |
 | `0x1100` | Breezy 160 | Freshpoint 160; Vents Breezy 160-E | Breezy/Freshpoint parameter variant, handled through the dedicated `breezy` profile |
 | `0x1400` | Breezy Eco 160 | Freshpoint Eco 160 | Breezy/Freshpoint parameter variant, handled through the dedicated `breezy` profile |
 | `0x1600` | Breezy 200 | Freshpoint 200 | Breezy/Freshpoint parameter variant, handled through the dedicated `breezy` profile |
@@ -198,19 +200,20 @@ subnet mask, gateway, DHCP mode, and channel parameters. The integration keeps
 those out of the profile because it does not expose Wi-Fi reconfiguration and
 should not read or store Wi-Fi credentials.
 
-### Freshbox 100 WiFi notes
+### Freshbox 100 WiFi / Micra 100 WiFi notes
 
-The Freshbox 100 WiFi PDF is another "Smart Home" connection guide. It uses
-the same BGCP/UDP framing, default password, port 4000, special commands, and
-checksum rules, but it is an air-handling-unit parameter map rather than a
-Vento/TwinFresh/Breezy relabel. Do not route it through the `vento` or `breezy`
-profile without a dedicated `freshbox` profile review.
+The Freshbox 100 WiFi and Micra 100 WiFi PDFs are matching "Smart Home"
+connection guides for the same AHU parameter family. They use the same BGCP/UDP
+framing, default password, port 4000, special commands, checksum rules, unit
+type value, and parameter table. This is an air-handling-unit parameter map
+rather than a Vento/TwinFresh/Breezy relabel, so it is handled through the
+dedicated `freshbox` profile.
 
 Documented unit type from parameter `0x00B9`:
 
 | PDF value | Parser value | PDF model text | Code status |
 | -- | -- | -- | -- |
-| `0x0002` | `0x0200` | Freshbox 100 WiFi | `freshbox` profile, conservative HA exposure |
+| `0x0002` | `0x0200` | Freshbox 100 WiFi / Micra 100 WiFi | `freshbox` profile, conservative HA exposure |
 
 Freshbox rows that overlap useful HA concepts. The current `freshbox` profile
 keeps basic fan/filter/timer parsing separate from Vento/Breezy; the

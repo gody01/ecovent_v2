@@ -37,6 +37,9 @@ FRESHPOINT_MANUAL_URL = (
 FRESHBOX_100_WIFI_MANUAL_URL = (
     "https://blaubergventilatoren.net/download/freshbox-100-wifi-datasheet-7508.pdf"
 )
+MICRA_100_WIFI_MANUAL_URL = (
+    "https://ventilation-system.com/download/micra-100-wifi-manual-19886.pdf"
+)
 ARC_SMART_MANUAL_URL = (
     "https://ventilation-system.com/download/arc-smart-manual-21863.pdf"
 )
@@ -307,7 +310,8 @@ DEVICE_MODELS = {
     0x0200: DeviceModel(
         "Freshbox 100 WiFi",
         "freshbox",
-        source_documents=(FRESHBOX_100_WIFI_MANUAL_URL,),
+        aliases=("Micra 100 WiFi",),
+        source_documents=(FRESHBOX_100_WIFI_MANUAL_URL, MICRA_100_WIFI_MANUAL_URL),
     ),
 }
 

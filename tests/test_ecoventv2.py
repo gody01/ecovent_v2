@@ -150,11 +150,16 @@ class ParseResponseTest(unittest.TestCase):
             ),
         )
         self.assertEqual(Fan.device_models[0x0200].name, "Freshbox 100 WiFi")
+        self.assertEqual(
+            Fan.device_models[0x0200].display_name,
+            "Freshbox 100 WiFi / Micra 100 WiFi",
+        )
         self.assertEqual(Fan.device_models[0x0200].profile_key, "freshbox")
         self.assertEqual(
             Fan.device_models[0x0200].source_documents,
             (
                 "https://blaubergventilatoren.net/download/freshbox-100-wifi-datasheet-7508.pdf",
+                "https://ventilation-system.com/download/micra-100-wifi-manual-19886.pdf",
             ),
         )
         self.assertEqual(
@@ -410,7 +415,7 @@ class ParseResponseTest(unittest.TestCase):
         self.assertTrue(
             fan.parse_response(packet_with_payload([0xFE, 0x02, 0xB9, 0x02, 0x00]))
         )
-        self.assertEqual(fan.unit_type, "Freshbox 100 WiFi")
+        self.assertEqual(fan.unit_type, "Freshbox 100 WiFi / Micra 100 WiFi")
         self.assertEqual(fan.profile_key, "freshbox")
 
     def test_parse_response_uses_arc_smart_profile(self):

@@ -145,6 +145,14 @@ class Fan(object):
     }
     screen_standby_time_states = {0: "off", 1: "on"}
     screen_display_states = {0: "off", 1: "on", 2: "off_interval"}
+    arc_airflows_low = {1: "20_m3h", 2: "40_m3h", 3: "60_m3h"}
+    arc_airflows_medium = {
+        2: "40_m3h",
+        3: "60_m3h",
+        4: "90_m3h",
+        5: "115_m3h",
+    }
+    arc_airflows_high = {3: "60_m3h", 4: "90_m3h", 5: "115_m3h"}
 
     # Observed on a TwinFresh V.2 as a volatile command/status flag, not a stable
     # beeper preference. Writing 0 or 2 did not disable command beeps reliably.
@@ -424,11 +432,19 @@ class Fan(object):
         0x0315: ["air_quality_sensor_state", humidity_permission_modes],
         0x0316: ["interval_ventilation_state", states],
         0x0317: ["silent_mode_state", states],
+        0x0318: ["silent_mode_start_time", None],
+        0x0319: ["silent_mode_end_time", None],
+        0x031A: ["humidity_airflow", arc_airflows_high],
+        0x031B: ["motion_light_airflow", arc_airflows_medium],
+        0x031C: ["air_quality_airflow", arc_airflows_high],
+        0x031D: ["interval_ventilation_airflow", arc_airflows_low],
+        0x031E: ["all_day_airflow", arc_airflows_low],
         0x031F: ["air_quality_treshold", None],
         0x0320: ["air_quality", None],
         0x0323: ["temperature_status", statuses],
         0x0324: ["temperature_sensor_state", states],
         0x0325: ["temperature_treshold", None],
+        0x032F: ["temperature_airflow", arc_airflows_high],
     }
 
     write_params = {
@@ -533,6 +549,12 @@ class Fan(object):
     _motion_sensor_state = None
     _light_sensor_state = None
     _air_quality_sensor_state = None
+    _humidity_airflow = None
+    _motion_light_airflow = None
+    _air_quality_airflow = None
+    _interval_ventilation_airflow = None
+    _all_day_airflow = None
+    _temperature_airflow = None
     _temperature_treshold = None
     _max_speed_setpoint = None
     _silent_speed_setpoint = None
@@ -1508,6 +1530,72 @@ class Fan(object):
         val = int(input, 16)
         self._air_quality_sensor_state = self._map_value(
             self.humidity_permission_modes, val, "air_quality_sensor_state"
+        )
+
+    @property
+    def humidity_airflow(self):
+        return self._humidity_airflow
+
+    @humidity_airflow.setter
+    def humidity_airflow(self, input):
+        val = int(input, 16)
+        self._humidity_airflow = self._map_value(
+            self.arc_airflows_high, val, "humidity_airflow"
+        )
+
+    @property
+    def motion_light_airflow(self):
+        return self._motion_light_airflow
+
+    @motion_light_airflow.setter
+    def motion_light_airflow(self, input):
+        val = int(input, 16)
+        self._motion_light_airflow = self._map_value(
+            self.arc_airflows_medium, val, "motion_light_airflow"
+        )
+
+    @property
+    def air_quality_airflow(self):
+        return self._air_quality_airflow
+
+    @air_quality_airflow.setter
+    def air_quality_airflow(self, input):
+        val = int(input, 16)
+        self._air_quality_airflow = self._map_value(
+            self.arc_airflows_high, val, "air_quality_airflow"
+        )
+
+    @property
+    def interval_ventilation_airflow(self):
+        return self._interval_ventilation_airflow
+
+    @interval_ventilation_airflow.setter
+    def interval_ventilation_airflow(self, input):
+        val = int(input, 16)
+        self._interval_ventilation_airflow = self._map_value(
+            self.arc_airflows_low, val, "interval_ventilation_airflow"
+        )
+
+    @property
+    def all_day_airflow(self):
+        return self._all_day_airflow
+
+    @all_day_airflow.setter
+    def all_day_airflow(self, input):
+        val = int(input, 16)
+        self._all_day_airflow = self._map_value(
+            self.arc_airflows_low, val, "all_day_airflow"
+        )
+
+    @property
+    def temperature_airflow(self):
+        return self._temperature_airflow
+
+    @temperature_airflow.setter
+    def temperature_airflow(self, input):
+        val = int(input, 16)
+        self._temperature_airflow = self._map_value(
+            self.arc_airflows_high, val, "temperature_airflow"
         )
 
     @property

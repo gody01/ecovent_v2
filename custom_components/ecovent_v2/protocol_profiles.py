@@ -40,6 +40,9 @@ FRESHBOX_100_WIFI_MANUAL_URL = (
 ARC_SMART_MANUAL_URL = (
     "https://ventilation-system.com/download/arc-smart-manual-21863.pdf"
 )
+O2_SUPREME_MANUAL_URL = (
+    "https://blaubergventilatoren.net/download/o2-supreme-manual-15274.pdf"
+)
 
 
 @dataclass(frozen=True)
@@ -230,7 +233,8 @@ DEVICE_MODELS = {
     0x0D00: DeviceModel(
         "Arc Smart",
         "arc",
-        source_documents=(ARC_SMART_MANUAL_URL,),
+        aliases=("O2 Supreme",),
+        source_documents=(ARC_SMART_MANUAL_URL, O2_SUPREME_MANUAL_URL),
     ),
     0x1100: DeviceModel(
         "Breezy 160",

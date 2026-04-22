@@ -428,6 +428,24 @@ SENSOR_SPECS = (
         required_capabilities=("breezy_screen",),
     ),
     SensorSpec(
+        "_silent_mode_start_time",
+        "Silent mode start time",
+        "silent_mode_start_time",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        enable_by_default=False,
+        icon="mdi:clock-start",
+        required_capabilities=("arc_environment",),
+    ),
+    SensorSpec(
+        "_silent_mode_end_time",
+        "Silent mode end time",
+        "silent_mode_end_time",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        enable_by_default=False,
+        icon="mdi:clock-end",
+        required_capabilities=("arc_environment",),
+    ),
+    SensorSpec(
         "_ip",
         "IP address",
         "current_wifi_ip",
@@ -740,6 +758,14 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
     def screen_off_end_time(self):
         """Get screen display off interval end."""
         return self._fan.screen_off_end_time
+
+    def silent_mode_start_time(self):
+        """Get silent mode start time."""
+        return self._fan.silent_mode_start_time
+
+    def silent_mode_end_time(self):
+        """Get silent mode end time."""
+        return self._fan.silent_mode_end_time
 
     def analogv(self):
         """Get analog Voltage value."""

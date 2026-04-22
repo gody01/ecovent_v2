@@ -117,6 +117,10 @@ class ParseResponseTest(unittest.TestCase):
             "Blauberg Smart Wi-Fi extract fan",
         )
         self.assertEqual(Fan.device_models[0x0D00].name, "Arc Smart")
+        self.assertEqual(
+            Fan.device_models[0x0D00].display_name,
+            "Arc Smart / O2 Supreme",
+        )
         self.assertEqual(Fan.device_models[0x0D00].profile_key, "arc")
 
     def test_unit_type_metadata_keeps_source_documents_with_models(self):
@@ -157,6 +161,7 @@ class ParseResponseTest(unittest.TestCase):
             Fan.device_models[0x0D00].source_documents,
             (
                 "https://ventilation-system.com/download/arc-smart-manual-21863.pdf",
+                "https://blaubergventilatoren.net/download/o2-supreme-manual-15274.pdf",
             ),
         )
 
@@ -489,6 +494,42 @@ class ParseResponseTest(unittest.TestCase):
                         0xFF,
                         0x03,
                         0xFE,
+                        0x03,
+                        0x18,
+                        0x00,
+                        0x1E,
+                        0x16,
+                        0xFF,
+                        0x03,
+                        0xFE,
+                        0x03,
+                        0x19,
+                        0x00,
+                        0x00,
+                        0x07,
+                        0xFF,
+                        0x03,
+                        0x1A,
+                        0x04,
+                        0xFF,
+                        0x03,
+                        0x1B,
+                        0x02,
+                        0xFF,
+                        0x03,
+                        0x1C,
+                        0x05,
+                        0xFF,
+                        0x03,
+                        0x1D,
+                        0x03,
+                        0xFF,
+                        0x03,
+                        0x1E,
+                        0x01,
+                        0xFF,
+                        0x03,
+                        0xFE,
                         0x02,
                         0x1F,
                         0xC8,
@@ -512,13 +553,17 @@ class ParseResponseTest(unittest.TestCase):
                         0x03,
                         0x25,
                         0x18,
+                        0xFF,
+                        0x03,
+                        0x2F,
+                        0x04,
                     ]
                 )
             )
         )
 
         self.assertEqual(fan.profile_key, "arc")
-        self.assertEqual(fan.unit_type, "Arc Smart")
+        self.assertEqual(fan.unit_type, "Arc Smart / O2 Supreme")
         self.assertEqual(fan.fan_preset_modes, [])
         self.assertFalse(fan.supports_percentage_control)
         self.assertFalse(fan.supports_parameter("state"))
@@ -542,14 +587,30 @@ class ParseResponseTest(unittest.TestCase):
         self.assertEqual(fan.air_quality_sensor_state, "manual")
         self.assertEqual(fan.interval_ventilation_state, "on")
         self.assertEqual(fan.silent_mode_state, "off")
+        self.assertEqual(fan.silent_mode_start_time, "22h 30m 0s ")
+        self.assertEqual(fan.silent_mode_end_time, "7h 0m 0s ")
+        self.assertEqual(fan.humidity_airflow, "90_m3h")
+        self.assertEqual(fan.motion_light_airflow, "40_m3h")
+        self.assertEqual(fan.air_quality_airflow, "115_m3h")
+        self.assertEqual(fan.interval_ventilation_airflow, "60_m3h")
+        self.assertEqual(fan.all_day_airflow, "20_m3h")
         self.assertEqual(fan.air_quality_treshold, 200)
         self.assertEqual(fan.air_quality, 300)
         self.assertEqual(fan.temperature_status, "on")
         self.assertEqual(fan.temperature_sensor_state, "on")
         self.assertEqual(fan.temperature_treshold, "24")
+        self.assertEqual(fan.temperature_airflow, "90_m3h")
         self.assertEqual(
             fan.parameter_options("air_quality_sensor_state"),
             ["off", "automatic", "manual"],
+        )
+        self.assertEqual(
+            fan.parameter_options("humidity_airflow"),
+            ["60_m3h", "90_m3h", "115_m3h"],
+        )
+        self.assertEqual(
+            fan.parameter_options("interval_ventilation_airflow"),
+            ["20_m3h", "40_m3h", "60_m3h"],
         )
 
     def test_parse_response_uses_freshbox_profile(self):

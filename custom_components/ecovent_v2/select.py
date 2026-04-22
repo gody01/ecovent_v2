@@ -97,6 +97,48 @@ SELECT_SPECS = (
         "mdi:air-filter",
         ("arc_environment",),
     ),
+    SelectSpec(
+        "_humidity_airflow",
+        "Humidity airflow",
+        "humidity_airflow",
+        "mdi:water-percent",
+        ("arc_environment",),
+    ),
+    SelectSpec(
+        "_motion_light_airflow",
+        "Motion/light airflow",
+        "motion_light_airflow",
+        "mdi:motion-sensor",
+        ("arc_environment",),
+    ),
+    SelectSpec(
+        "_air_quality_airflow",
+        "Air quality airflow",
+        "air_quality_airflow",
+        "mdi:air-filter",
+        ("arc_environment",),
+    ),
+    SelectSpec(
+        "_interval_ventilation_airflow",
+        "Interval ventilation airflow",
+        "interval_ventilation_airflow",
+        "mdi:fan-auto",
+        ("arc_environment",),
+    ),
+    SelectSpec(
+        "_all_day_airflow",
+        "All day airflow",
+        "all_day_airflow",
+        "mdi:hours-24",
+        ("arc_environment",),
+    ),
+    SelectSpec(
+        "_temperature_airflow",
+        "Temperature airflow",
+        "temperature_airflow",
+        "mdi:thermometer",
+        ("arc_environment",),
+    ),
 )
 
 

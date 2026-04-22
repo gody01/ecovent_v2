@@ -220,7 +220,7 @@ class Fan(object):
     _relay_sensor_state = None
     _analogV_sensor_state = None
     _humidity_treshold = None
-    _battery_voltage = 0
+    _battery_voltage = None
     _humidity = None
     _analogV = None
     _relay_status = None

@@ -401,10 +401,17 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         """Get battery used percentage."""
         high = 3300
         low = 2500
-        if self._fan.battery_voltage is None:
+        value = self._fan.battery_voltage
+        if value is None:
             return None
 
-        voltage = int(self._fan.battery_voltage.split()[0])
+        if isinstance(value, (int, float)):
+            voltage = int(value)
+        else:
+            match = re.match(r"(?P<voltage>\d+)", str(value))
+            if match is None:
+                return None
+            voltage = int(match.group("voltage"))
         voltage = round(((voltage - low) / (high - low)) * 100)
         return min(100, max(0, voltage))
 

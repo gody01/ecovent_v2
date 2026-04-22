@@ -176,10 +176,7 @@ async def _async_migrate_statistics_metadata_on_start(
     async def _async_run_at_start(_event) -> None:
         await _async_migrate_statistics_metadata(hass, coordinator)
 
-    hass.bus.async_listen_once(
-        EVENT_HOMEASSISTANT_STARTED,
-        lambda event: hass.async_create_task(_async_run_at_start(event)),
-    )
+    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _async_run_at_start)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

@@ -83,6 +83,15 @@ class ParseResponseTest(unittest.TestCase):
         )
         self.assertEqual(fan.filter_timer_setpoint, "365 d")
 
+    def test_parse_response_reads_four_byte_filter_timer_countdown(self):
+        fan = Fan("192.0.2.1")
+        self.assertTrue(
+            fan.parse_response(
+                packet_with_payload([0xFE, 0x04, 0x64, 0x11, 0x08, 0x48, 0x00])
+            )
+        )
+        self.assertEqual(fan.filter_timer_countdown, "72d 8h 17m ")
+
     def test_parse_response_rejects_dangling_extended_marker(self):
         fan = Fan("192.0.2.1")
         self.assertFalse(fan.parse_response(packet_with_payload([0xFF])))

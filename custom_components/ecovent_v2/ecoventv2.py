@@ -993,7 +993,12 @@ class Fan(object):
     @filter_timer_countdown.setter
     def filter_timer_countdown(self, input):
         if len(input) == 8:
-            input = input[:-2]
+            val = int(input, 16).to_bytes(4, "big")
+            days = val[3] * 256 + val[2]
+            self._filter_timer_countdown = (
+                str(days) + "d " + str(val[1]) + "h " + str(val[0]) + "m "
+            )
+            return
         # print ( "EcoventV2: " + input , file = sys.stderr )
         val = int(input, 16).to_bytes(3, "big")
         self._filter_timer_countdown = (

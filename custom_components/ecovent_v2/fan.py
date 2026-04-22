@@ -194,6 +194,10 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         **kwargs: Any,
     ) -> None:
         """Turn on the entity."""
+        speed = kwargs.get("speed")
+        if preset_mode is None and isinstance(speed, str) and speed in PRESET_MODES:
+            preset_mode = speed
+
         if preset_mode is not None:
             await self.hass.async_add_executor_job(self.set_preset_mode, preset_mode)
         if percentage is not None:

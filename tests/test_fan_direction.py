@@ -45,6 +45,12 @@ def _string_constants(node):
 
 
 class FanDirectionTest(unittest.TestCase):
+    def test_turn_on_accepts_legacy_speed_argument(self):
+        tree = _fan_tree()
+        turn_on = _class_method(tree, "VentoExpertFan", "async_turn_on")
+
+        self.assertIn("speed", _string_constants(turn_on))
+
     def test_advertised_directions_match_home_assistant_service_values(self):
         tree = _fan_tree()
         directions = _constant_assignment(tree, "DIRECTIONS")

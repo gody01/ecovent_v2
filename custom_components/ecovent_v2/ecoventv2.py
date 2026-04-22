@@ -1,13 +1,12 @@
-"""Version"""
+"""Library to handle communication with Wifi ecofan from TwinFresh / Blauberg."""
 
-__version__ = "loc_0.9.29"
-
-"""Library to handle communication with Wifi ecofan from TwinFresh / Blauberg"""
+import logging
+import math
 import socket
 import sys
 import time
-import math
-import logging
+
+__version__ = "loc_0.9.29"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -77,13 +76,10 @@ Sw used for switch
 """
 
 
-
-
-
 class Fan(object):
     """Class to communicate with the ecofan"""
 
-    HEADER = f"FDFD"
+    HEADER = "FDFD"
 
     func = {
         "read": "01",
@@ -102,7 +98,9 @@ class Fan(object):
 
     statuses = {0: "off", 1: "on"}
 
-    bstatuses = {0: "off", 1: "on", 2: "silent"}  # for beeper, values unknown
+    # Observed on a TwinFresh V.2 as a volatile command/status flag, not a stable
+    # beeper preference. Writing 0 or 2 did not disable command beeps reliably.
+    bstatuses = {0: "off", 1: "on", 2: "silent"}
 
     boost_statuses = {0: "off", 1: "on", 2: "delay"}
 
@@ -143,7 +141,7 @@ class Fan(object):
     params = {
         0x0001: ["state", states],
         0x0002: ["speed", speeds],
-        0x0006: ["boost_status", statuses],
+        0x0006: ["boost_status", boost_statuses],
         0x0007: ["timer_mode", timer_modes],
         0x000B: ["timer_counter", None],
         0x000F: ["humidity_sensor_state", states],
@@ -154,17 +152,24 @@ class Fan(object):
         0x0025: ["humidity", None],
         0x002D: ["analogV", None],
         0x0032: ["relay_status", statuses],
+        0x003A: ["supply_speed_low", None],
+        0x003B: ["exhaust_speed_low", None],
+        0x003C: ["supply_speed_medium", None],
+        0x003D: ["exhaust_speed_medium", None],
+        0x003E: ["supply_speed_high", None],
+        0x003F: ["exhaust_speed_high", None],
         0x0044: ["man_speed", None],
         0x004A: ["fan1_speed", None],
         0x004B: ["fan2_speed", None],
+        0x0063: ["filter_timer_setpoint", None],
         0x0064: ["filter_timer_countdown", None],
         0x0066: ["boost_time", None],
-     #   0x006F: ["rtc_time", None],  according stats not used in integration
-     #   0x0070: ["rtc_date", None],  according stats not used in integration
+        #   0x006F: ["rtc_time", None],  according stats not used in integration
+        #   0x0070: ["rtc_date", None],  according stats not used in integration
         0x007C: ["device_search", None],  # this is the fan serial number
-     #   0x007D: ["device_password", None],  according stats not used in integration
+        #   0x007D: ["device_password", None],  according stats not used in integration
         0x007E: ["machine_hours", None],
-     #   0x0081: ["heater_status", statuses], according stats not used in integration
+        #   0x0081: ["heater_status", statuses], according stats not used in integration
         0x0083: ["alarm_status", alarms],
         0x0085: ["cloud_server_state", states],
         0x0086: ["firmware", None],
@@ -173,29 +178,30 @@ class Fan(object):
         0x00B7: ["airflow", airflows],
         0x00B8: ["analogV_treshold", None],
         0x00B9: ["unit_type", unit_types],
-        # Write only parameters
-        0x0065: ["filter_timer_reset", None],  # WRITE ONLY
         0x0072: ["weekly_schedule_state", states],
-     #   0x0077: ["weekly_schedule_setup", None], according stats not used in integration
-        0x0080: ["reset_alarms", None],  # WRITE ONLY
+        #   0x0077: ["weekly_schedule_setup", None], according stats not used in integration
         #        0x0087: [ 'factory_reset', None ],
         #        0x00a0: [ 'wifi_apply_and_quit', None ],
         #        0x00a2: [ 'wifi_discard_and_quit', None ],
-      #  0x0094: ["wifi_operation_mode", wifi_operation_modes],  according stats not used in integration
-      #  # 0x0095: ["wifi_name", None],  # propose not to transfer this data over network   according stats not used in integration
-      #  # 0x0096: ["wifi_pasword", None], # propose not to transfer this data over network  according stats not used in integration
-      #  # 0x0099: ["wifi_enc_type", wifi_enc_types], # propose not to transfer this data over network  according stats not used in integration
-      #  0x009A: ["wifi_freq_channel", None],  according stats not used in integration
-      #  0x009B: ["wifi_dhcp", wifi_dhcps],  according stats not used in integration
+        #  0x0094: ["wifi_operation_mode", wifi_operation_modes],  according stats not used in integration
+        #  # 0x0095: ["wifi_name", None],  # propose not to transfer this data over network   according stats not used in integration
+        #  # 0x0096: ["wifi_pasword", None], # propose not to transfer this data over network  according stats not used in integration
+        #  # 0x0099: ["wifi_enc_type", wifi_enc_types], # propose not to transfer this data over network  according stats not used in integration
+        #  0x009A: ["wifi_freq_channel", None],  according stats not used in integration
+        #  0x009B: ["wifi_dhcp", wifi_dhcps],  according stats not used in integration
         0x009C: ["wifi_assigned_ip", None],
-      #  0x009D: ["wifi_assigned_netmask", None],  according stats not used in integration
-      #  0x009E: ["wifi_main_gateway", None],  according stats not used in integration
-      #  0x0302: ["night_mode_timer", None],  according stats not used in integration
-      #  0x0303: ["party_mode_timer", None],  according stats not used in integration
+        #  0x009D: ["wifi_assigned_netmask", None],  according stats not used in integration
+        #  0x009E: ["wifi_main_gateway", None],  according stats not used in integration
+        0x0302: ["night_mode_timer", None],
+        0x0303: ["party_mode_timer", None],
         0x0304: ["humidity_status", statuses],
         0x0305: ["analogV_status", statuses],
-      #  0x0306: ["beeper", bstatuses]        # beeper seems not to work on V2 eco vents, needs firmware 1.xxx or higher
-         #  beeper according stats not used in integration
+        0x0306: ["beeper", bstatuses],
+    }
+
+    write_params = {
+        0x0065: ["filter_timer_reset", None],
+        0x0080: ["reset_alarms", None],
     }
 
     _name = None
@@ -217,9 +223,16 @@ class Fan(object):
     _humidity = None
     _analogV = None
     _relay_status = None
+    _supply_speed_low = None
+    _exhaust_speed_low = None
+    _supply_speed_medium = None
+    _exhaust_speed_medium = None
+    _supply_speed_high = None
+    _exhaust_speed_high = None
     _man_speed = None
     _fan1_speed = None
     _fan2_speed = None
+    _filter_timer_setpoint = None
     _filter_timer_countdown = None
     _boost_time = None
     _rtc_time = None
@@ -251,6 +264,7 @@ class Fan(object):
     _humidity_status = None
     _analogV_status = None
     _beeper = None
+    _unknown_params = None
 
     def __init__(
         self,
@@ -267,6 +281,7 @@ class Fan(object):
         self._id = fan_id
         self._pwd_size = 0
         self._password = password
+        self._unknown_params = {}
 
     def init_device(self):
         if self._id == "DEFAULT_DEVICEID":
@@ -348,17 +363,19 @@ class Fan(object):
         return str
 
     def get_params_index(self, value):
-        for i in self.params:
-            if self.params[i][0] == value:
-                return i
+        for params in (self.params, self.write_params):
+            for i in params:
+                if params[i][0] == value:
+                    return i
 
     def get_params_values(self, idx, value):
         # print ( "EcoventV2: " + idx,  file = sys.stderr )
         index = self.get_params_index(idx)
-        if index != None:
-            if self.params[index][1] != None:
-                for i in self.params[index][1]:
-                    if self.params[index][1][i] == value:
+        if index is not None:
+            param = self.params.get(index) or self.write_params.get(index)
+            if param[1] is not None:
+                for i in param[1]:
+                    if param[1][i] == value:
                         return [index, i]
             return [index, None]
         else:
@@ -458,11 +475,15 @@ class Fan(object):
         # 0x0305: ["analogV_status", statuses],
         return self.do_func(self.func["read"], request)
 
+    def update_preset_speed_settings(self):
+        request = "003A003B003C003D003E003F"
+        return self.do_func(self.func["read"], request)
+
     def set_param(self, param, value):
         valpar = self.get_params_values(param, value)
         # print ( "EcoventV2: " + " " + param + "/" + value , file = sys.stderr )
-        if valpar[0] != None:
-            if valpar[1] != None:
+        if valpar[0] is not None:
+            if valpar[1] is not None:
                 self.do_func(
                     self.func["write_return"],
                     hex(valpar[0]).replace("0x", "").zfill(4),
@@ -477,7 +498,7 @@ class Fan(object):
 
     def get_param(self, param):
         idx = self.get_params_index(param)
-        if idx != None:
+        if idx is not None:
             #  _LOGGER.debug(f"Getting parameter {param} with index {idx}")
             self.do_func(self.func["read"], hex(idx).replace("0x", "").zfill(4))
 
@@ -527,6 +548,28 @@ class Fan(object):
             value = hex(val).replace("0x", "").zfill(2)
             self.do_func(self.func["write_return"], request, value)
 
+    def _handle_param_response(self, param_id, value):
+        param = self.params.get(param_id)
+        if param is None:
+            self.unknown_params[param_id] = value
+            _LOGGER.debug(
+                "EcoventV2: skipping unknown parameter 0x%04x=%s",
+                param_id,
+                value,
+            )
+            return
+
+        if value is None:
+            _LOGGER.debug(
+                "EcoventV2: skipping no-value parameter 0x%04x (%s)",
+                param_id,
+                param[0],
+            )
+            return
+
+        setattr(self, param[0], value)
+        # _LOGGER.debug(f"Updated parameter {param[0]} with value {value}")
+
     def parse_response(self, data):
         pointer = 20  # discard header bytes
         length = len(data) - 2
@@ -561,7 +604,12 @@ class Fan(object):
                     value_counter = p
                     ext_function = 2
                 elif ext_function == 0xFD:
-                    None
+                    self._handle_param_response(p, None)
+                    ext_function = 0
+                    parameter = 1
+                    value_counter = 1
+                    high_byte_value = 0
+                    response = bytearray()
                 else:
                     if parameter == 1:
                         # print ("appending: " + hex(high_byte_value))
@@ -575,8 +623,9 @@ class Fan(object):
                 parameter = 1
                 value_counter = 1
                 high_byte_value = 0
-                setattr(self, self.params[int(response[:2].hex(), 16)][0], response[2:].hex() )
-                # _LOGGER.debug(f"Updated parameter {self.params[int(response[:2].hex(), 16)][0]} with value {response[2:].hex()}")
+                param_id = int(response[:2].hex(), 16)
+                value = response[2:].hex()
+                self._handle_param_response(param_id, value)
                 response = bytearray()
 
     @property
@@ -629,7 +678,7 @@ class Fan(object):
 
     @state.setter
     def state(self, val):
-        self._state = self.states.get(int(val),"Unknown %s" % val)
+        self._state = self.states.get(int(val), "Unknown %s" % val)
 
     @property
     def speed(self):
@@ -638,7 +687,7 @@ class Fan(object):
     @speed.setter
     def speed(self, input):
         val = int(input, 16)
-        self._speed = self.speeds.get(val,"Unknown %s" % val)
+        self._speed = self.speeds.get(val, "Unknown %s" % val)
 
     @property
     def boost_status(self):
@@ -750,7 +799,84 @@ class Fan(object):
     @relay_status.setter
     def relay_status(self, input):
         val = int(input, 16)
-        self._relay_status = self.statuses.get(val,"Unknown %s" % val)
+        self._relay_status = self.statuses.get(val, "Unknown %s" % val)
+
+    def _preset_speed_percent(self, input):
+        val = int(input, 16)
+        if val >= 0 and val <= 255:
+            return int(val / 255 * 100)
+        return None
+
+    @property
+    def supply_speed_low(self):
+        return self._supply_speed_low
+
+    @supply_speed_low.setter
+    def supply_speed_low(self, input):
+        self._supply_speed_low = self._preset_speed_percent(input)
+
+    @property
+    def exhaust_speed_low(self):
+        return self._exhaust_speed_low
+
+    @exhaust_speed_low.setter
+    def exhaust_speed_low(self, input):
+        self._exhaust_speed_low = self._preset_speed_percent(input)
+
+    @property
+    def supply_speed_medium(self):
+        return self._supply_speed_medium
+
+    @supply_speed_medium.setter
+    def supply_speed_medium(self, input):
+        self._supply_speed_medium = self._preset_speed_percent(input)
+
+    @property
+    def exhaust_speed_medium(self):
+        return self._exhaust_speed_medium
+
+    @exhaust_speed_medium.setter
+    def exhaust_speed_medium(self, input):
+        self._exhaust_speed_medium = self._preset_speed_percent(input)
+
+    @property
+    def supply_speed_high(self):
+        return self._supply_speed_high
+
+    @supply_speed_high.setter
+    def supply_speed_high(self, input):
+        self._supply_speed_high = self._preset_speed_percent(input)
+
+    @property
+    def exhaust_speed_high(self):
+        return self._exhaust_speed_high
+
+    @exhaust_speed_high.setter
+    def exhaust_speed_high(self, input):
+        self._exhaust_speed_high = self._preset_speed_percent(input)
+
+    def preset_speed_percent(self, preset):
+        preset_speeds = {
+            "low": (self.supply_speed_low, self.exhaust_speed_low),
+            "medium": (self.supply_speed_medium, self.exhaust_speed_medium),
+            "high": (self.supply_speed_high, self.exhaust_speed_high),
+        }
+        preset_speed = preset_speeds.get(preset)
+        if preset_speed is None:
+            return self.man_speed
+
+        supply_speed, exhaust_speed = preset_speed
+        if self.airflow == "air_supply" and supply_speed is not None:
+            return supply_speed
+        if self.airflow == "ventilation" and exhaust_speed is not None:
+            return exhaust_speed
+
+        available_speeds = [
+            speed for speed in (supply_speed, exhaust_speed) if speed is not None
+        ]
+        if available_speeds:
+            return int(sum(available_speeds) / len(available_speeds))
+        return self.man_speed
 
     @property
     def man_speed(self):
@@ -783,6 +909,15 @@ class Fan(object):
             int(input, 16).to_bytes(2, "big"), byteorder="little", signed=False
         )
         self._fan2_speed = str(val)
+
+    @property
+    def filter_timer_setpoint(self):
+        return self._filter_timer_setpoint
+
+    @filter_timer_setpoint.setter
+    def filter_timer_setpoint(self, input):
+        val = int.from_bytes(bytes.fromhex(input), byteorder="little", signed=False)
+        self._filter_timer_setpoint = str(val) + " d"
 
     @property
     def filter_timer_countdown(self):
@@ -840,7 +975,7 @@ class Fan(object):
 
     @weekly_schedule_state.setter
     def weekly_schedule_state(self, val):
-        self._weekly_schedule_state = self.states.get(int(val),"Unknown %s" % val)
+        self._weekly_schedule_state = self.states.get(int(val), "Unknown %s" % val)
 
     @property
     def weekly_schedule_setup(self):
@@ -900,7 +1035,7 @@ class Fan(object):
     @alarm_status.setter
     def alarm_status(self, input):
         val = int(input, 16)
-        self._alarm_status = self.alarms.get(val,"Unknown %s" % val)
+        self._alarm_status = self.alarms.get(val, "Unknown %s" % val)
 
     @property
     def cloud_server_state(self):
@@ -909,7 +1044,7 @@ class Fan(object):
     @cloud_server_state.setter
     def cloud_server_state(self, input):
         val = int(input, 16)
-        self._cloud_server_state = self.states.get(val,"Unknown %s" % val)
+        self._cloud_server_state = self.states.get(val, "Unknown %s" % val)
 
     @property
     def firmware(self):
@@ -937,7 +1072,7 @@ class Fan(object):
     @filter_replacement_status.setter
     def filter_replacement_status(self, input):
         val = int(input, 16)
-        self._filter_replacement_status = self.statuses.get(val,"Unknown %s" % val)
+        self._filter_replacement_status = self.statuses.get(val, "Unknown %s" % val)
 
     @property
     def wifi_operation_mode(self):
@@ -946,7 +1081,9 @@ class Fan(object):
     @wifi_operation_mode.setter
     def wifi_operation_mode(self, input):
         val = int(input, 16)
-        self._wifi_operation_mode = self.wifi_operation_modes.get(val,"Unknown %s" % val)
+        self._wifi_operation_mode = self.wifi_operation_modes.get(
+            val, "Unknown %s" % val
+        )
 
     @property
     def wifi_name(self):
@@ -971,7 +1108,7 @@ class Fan(object):
     @wifi_enc_type.setter
     def wifi_enc_type(self, input):
         val = int(input, 16)
-        self._wifi_enc_type = self.wifi_enc_types.get(val,"Unknown %s" % val)
+        self._wifi_enc_type = self.wifi_enc_types.get(val, "Unknown %s" % val)
 
     @property
     def wifi_freq_channel(self):
@@ -989,7 +1126,7 @@ class Fan(object):
     @wifi_dhcp.setter
     def wifi_dhcp(self, input):
         val = int(input, 16)
-        self._wifi_dhcp = self.wifi_dhcps.get(val,"Unknown %s" % val)
+        self._wifi_dhcp = self.wifi_dhcps.get(val, "Unknown %s" % val)
 
     @property
     def wifi_assigned_ip(self):
@@ -1042,7 +1179,7 @@ class Fan(object):
     @airflow.setter
     def airflow(self, input):
         val = int(input, 16)
-        self._airflow = self.airflows.get(val,"Unknown %s" % val)
+        self._airflow = self.airflows.get(val, "Unknown %s" % val)
 
     @property
     def analogV_treshold(self):
@@ -1091,7 +1228,7 @@ class Fan(object):
     @humidity_status.setter
     def humidity_status(self, input):
         val = int(input, 16)
-        self._humidity_status = self.statuses.get(val,"Unknown %s" % val)
+        self._humidity_status = self.statuses.get(val, "Unknown %s" % val)
 
     @property
     def analogV_status(self):
@@ -1100,7 +1237,7 @@ class Fan(object):
     @analogV_status.setter
     def analogV_status(self, input):
         val = int(input, 16)
-        self._analogV_status = self.statuses.get(val,"Unknown %s" % val)
+        self._analogV_status = self.statuses.get(val, "Unknown %s" % val)
 
     @property
     def beeper(self):
@@ -1109,7 +1246,11 @@ class Fan(object):
     @beeper.setter
     def beeper(self, input):
         val = int(input, 16)
-        self._beeper = self.bstatuses.get(val,"Unknown %s" % val)
+        self._beeper = self.bstatuses.get(val, "Unknown %s" % val)
+
+    @property
+    def unknown_params(self):
+        return self._unknown_params
 
     def reset_filter_timer(self):
         self.set_param("filter_timer_reset", "")

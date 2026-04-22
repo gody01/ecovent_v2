@@ -9,6 +9,7 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
 )
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -32,36 +33,50 @@ async def async_setup_entry(
     async_add_entities(
         [
             VentoBinarySensor(
-                hass, config, "_boost_status", "boost_status", False, None
-            ),
-            VentoBinarySensor(hass, config, "_timer_mode", "timer_mode", False, None),
-            VentoBinarySensor(
-                hass, config, "_relay_status", "relay_status", False, None
+                hass,
+                config,
+                "_relay_status",
+                "Relay status",
+                "relay_status",
+                False,
+                "mdi:electric-switch",
             ),
             VentoBinarySensor(
                 hass,
                 config,
                 "_filter_replacement_status",
+                "Filter replacement required",
                 "filter_replacement_status",
                 True,
-                None,
-            ),
-            VentoBinarySensor(
-                hass, config, "_alarm_status", "alarm_status", True, None
+                "mdi:air-filter",
+                BinarySensorDeviceClass.PROBLEM,
             ),
             VentoBinarySensor(
                 hass,
                 config,
                 "_cloud_server_state",
+                "Cloud server",
                 "cloud_server_state",
                 False,
-                None,
+                "mdi:cloud-check-outline",
             ),
             VentoBinarySensor(
-                hass, config, "_humidity_status", "humidity_status", False, None
+                hass,
+                config,
+                "_humidity_status",
+                "Humidity status",
+                "humidity_status",
+                False,
+                "mdi:water-alert-outline",
             ),
             VentoBinarySensor(
-                hass, config, "_analogV_status", "analogV_status", False, None
+                hass,
+                config,
+                "_analogV_status",
+                "Analog voltage status",
+                "analogV_status",
+                False,
+                "mdi:flash-alert-outline",
             ),
         ]
     )
@@ -70,26 +85,31 @@ async def async_setup_entry(
 class VentoBinarySensor(CoordinatorEntity, BinarySensorEntity):  # CoordinatorEntity
     """Vento Binary Sensor class."""
 
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+
     def __init__(
         self,
         hass: HomeAssistant,
         config: ConfigEntry,
-        name="VentoBinarySensor",
+        key="VentoBinarySensor",
+        name=None,
         method=None,
         enable_by_default: bool = False,
         icon: str | None = "",
-        device_class=BinarySensorDeviceClass,
+        device_class: BinarySensorDeviceClass | None = None,
     ) -> None:
         """Initialize fan binary sensors."""
         coordinator: EcoVentCoordinator = hass.data[DOMAIN][config.entry_id]
         super().__init__(coordinator)
         self._fan: Fan = coordinator._fan
-        self._attr_unique_id = self._fan.id + name
-        self._attr_name = self._fan.name + name
+        self._attr_unique_id = self._fan.id + key
+        self._attr_name = name
         self._state = None
-        self._sensor_type = device_class
+        self._attr_device_class = device_class
         self._attr_entity_registry_enabled_default = enable_by_default
-        self._attribute = getattr(self._fan, method)
+        self._method = method
         self._attr_icon = icon
 
         self._attr_device_info = DeviceInfo(
@@ -99,7 +119,7 @@ class VentoBinarySensor(CoordinatorEntity, BinarySensorEntity):  # CoordinatorEn
     @property
     def is_on(self):
         """Is on."""
-        self._state = self._attribute == "on"
+        self._state = getattr(self._fan, self._method) == "on"
         # self.async_write_ha_state() dangerous not allowed
         # self.schedule_update_ha_state() # not needed
         # _LOGGER.debug(f"VentoBinarySensor: {self._attr_name} state updated to {self._state}")

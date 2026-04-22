@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import re
+
 from .ecoventv2 import Fan
 
 from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory
+from homeassistant.const import EntityCategory, PERCENTAGE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -40,11 +42,12 @@ async def async_setup_entry(
                 native_min_value=40.0,
                 native_max_value=80.0,
                 native_step=1,
+                unit_of_measurement=PERCENTAGE,
             ),
             VentoNumber(
                 hass,
                 config,
-                "Analog Voltage threshold",
+                "Analog voltage threshold",
                 "analogV_treshold",
                 None,
                 "mdi:flash-triangle-outline",
@@ -54,6 +57,7 @@ async def async_setup_entry(
                 native_min_value=0.0,
                 native_max_value=100.0,
                 native_step=1,
+                unit_of_measurement=PERCENTAGE,
             ),
             VentoNumber(
                 hass,
@@ -68,6 +72,22 @@ async def async_setup_entry(
                 native_min_value=0,
                 native_max_value=60,
                 native_step=1,
+                unit_of_measurement="min",
+            ),
+            VentoNumber(
+                hass,
+                config,
+                "Filter timer setpoint",
+                "filter_timer_setpoint",
+                None,
+                "mdi:air-filter",
+                False,
+                mode=NumberMode.AUTO,
+                entity_category=EntityCategory.CONFIG,
+                native_min_value=10,
+                native_max_value=999,
+                native_step=1,
+                unit_of_measurement="d",
             ),
         ]
     )
@@ -126,12 +146,33 @@ class VentoNumber(CoordinatorEntity, NumberEntity):
             name=self._fan.name,
         )
 
+    @property
+    def native_value(self) -> float | None:
+        """Return the numeric part of the current device value."""
+        value = getattr(self._fan, self._func)
+        if value is None:
+            return None
+        if isinstance(value, (int, float)):
+            return value
+
+        match = re.match(r"(?P<value>\d+(?:\.\d+)?)", str(value))
+        if match is None:
+            return None
+
+        return float(match.group("value"))
+
     async def async_set_native_value(self, value: float) -> None:
         """Update the current value."""
         self._attr_native_value = value
         intval = int(value)
+        if self._func == "filter_timer_setpoint":
+            value_hex = intval.to_bytes(2, "little").hex()
+        else:
+            value_hex = hex(intval).replace("0x", "").zfill(2)
         await self.hass.async_add_executor_job(
-            self._fan.set_param, self._func, hex(intval).replace("0x", "").zfill(2)
+            self._fan.set_param,
+            self._func,
+            value_hex,
         )
         self.async_write_ha_state()
         await self.coordinator.async_refresh()

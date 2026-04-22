@@ -8,7 +8,6 @@ from .ecoventv2 import Fan
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    CONF_DEVICE_ID,
     CONF_IP_ADDRESS,
     CONF_NAME,
     CONF_PASSWORD,
@@ -81,4 +80,3 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         else:
             _LOGGER.debug("EcoVentCoordinator: Starting quick data update...")
             await self.hass.async_add_executor_job(self._fan.quick_update)
-

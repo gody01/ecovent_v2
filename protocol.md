@@ -20,6 +20,7 @@ Source PDFs:
 - [TwinFresh Style Wi-Fi mini manual 19765](https://ventilation-system.com/download/twinfresh-style-wi-fi-mini-manual-19765.pdf)
 - [Breezy Eco manual 21433](https://ventilation-system.com/download/breezy-eco-manual-21433.pdf)
 - [Freshpoint manual 16999](https://blaubergventilatoren.net/download/freshpoint-manual-16999.pdf)
+- [Freshbox 100 WiFi connection guide B73-9-1EN-01](https://blaubergventilatoren.net/download/freshbox-100-wifi-datasheet-7508.pdf)
 
 ### Relabelled model names
 
@@ -184,6 +185,73 @@ The Smart Wi-Fi PDF also documents editable Wi-Fi SSID/password/encryption,
 subnet mask, gateway, DHCP mode, and channel parameters. The integration keeps
 those out of the profile because it does not expose Wi-Fi reconfiguration and
 should not read or store Wi-Fi credentials.
+
+### Freshbox 100 WiFi notes
+
+The Freshbox 100 WiFi PDF is another "Smart Home" connection guide. It uses
+the same BGCP/UDP framing, default password, port 4000, special commands, and
+checksum rules, but it is an air-handling-unit parameter map rather than a
+Vento/TwinFresh/Breezy relabel. Do not route it through the `vento` or `breezy`
+profile without a dedicated `freshbox` profile review.
+
+Documented unit type from parameter `0x00B9`:
+
+| PDF value | Parser value | PDF model text | Code status |
+| -- | -- | -- | -- |
+| `0x0002` | `0x0200` | Freshbox 100 WiFi | `freshbox` profile, conservative HA exposure |
+
+Freshbox rows that overlap useful HA concepts. The current `freshbox` profile
+keeps basic fan/filter/timer parsing separate from Vento/Breezy; the
+AHU-specific rows below are documented for the next profile-expansion pass.
+
+| Parameter | Functions | Description | Notes |
+| -- | -- | -- | -- |
+| 0x0002 | R/W/RW/INC/DEC | Speed mode 1-5 | five-speed, no manual `0xFF` mode in this PDF row |
+| 0x0003 | R/W/RW/INC/DEC | Maximum speed number | 3 or 5 speed configuration |
+| 0x0006 | R | Boost-mode status | Same ID as Vento boost status, compatible status meaning |
+| 0x0008 | R/W/RW/INC/DEC | Timer mode speed | Different from extract-fan humidity status at same ID |
+| 0x0009 | R/W/RW/INC/DEC | Timer setpoint minutes | Freshbox-specific timer setup |
+| 0x000A | R/W/RW/INC/DEC | Timer setpoint hours | Freshbox-specific timer setup |
+| 0x000D | R/W/RW/INC/DEC | Room temperature setpoint in timer mode | Freshbox-specific temperature control |
+| 0x0014 | R/W/RW | BOOST switch control | Same ID as Vento relay sensor activation, different semantics |
+| 0x0015 | R/W/RW | Fire alarm sensor control | Freshbox-specific safety input |
+| 0x0018 | R/W/RW/INC/DEC | Room temperature setpoint in normal mode | Same ID as extract-fan max speed setpoint, different semantics |
+| 0x001D | R/W/RW/INC/DEC | Temperature sensor selected for room-temperature control | Freshbox-specific enum |
+| 0x001E | R | Current room-control temperature | Signed tenths-of-degree value |
+| 0x001F | R | Current intake air temperature at the unit inlet | Signed tenths-of-degree value |
+| 0x0020 | R | Current supply air temperature at the unit outlet | Signed tenths-of-degree value |
+| 0x0021 | R | Current extract air temperature at the unit inlet | Signed tenths-of-degree value |
+| 0x0022 | R | Current exhaust air temperature at the unit outlet | Signed tenths-of-degree value |
+| 0x0032 | R | Current Boost switch status | Same ID as Vento relay status, different semantics |
+| 0x0033 | R | Current fire alarm sensor status | Freshbox-specific binary status |
+| 0x0036 | R/W/RW/INC/DEC | Minimum supply fan speed | Freshbox-specific speed bound |
+| 0x0037 | R/W/RW/INC/DEC | Minimum extract fan speed | Freshbox-specific speed bound |
+| 0x0040 | R/W/RW/INC/DEC | Supply fan speed in Speed 4 mode | Freshbox five-speed extension |
+| 0x0041 | R/W/RW/INC/DEC | Extract fan speed in Speed 4 mode | Freshbox five-speed extension |
+| 0x0042 | R/W/RW/INC/DEC | Supply fan speed in Speed 5 mode | Freshbox five-speed extension |
+| 0x0043 | R/W/RW/INC/DEC | Extract fan speed in Speed 5 mode | Freshbox five-speed extension |
+| 0x0045 | R/W/RW/INC/DEC | Fan speed while blowing electric heaters | Heater-specific speed |
+| 0x0046 | R/W/RW/INC/DEC | Supply fan speed in BOOST mode | Boost-specific speed |
+| 0x0047 | R/W/RW/INC/DEC | Extract fan speed in BOOST mode | Boost-specific speed |
+| 0x0060 | R/W/RW/INC/DEC | Main heater type | Freshbox-specific enum |
+| 0x0067 | R/W/RW/INC/DEC | Boost turn-on delay setpoint | Freshbox-specific delay |
+| 0x0068 | R/W/RW | Temperature control in normal mode | Same ID as Breezy heater control, different semantics |
+| 0x006A | R | TE5 temperature | Signed tenths-of-degree value |
+| 0x0073 | R | Weekly schedule speed | Freshbox-specific schedule status |
+| 0x0074 | R | Weekly schedule temperature setup | Freshbox-specific schedule status |
+| 0x0093 | R | Wi-Fi module presence | Diagnostic only |
+| 0x00A1 | R | Wi-Fi access-point connection status | Diagnostic only |
+| 0x00B6 | R | Electric heater blowing status | Freshbox-specific status |
+| 0x00F0 | R/W/RW/INC/DEC | Recirculation damper | Only for units with recirculation |
+| 0x0111 | R | Control device type | Freshbox control-panel metadata |
+| 0x0112 | R | Control panel firmware version/date | Freshbox control-panel metadata |
+| 0x0400 | R/W/RW | Button backlight brightness setpoint | Range 0-80 maps to 20-100% |
+| 0x0401 | R/W/RW | Circuit-board sound generator | Only off/on in this PDF |
+| 0x0402 | R/W/RW | Backlight mode selection | Static/dynamic, not Breezy auto/manual/toggle |
+
+The Freshbox guide also documents Wi-Fi SSID/password/encryption, DHCP, DNS,
+gateway, and setup-mode commands. Those rows remain intentionally out of scope
+for HA exposure for the same credential-safety reasons as the other profiles.
 
 
 | Smart Home (Vento) b133_4_1en_02_preview |                  |                                                                                                                                                                                                                                                                                                                                                                                                                                                 |                                                                                                                                                                                                                                                                                                                                                                                                                                                            |                  |  | Smart Wifi b168_1en_01preview |                                                                   |                                                                                                                                      |              |

@@ -115,6 +115,14 @@ class ParseResponseTest(unittest.TestCase):
             Fan.device_models[0x0600].source_documents,
             ("Smart Wifi b168_1en_01preview",),
         )
+        self.assertEqual(Fan.device_models[0x0200].name, "Freshbox 100 WiFi")
+        self.assertEqual(Fan.device_models[0x0200].profile_key, "freshbox")
+        self.assertEqual(
+            Fan.device_models[0x0200].source_documents,
+            (
+                "https://blaubergventilatoren.net/download/freshbox-100-wifi-datasheet-7508.pdf",
+            ),
+        )
 
     def test_protocol_reference_documents_extract_fan_param_map(self):
         reference = PROTOCOL_REFERENCE_PATH.read_text()
@@ -348,6 +356,75 @@ class ParseResponseTest(unittest.TestCase):
             fan.parse_response(packet_with_payload([0xFE, 0x02, 0xB9, 0x1C, 0x00]))
         )
         self.assertEqual(fan.unit_type, "TwinFresh Atmo 160")
+
+    def test_parse_response_names_freshbox_unit_type(self):
+        fan = Fan("192.0.2.1")
+        self.assertTrue(
+            fan.parse_response(packet_with_payload([0xFE, 0x02, 0xB9, 0x02, 0x00]))
+        )
+        self.assertEqual(fan.unit_type, "Freshbox 100 WiFi")
+        self.assertEqual(fan.profile_key, "freshbox")
+
+    def test_parse_response_uses_freshbox_profile(self):
+        fan = Fan("192.0.2.1")
+        self.assertTrue(
+            fan.parse_response(
+                packet_with_payload(
+                    [
+                        0xFE,
+                        0x02,
+                        0xB9,
+                        0x02,
+                        0x00,
+                        0x02,
+                        0x05,
+                        0x3A,
+                        0x28,
+                        0x3B,
+                        0x32,
+                        0x40,
+                        0x46,
+                        0x41,
+                        0x50,
+                        0x42,
+                        0x5A,
+                        0x43,
+                        0x64,
+                        0xFE,
+                        0x02,
+                        0x1F,
+                        0xE1,
+                        0x00,
+                        0x32,
+                        0x01,
+                        0x33,
+                        0x00,
+                        0x93,
+                        0x01,
+                        0xA1,
+                        0x00,
+                        0xB6,
+                        0x01,
+                    ]
+                )
+            )
+        )
+
+        self.assertEqual(fan.profile_key, "freshbox")
+        self.assertEqual(fan.speed, "speed_5")
+        self.assertEqual(fan.supply_speed_low, 40)
+        self.assertEqual(fan.exhaust_speed_low, 50)
+        self.assertEqual(fan.supply_speed_4, 70)
+        self.assertEqual(fan.exhaust_speed_4, 80)
+        self.assertEqual(fan.supply_speed_5, 90)
+        self.assertEqual(fan.exhaust_speed_5, 100)
+        self.assertEqual(fan.outdoor_temperature, 22.5)
+        self.assertEqual(fan.boost_switch_status, "on")
+        self.assertEqual(fan.fire_alarm_status, "off")
+        self.assertEqual(fan.wifi_module_status, "on")
+        self.assertEqual(fan.wifi_connection_status, "off")
+        self.assertEqual(fan.heater_blowing_status, "on")
+        self.assertEqual(fan.preset_speed_percent("speed_5"), 95)
 
     def test_parse_response_uses_extract_fan_profile(self):
         fan = Fan("192.0.2.1")

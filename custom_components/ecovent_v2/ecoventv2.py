@@ -342,6 +342,48 @@ class Fan(object):
         0x0409: ["screen_off_end_time", None],
     }
 
+    # Freshbox 100 WiFi profile. Keep this conservative until a live device or
+    # issue trace confirms which AHU-specific controls should become HA entities.
+    freshbox_params = {
+        0x0001: ["state", states],
+        0x0002: ["speed", speeds],
+        0x0006: ["boost_status", statuses],
+        0x0007: ["timer_status", states],
+        0x000B: ["timer_counter", None],
+        0x001F: ["outdoor_temperature", None],
+        0x0020: ["supply_temperature", None],
+        0x0021: ["exhaust_in_temperature", None],
+        0x0022: ["exhaust_out_temperature", None],
+        0x0032: ["boost_switch_status", statuses],
+        0x0033: ["fire_alarm_status", statuses],
+        0x003A: ["supply_speed_low", None],
+        0x003B: ["exhaust_speed_low", None],
+        0x003C: ["supply_speed_medium", None],
+        0x003D: ["exhaust_speed_medium", None],
+        0x003E: ["supply_speed_high", None],
+        0x003F: ["exhaust_speed_high", None],
+        0x0040: ["supply_speed_4", None],
+        0x0041: ["exhaust_speed_4", None],
+        0x0042: ["supply_speed_5", None],
+        0x0043: ["exhaust_speed_5", None],
+        0x0063: ["filter_timer_setpoint", None],
+        0x0064: ["filter_timer_countdown", None],
+        0x0066: ["boost_time", None],
+        0x007C: ["device_search", None],
+        0x007E: ["machine_hours", None],
+        0x007F: ["alarm_list", None],
+        0x0081: ["heater_status", statuses],
+        0x0083: ["alarm_status", alarms],
+        0x0085: ["cloud_server_state", states],
+        0x0086: ["firmware", None],
+        0x0088: ["filter_replacement_status", statuses],
+        0x0093: ["wifi_module_status", statuses],
+        0x00A1: ["wifi_connection_status", statuses],
+        0x00A3: ["current_wifi_ip", None],
+        0x00B6: ["heater_blowing_status", statuses],
+        0x00B9: ["unit_type", unit_types],
+    }
+
     write_params = {
         0x0065: ["filter_timer_reset", None],
         0x0080: ["reset_alarms", None],
@@ -353,6 +395,11 @@ class Fan(object):
     }
 
     breezy_write_params = {
+        0x0065: ["filter_timer_reset", None],
+        0x0080: ["reset_alarms", None],
+    }
+
+    freshbox_write_params = {
         0x0065: ["filter_timer_reset", None],
         0x0080: ["reset_alarms", None],
     }
@@ -468,6 +515,15 @@ class Fan(object):
     _screen_display_state = None
     _screen_off_start_time = None
     _screen_off_end_time = None
+    _boost_switch_status = None
+    _fire_alarm_status = None
+    _supply_speed_4 = None
+    _exhaust_speed_4 = None
+    _supply_speed_5 = None
+    _exhaust_speed_5 = None
+    _wifi_module_status = None
+    _wifi_connection_status = None
+    _heater_blowing_status = None
 
     def __init__(
         self,
@@ -1426,6 +1482,28 @@ class Fan(object):
         self._relay_status = self._map_value(self.statuses, val, "relay_status")
 
     @property
+    def boost_switch_status(self):
+        return self._boost_switch_status
+
+    @boost_switch_status.setter
+    def boost_switch_status(self, input):
+        val = int(input, 16)
+        self._boost_switch_status = self._map_value(
+            self.statuses, val, "boost_switch_status"
+        )
+
+    @property
+    def fire_alarm_status(self):
+        return self._fire_alarm_status
+
+    @fire_alarm_status.setter
+    def fire_alarm_status(self, input):
+        val = int(input, 16)
+        self._fire_alarm_status = self._map_value(
+            self.statuses, val, "fire_alarm_status"
+        )
+
+    @property
     def temperature_status(self):
         return self._temperature_status
 
@@ -1523,6 +1601,38 @@ class Fan(object):
     def exhaust_speed_high(self, input):
         self._exhaust_speed_high = self._preset_speed_percent(input)
 
+    @property
+    def supply_speed_4(self):
+        return self._supply_speed_4
+
+    @supply_speed_4.setter
+    def supply_speed_4(self, input):
+        self._supply_speed_4 = self._preset_speed_percent(input)
+
+    @property
+    def exhaust_speed_4(self):
+        return self._exhaust_speed_4
+
+    @exhaust_speed_4.setter
+    def exhaust_speed_4(self, input):
+        self._exhaust_speed_4 = self._preset_speed_percent(input)
+
+    @property
+    def supply_speed_5(self):
+        return self._supply_speed_5
+
+    @supply_speed_5.setter
+    def supply_speed_5(self, input):
+        self._supply_speed_5 = self._preset_speed_percent(input)
+
+    @property
+    def exhaust_speed_5(self):
+        return self._exhaust_speed_5
+
+    @exhaust_speed_5.setter
+    def exhaust_speed_5(self, input):
+        self._exhaust_speed_5 = self._preset_speed_percent(input)
+
     def preset_speed_percent(self, preset):
         if self.uses_operating_mode_presets:
             return self.max_speed_setpoint
@@ -1531,8 +1641,8 @@ class Fan(object):
             "low": (self.supply_speed_low, self.exhaust_speed_low),
             "medium": (self.supply_speed_medium, self.exhaust_speed_medium),
             "high": (self.supply_speed_high, self.exhaust_speed_high),
-            "speed_4": (None, None),
-            "speed_5": (None, None),
+            "speed_4": (self.supply_speed_4, self.exhaust_speed_4),
+            "speed_5": (self.supply_speed_5, self.exhaust_speed_5),
         }
         preset_speed = preset_speeds.get(preset)
         if preset_speed is None:
@@ -1791,6 +1901,28 @@ class Fan(object):
         )
 
     @property
+    def wifi_module_status(self):
+        return self._wifi_module_status
+
+    @wifi_module_status.setter
+    def wifi_module_status(self, input):
+        val = int(input, 16)
+        self._wifi_module_status = self._map_value(
+            self.statuses, val, "wifi_module_status"
+        )
+
+    @property
+    def wifi_connection_status(self):
+        return self._wifi_connection_status
+
+    @wifi_connection_status.setter
+    def wifi_connection_status(self, input):
+        val = int(input, 16)
+        self._wifi_connection_status = self._map_value(
+            self.statuses, val, "wifi_connection_status"
+        )
+
+    @property
     def firmware(self):
         return self._firmware
 
@@ -1818,6 +1950,17 @@ class Fan(object):
         val = int(input, 16)
         self._filter_replacement_status = self._map_value(
             self.statuses, val, "filter_replacement_status"
+        )
+
+    @property
+    def heater_blowing_status(self):
+        return self._heater_blowing_status
+
+    @heater_blowing_status.setter
+    def heater_blowing_status(self, input):
+        val = int(input, 16)
+        self._heater_blowing_status = self._map_value(
+            self.statuses, val, "heater_blowing_status"
         )
 
     @property

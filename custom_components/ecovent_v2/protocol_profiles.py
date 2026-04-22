@@ -32,6 +32,9 @@ BREEZY_ECO_MANUAL_URL = (
 FRESHPOINT_MANUAL_URL = (
     "https://blaubergventilatoren.net/download/freshpoint-manual-16999.pdf"
 )
+FRESHBOX_100_WIFI_MANUAL_URL = (
+    "https://blaubergventilatoren.net/download/freshbox-100-wifi-datasheet-7508.pdf"
+)
 
 
 @dataclass(frozen=True)
@@ -144,6 +147,22 @@ DEVICE_PROFILES = {
         supports_preset_speed_settings=True,
         speed_percent_scale="percent",
     ),
+    "freshbox": DeviceProfile(
+        key="freshbox",
+        params_name="freshbox_params",
+        write_params_name="freshbox_write_params",
+        quick_update_request="0006000B003200330081008300A100B6",
+        preset_modes=("off", "low", "medium", "high", "speed_4", "speed_5"),
+        boost_statuses_name="statuses",
+        humidity_sensor_states_name="states",
+        capabilities=frozenset(
+            {
+                "filter_maintenance",
+                "timer_mode",
+            }
+        ),
+        speed_percent_scale="percent",
+    ),
 }
 
 
@@ -246,6 +265,14 @@ DEVICE_MODELS = {
         "Blauberg Smart Wi-Fi extract fan",
         "extract_fan",
         source_documents=(SMART_WIFI_MANUAL_LABEL,),
+    ),
+    # Freshbox uses the same BGCP/UDP framing but a different AHU parameter map.
+    # Its unit type is documented as 0x0002; this parser stores the two response
+    # bytes as a hex integer, so the little-endian value appears as 0x0200.
+    0x0200: DeviceModel(
+        "Freshbox 100 WiFi",
+        "freshbox",
+        source_documents=(FRESHBOX_100_WIFI_MANUAL_URL,),
     ),
 }
 

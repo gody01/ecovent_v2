@@ -69,6 +69,17 @@ class DeviceProfile:
 
 
 @dataclass(frozen=True)
+class MarketingName:
+    """Marketing model name with its brand layer and evidence strength."""
+
+    brand: str
+    family: str
+    model: str
+    evidence: str
+    source_documents: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class DeviceModel:
     """Known unit type and the protocol profile it uses."""
 
@@ -76,13 +87,18 @@ class DeviceModel:
     profile_key: str = "vento"
     aliases: tuple[str, ...] = ()
     source_documents: tuple[str, ...] = ()
+    device_type: int | None = None
+    parser_key: int | None = None
+    manufacturer_group: str = "Blauberg Group / VENTS platform"
+    official_names: tuple[MarketingName, ...] = ()
+    relabels: tuple[MarketingName, ...] = ()
+    candidates: tuple[MarketingName, ...] = ()
 
     @property
     def display_name(self):
-        """Return a stable model name including known relabels."""
-        if not self.aliases:
-            return self.name
-        return " / ".join((self.name, *self.aliases))
+        """Return the concise parser-facing model name."""
+        names = [self.name, *self.aliases]
+        return " / ".join(dict.fromkeys(names))
 
 
 DEVICE_PROFILES = {
@@ -199,11 +215,94 @@ DEVICE_PROFILES = {
 
 DEVICE_MODELS = {
     0x0300: DeviceModel(
-        "Vento Expert A50-1/A85-1/A100-1 W V.2",
-        aliases=(
-            "TwinFresh Expert RW1-50/85/100 V.2",
-            "VENTO Expert A50-1 W V.3",
-            "TwinFresh Expert RW1-50 V.3",
+        "Blauberg VENTO Expert / VENTS TwinFresh Expert",
+        device_type=3,
+        parser_key=0x0300,
+        official_names=(
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "VENTO Expert",
+                "VENTO Expert A50-1 S10 W V.2",
+                "official_group",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "VENTO Expert",
+                "VENTO Expert A85-1 S10 W V.2",
+                "official_group",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "VENTO Expert",
+                "VENTO Expert A100-1 S10 W V.2",
+                "official_group",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "VENTO Expert",
+                "VENTO Expert A50-1 W V.3",
+                "official_listing",
+            ),
+            MarketingName(
+                "VENTS",
+                "TwinFresh Expert",
+                "TwinFresh Expert RW1-50 V.2",
+                "official_group",
+            ),
+            MarketingName(
+                "VENTS",
+                "TwinFresh Expert",
+                "TwinFresh Expert RW1-85 V.2",
+                "official_group",
+            ),
+            MarketingName(
+                "VENTS",
+                "TwinFresh Expert",
+                "TwinFresh Expert RW1-100 V.2",
+                "official_group",
+            ),
+            MarketingName(
+                "VENTS",
+                "TwinFresh Expert",
+                "TwinFresh Expert RW1-50 V.3",
+                "official_listing",
+            ),
+        ),
+        relabels=(
+            MarketingName(
+                "SIKU",
+                "SIKU RV",
+                "SIKU RV 50 W Pro WiFi V2",
+                "official_listing",
+            ),
+            MarketingName(
+                "SIKU",
+                "SIKU RV",
+                "SIKU RV 50 W PRO WIFI V2",
+                "official_listing",
+            ),
+            MarketingName("DUKA", "DUKA One", "DUKA One S6W", "community_tested"),
+            MarketingName("RL Raumklima", "RL PRO-Serie", "RL 50RVW", "community_tested"),
+            MarketingName(
+                "Winzel",
+                "Winzel Expert",
+                "Winzel Expert WiFi RW1-50 P",
+                "app_by_blauberg",
+            ),
+            MarketingName(
+                "Winzel",
+                "Winzel Expert",
+                "Blauberg Winzel Expert WiFi RW1-50 P",
+                "app_by_blauberg",
+            ),
+        ),
+        candidates=(
+            MarketingName(
+                "Flexit", "Roomie One", "Flexit Roomie One WiFi V2", "candidate"
+            ),
+            MarketingName("DUKA", "DUKA One", "DUKA One Pro 50 S Wi-Fi", "candidate"),
+            MarketingName("NIBE", "DVC 10", "NIBE DVC 10", "candidate"),
+            MarketingName("NIBE", "DVC 10", "NIBE DVC 10-50W", "candidate"),
         ),
         source_documents=(
             VENTO_SMART_HOME_MANUAL_URL,
@@ -212,8 +311,54 @@ DEVICE_MODELS = {
         ),
     ),
     0x0400: DeviceModel(
-        "Vento Expert Duo A30-1 W V.2",
-        aliases=("TwinFresh Expert Duo RW1-30 V.2",),
+        "Blauberg VENTO Expert Duo / VENTS TwinFresh Expert Duo",
+        device_type=4,
+        parser_key=0x0400,
+        official_names=(
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "VENTO Expert Duo",
+                "VENTO Expert DUO A30-1 S10 W V.2",
+                "official_group",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "VENTO Expert Duo",
+                "VENTO Expert DUO A30-1 S10 W V.2 BLK",
+                "official_listing",
+            ),
+            MarketingName(
+                "VENTS",
+                "TwinFresh Expert Duo",
+                "TwinFresh Expert Duo RW1-30 V.2",
+                "official_group",
+            ),
+        ),
+        relabels=(
+            MarketingName(
+                "SIKU",
+                "SIKU RV",
+                "SIKU RV 30 DW Pro Duo WiFi V2",
+                "official_listing",
+            ),
+            MarketingName(
+                "SIKU",
+                "SIKU RV",
+                "SIKU RV 30 DW PRO DUO WIFI V2",
+                "official_listing",
+            ),
+            MarketingName(
+                "Flexit", "Roomie Dual", "Flexit Roomie Dual Wifi", "community_tested"
+            ),
+            MarketingName("Flexit", "Roomie Dual", "Roomie Dual WiFi V2", "candidate"),
+            MarketingName("DUKA", "DUKA One", "DUKA One S6BW", "community_tested"),
+            MarketingName("RL Raumklima", "RL PRO-Serie", "RL 30DVW", "community_tested"),
+        ),
+        candidates=(
+            MarketingName("Flexit", "Aura", "Flexit Aura", "candidate"),
+            MarketingName("Flexit", "Muto", "Flexit Muto", "candidate"),
+            MarketingName("NIBE", "DVC 10", "NIBE DVC 10-D30W", "candidate"),
+        ),
         source_documents=(
             VENTO_SMART_HOME_MANUAL_URL,
             TWINFRESH_STYLE_MANUAL_URL,
@@ -221,8 +366,29 @@ DEVICE_MODELS = {
         ),
     ),
     0x0500: DeviceModel(
-        "Vento Expert A30 W V.2",
-        aliases=("TwinFresh Expert RW-30 V.2",),
+        "Blauberg VENTO Expert A30 / VENTS TwinFresh Expert RW-30",
+        device_type=5,
+        parser_key=0x0500,
+        official_names=(
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "VENTO Expert",
+                "VENTO Expert A30 S10 W V.2",
+                "official_group",
+            ),
+            MarketingName(
+                "VENTS",
+                "TwinFresh Expert",
+                "TwinFresh Expert RW-30 V.2",
+                "official_group",
+            ),
+        ),
+        candidates=(
+            MarketingName(
+                "SIKU", "SIKU RV", "SIKU RV 25 W Pro WiFi V2", "candidate"
+            ),
+            MarketingName("RL Raumklima", "RL PRO-Serie", "RL 25RVW", "candidate"),
+        ),
         source_documents=(
             VENTO_SMART_HOME_MANUAL_URL,
             TWINFRESH_STYLE_MANUAL_URL,
@@ -230,15 +396,42 @@ DEVICE_MODELS = {
         ),
     ),
     0x0E00: DeviceModel(
-        "Vents TwinFresh Style Wi-Fi",
-        aliases=(
-            "TwinFresh Style Wi-Fi",
-            "TwinFresh Style Wi-Fi V.2",
-            "Vents TwinFresh Style Frost Wi-Fi",
-            "TwinFresh Style Frost Wi-Fi",
-            "Vents TwinFresh Style Wi-Fi mini",
-            "TwinFresh Style Wi-Fi mini",
-            "Oxxify smart 50",
+        "VENTS TwinFresh Style Wi-Fi",
+        device_type=14,
+        parser_key=0x0E00,
+        official_names=(
+            MarketingName(
+                "VENTS", "TwinFresh Style", "Vents TwinFresh Style Wi-Fi", "official_group"
+            ),
+            MarketingName(
+                "VENTS",
+                "TwinFresh Style",
+                "TwinFresh Style Wi-Fi",
+                "protocol_pdf",
+            ),
+            MarketingName(
+                "VENTS",
+                "TwinFresh Style",
+                "Vents TwinFresh Style Frost Wi-Fi",
+                "official_group",
+            ),
+            MarketingName(
+                "VENTS",
+                "TwinFresh Style",
+                "Vents TwinFresh Style Wi-Fi mini",
+                "official_group",
+            ),
+        ),
+        relabels=(
+            MarketingName("OXXIFY", "OXXIFY.smart", "OXXIFY.smart 50", "observed"),
+            MarketingName("Oxxify", "Oxxify.smart", "Oxxify.smart 50", "observed"),
+            MarketingName("Oxxify", "Oxxify smart", "Oxxify smart 50", "observed"),
+        ),
+        candidates=(
+            MarketingName("Oxxify", "Oxxify.smart", "Oxxify.smart 30", "candidate"),
+            MarketingName("Oxxify", "Oxxify.smart", "oxxify.smart 50k", "candidate"),
+            MarketingName("OXXIFY", "OXXIFY.pro", "OXXIFY.pro 50", "candidate"),
+            MarketingName("OXXIFY", "OXXIFY.eco", "OXXIFY.eco 50", "candidate"),
         ),
         source_documents=(
             TWINFRESH_STYLE_MANUAL_URL,
@@ -246,32 +439,70 @@ DEVICE_MODELS = {
         ),
     ),
     0x0D00: DeviceModel(
-        "Vents Arc Smart",
+        "VENTS Arc Smart / Blauberg O2 Supreme",
         "arc",
-        aliases=(
-            "Vents Arc Smart white",
-            "Vents Arc Smart black",
-            "Blauberg O2 Supreme",
-            "Blauberg O2 Supreme white",
-            "Blauberg O2 Supreme black",
+        device_type=13,
+        parser_key=0x0D00,
+        official_names=(
+            MarketingName("VENTS", "Arc Smart", "Vents Arc Smart", "official_group"),
+            MarketingName("VENTS", "Arc Smart", "Vents Arc Smart white", "official_group"),
+            MarketingName("VENTS", "Arc Smart", "Vents Arc Smart black", "official_group"),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "O2 Supreme",
+                "Blauberg O2 Supreme",
+                "official_group",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "O2 Supreme",
+                "O2 Supreme white",
+                "official_group",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "O2 Supreme",
+                "O2 Supreme black",
+                "official_group",
+            ),
         ),
         source_documents=(ARC_SMART_MANUAL_URL, O2_SUPREME_MANUAL_URL),
     ),
     0x1100: DeviceModel(
-        "Breezy 160",
+        "VENTS Breezy 160 / Blauberg Freshpoint 160",
         profile_key="breezy",
-        aliases=(
-            "Freshpoint 160",
-            "Vents Breezy 160-E",
-            "Vents Breezy 160-E Smart",
-            "Freshpoint 160-E",
-            "Freshpoint 160-E Pro",
-            "Freshpoint 160-E L055",
-            "Freshpoint 160-E L07",
-            "Freshpoint 160-E L1",
-            "Freshpoint 160-E Pro L055",
-            "Freshpoint 160-E Pro L07",
-            "Freshpoint 160-E Pro L1",
+        device_type=17,
+        parser_key=0x1100,
+        official_names=(
+            MarketingName("VENTS", "Breezy", "Vents Breezy 160", "official_group"),
+            MarketingName("VENTS", "Breezy", "Vents Breezy 160-E", "official_group"),
+            MarketingName(
+                "VENTS", "Breezy", "Vents Breezy 160-E Smart", "official_group"
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Freshpoint",
+                "Freshpoint 160",
+                "protocol_pdf",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Freshpoint",
+                "Freshpoint 160-E Pro L055",
+                "official_listing",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Freshpoint",
+                "Freshpoint 160-E Pro L07",
+                "official_listing",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Freshpoint",
+                "Freshpoint 160-E Pro L1",
+                "official_listing",
+            ),
         ),
         source_documents=(
             BREEZY_ECO_MANUAL_URL,
@@ -279,17 +510,27 @@ DEVICE_MODELS = {
         ),
     ),
     0x1400: DeviceModel(
-        "Breezy Eco 160",
+        "VENTS Breezy Eco 160 / Blauberg Freshpoint Eco 160",
         profile_key="breezy",
-        aliases=(
-            "Freshpoint Eco 160",
-            "Freshpoint Eco 160 L055",
-            "Freshpoint Eco 160 L07",
-            "Freshpoint Eco 160 L1",
-            "Freshpoint Eco 160-E",
-            "Freshpoint Eco 160-E L055",
-            "Freshpoint Eco 160-E L07",
-            "Freshpoint Eco 160-E L1",
+        device_type=20,
+        parser_key=0x1400,
+        official_names=(
+            MarketingName("VENTS", "Breezy Eco", "Vents Breezy Eco 160", "official_group"),
+            MarketingName(
+                "VENTS", "Breezy Eco", "Vents Breezy Eco 160-E", "official_group"
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Freshpoint Eco",
+                "Freshpoint Eco 160",
+                "protocol_pdf",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Freshpoint Eco",
+                "Freshpoint Eco 160-E L07",
+                "official_listing",
+            ),
         ),
         source_documents=(
             BREEZY_ECO_MANUAL_URL,
@@ -297,20 +538,39 @@ DEVICE_MODELS = {
         ),
     ),
     0x1600: DeviceModel(
-        "Breezy 200",
+        "VENTS Breezy 200 / Blauberg Freshpoint 200",
         profile_key="breezy",
-        aliases=(
-            "Freshpoint 200",
-            "Vents Breezy 200-E",
-            "Vents Breezy 200-E Smart",
-            "Freshpoint 200-E",
-            "Freshpoint 200-E Pro",
-            "Freshpoint 200-E L055",
-            "Freshpoint 200-E L07",
-            "Freshpoint 200-E L1",
-            "Freshpoint 200-E Pro L055",
-            "Freshpoint 200-E Pro L07",
-            "Freshpoint 200-E Pro L1",
+        device_type=22,
+        parser_key=0x1600,
+        official_names=(
+            MarketingName("VENTS", "Breezy", "Vents Breezy 200-E", "official_group"),
+            MarketingName(
+                "VENTS", "Breezy", "Vents Breezy 200-E Smart", "official_group"
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Freshpoint",
+                "Freshpoint 200",
+                "protocol_pdf",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Freshpoint",
+                "Freshpoint 200-E Pro L055",
+                "official_listing",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Freshpoint",
+                "Freshpoint 200-E Pro L07",
+                "official_listing",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Freshpoint",
+                "Freshpoint 200-E Pro L1",
+                "official_listing",
+            ),
         ),
         source_documents=(
             BREEZY_ECO_MANUAL_URL,
@@ -318,9 +578,21 @@ DEVICE_MODELS = {
         ),
     ),
     0x1800: DeviceModel(
-        "Breezy Eco 200",
+        "VENTS Breezy Eco 200 / Blauberg Freshpoint Eco 200",
         profile_key="breezy",
-        aliases=("Freshpoint Eco 200",),
+        device_type=24,
+        parser_key=0x1800,
+        official_names=(
+            MarketingName(
+                "VENTS", "Breezy Eco", "Vents Breezy Eco 200", "protocol_pdf"
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Freshpoint Eco",
+                "Freshpoint Eco 200",
+                "protocol_pdf",
+            ),
+        ),
         source_documents=(
             BREEZY_ECO_MANUAL_URL,
             FRESHPOINT_MANUAL_URL,
@@ -328,9 +600,16 @@ DEVICE_MODELS = {
     ),
     0x1A00: DeviceModel(
         "VENTO inHome old / TwinFresh Atmo old",
-        aliases=(
-            "VENTO inHome",
-            "TwinFresh Atmo",
+        device_type=26,
+        parser_key=0x1A00,
+        official_names=(
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "VENTO inHome",
+                "VENTO inHome",
+                "protocol_pdf",
+            ),
+            MarketingName("VENTS", "TwinFresh Atmo", "TwinFresh Atmo", "protocol_pdf"),
         ),
         source_documents=(
             VENTO_SMART_HOME_MANUAL_URL,
@@ -339,14 +618,38 @@ DEVICE_MODELS = {
         ),
     ),
     0x1B00: DeviceModel(
-        "VENTO inHome 100",
-        aliases=(
-            "Vento inHome S11 W",
-            "VENTO inHome mini",
-            "VENTO inHome mini W",
-            "TwinFresh Atmo 100",
-            "Vents TwinFresh Atmo mini",
-            "Vents TwinFresh Atmo mini Wi-Fi",
+        "VENTO inHome 100 / TwinFresh Atmo 100",
+        device_type=27,
+        parser_key=0x1B00,
+        official_names=(
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "VENTO inHome",
+                "VENTO inHome 100",
+                "protocol_pdf",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "VENTO inHome",
+                "VENTO inHome mini",
+                "official_listing",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "VENTO inHome",
+                "VENTO inHome mini W",
+                "official_listing",
+            ),
+            MarketingName("VENTS", "TwinFresh Atmo", "TwinFresh Atmo 100", "protocol_pdf"),
+            MarketingName(
+                "VENTS", "TwinFresh Atmo", "Vents TwinFresh Atmo mini", "official_listing"
+            ),
+            MarketingName(
+                "VENTS",
+                "TwinFresh Atmo",
+                "Vents TwinFresh Atmo mini Wi-Fi",
+                "official_listing",
+            ),
         ),
         source_documents=(
             VENTO_SMART_HOME_MANUAL_URL,
@@ -355,12 +658,26 @@ DEVICE_MODELS = {
         ),
     ),
     0x1C00: DeviceModel(
-        "VENTO inHome 160",
-        aliases=(
-            "VENTO inHome W",
-            "TwinFresh Atmo 160",
-            "Vents TwinFresh Atmo",
-            "Vents TwinFresh Atmo Wi-Fi",
+        "VENTO inHome 160 / TwinFresh Atmo 160",
+        device_type=28,
+        parser_key=0x1C00,
+        official_names=(
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "VENTO inHome",
+                "VENTO inHome 160",
+                "protocol_pdf",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "VENTO inHome",
+                "VENTO inHome W",
+                "official_listing",
+            ),
+            MarketingName("VENTS", "TwinFresh Atmo", "TwinFresh Atmo 160", "protocol_pdf"),
+            MarketingName(
+                "VENTS", "TwinFresh Atmo", "Vents TwinFresh Atmo Wi-Fi", "official_listing"
+            ),
         ),
         source_documents=(
             VENTO_SMART_HOME_MANUAL_URL,
@@ -369,13 +686,24 @@ DEVICE_MODELS = {
         ),
     ),
     0x0600: DeviceModel(
-        "Blauberg Smart Wi-Fi",
+        "Blauberg Smart Wi-Fi / VENTS iFan Wi-Fi",
         "extract_fan",
-        aliases=(
-            "Blauberg Smart Wi-Fi extract fan",
-            "Blauberg Smart IR Wi-Fi",
-            "Vents iFan Wi-Fi",
-            "Vents iFan Move Wi-Fi",
+        parser_key=0x0600,
+        official_names=(
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Smart",
+                "Blauberg Smart Wi-Fi",
+                "official_group",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Smart",
+                "Smart IR Wi-Fi",
+                "official_group",
+            ),
+            MarketingName("VENTS", "iFan", "Vents iFan Wi-Fi", "official_group"),
+            MarketingName("VENTS", "iFan", "Vents iFan Move Wi-Fi", "official_group"),
         ),
         source_documents=(SMART_WIFI_MANUAL_URL,),
     ),
@@ -383,25 +711,41 @@ DEVICE_MODELS = {
     # Its unit type is documented as 0x0002; this parser stores the two response
     # bytes as a hex integer, so the little-endian value appears as 0x0200.
     0x0200: DeviceModel(
-        "Freshbox 100 WiFi",
+        "Blauberg Freshbox 100 WiFi / VENTS Micra 100 WiFi",
         "freshbox",
-        aliases=(
-            "Freshbox 100 ERV WiFi",
-            "Freshbox E-100 WiFi",
-            "Freshbox E-100 ERV WiFi",
-            "Freshbox E1-100 WiFi",
-            "Freshbox E1-100 ERV WiFi",
-            "Freshbox E2-100 WiFi",
-            "Freshbox E2-100 ERV WiFi",
-            "Micra 100 WiFi",
-            "Vents Micra 100 WiFi",
-            "Vents Micra 100 ERV WiFi",
-            "Vents Micra 100 E WiFi",
-            "Vents Micra 100 E ERV WiFi",
-            "Vents Micra 100 E1 WiFi",
-            "Vents Micra 100 E1 ERV WiFi",
-            "Vents Micra 100 E2 WiFi",
-            "Vents Micra 100 E2 ERV WiFi",
+        device_type=2,
+        parser_key=0x0200,
+        official_names=(
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Freshbox",
+                "Freshbox 100 WiFi",
+                "protocol_pdf",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Freshbox",
+                "Freshbox 100 ERV WiFi",
+                "official_group",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Freshbox",
+                "Freshbox E-100 WiFi",
+                "official_group",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Freshbox",
+                "Freshbox E2-100 ERV WiFi",
+                "official_group",
+            ),
+            MarketingName("VENTS", "Micra", "Vents Micra 100 WiFi", "protocol_pdf"),
+            MarketingName("VENTS", "Micra", "Vents Micra 100 ERV WiFi", "official_group"),
+            MarketingName("VENTS", "Micra", "Vents Micra 100 E WiFi", "official_group"),
+            MarketingName(
+                "VENTS", "Micra", "Vents Micra 100 E2 ERV WiFi", "official_group"
+            ),
         ),
         source_documents=(FRESHBOX_100_WIFI_MANUAL_URL, MICRA_100_WIFI_MANUAL_URL),
     ),

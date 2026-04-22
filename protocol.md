@@ -25,29 +25,47 @@ Source PDFs:
 - [Arc Smart Smart House CO2 connection guide](https://ventilation-system.com/download/arc-smart-manual-21863.pdf)
 - [O2 Supreme Smart Home connection guide B255-1EN-01](https://blaubergventilatoren.net/download/o2-supreme-manual-15274.pdf)
 
-### Relabelled model names
+### Model lineage names
 
-These manuals describe the same local UDP protocol across Blauberg, Vento,
-Vents, TwinFresh, Oxxify, Breezy, and Freshpoint marketing names. The code keeps
-a stable primary model name and stores known relabels as aliases; Home Assistant
-gets a joined display name so reports from any brand can be matched to the same
-unit type.
+These manuals describe one Blauberg Group / VENTS platform across sibling
+brands, official family names, external relabels, and candidate OEM names.
+VENTS is treated as an official sibling brand, not as a Blauberg relabel.
 
-| Unit type | Primary name | Known relabels / compatible names | Notes |
+The code keeps these layers separate:
+
+- `manufacturer_group`: upstream platform/factory layer.
+- `brand`: Blauberg Ventilatoren, VENTS, SIKU, Flexit, DUKA, OXXIFY, and other
+  marketing brands.
+- `family`: VENTO Expert, TwinFresh Expert, Freshbox, Micra, Breezy,
+  Freshpoint, and similar product families.
+- `model`: exact sellable marketing spelling.
+- `device_type`: native BGCP value from parameter `0x00B9`.
+- `parser_key`: byte-swapped integer used by this parser.
+- `evidence`: `official_group`, `official_listing`, `protocol_pdf`,
+  `community_tested`, `observed`, `app_by_blauberg`, or `candidate`.
+
+Only concise primary names and explicit compatibility aliases are used for the
+parser-facing Home Assistant unit-type string. The structured `official_names`,
+`relabels`, and `candidates` metadata is for reviewability and issue matching;
+candidates are not shown as confirmed model names until a device reports
+`0x00B9`.
+
+| Unit type | Primary name | Official same-group names | External relabel/candidate notes |
 | -- | -- | -- | -- |
-| `0x0300` | Vento Expert A50-1/A85-1/A100-1 W V.2 | TwinFresh Expert RW1-50/85/100 V.2; VENTO Expert A50-1 W V.3; TwinFresh Expert RW1-50 V.3 | Same `vento` profile; no separate V.3 unit type found |
-| `0x0400` | Vento Expert Duo A30-1 W V.2 | TwinFresh Expert Duo RW1-30 V.2 | Same `vento` profile |
-| `0x0500` | Vento Expert A30 W V.2 | TwinFresh Expert RW-30 V.2 | Same `vento` profile |
-| `0x0D00` | Vents Arc Smart | Vents Arc Smart white/black; Blauberg O2 Supreme white/black | Dedicated `arc` profile |
-| `0x0E00` | Vents TwinFresh Style Wi-Fi | TwinFresh Style Wi-Fi; TwinFresh Style Wi-Fi V.2; Vents TwinFresh Style Frost Wi-Fi; Vents TwinFresh Style Wi-Fi mini; Oxxify smart 50 | Same `vento` profile |
-| `0x0200` | Freshbox 100 WiFi | Freshbox ERV/E/E1/E2 WiFi variants; Micra 100 WiFi; Vents Micra 100 ERV/E/E1/E2 WiFi variants | Dedicated `freshbox` AHU profile |
-| `0x1100` | Breezy 160 | Freshpoint 160; Vents Breezy 160-E/Smart; Freshpoint 160-E/Pro/L055/L07/L1 variants | Breezy/Freshpoint parameter variant, handled through the dedicated `breezy` profile |
-| `0x1400` | Breezy Eco 160 | Freshpoint Eco 160; Freshpoint Eco 160-E/L055/L07/L1 variants | Breezy/Freshpoint parameter variant, handled through the dedicated `breezy` profile |
-| `0x1600` | Breezy 200 | Freshpoint 200; Vents Breezy 200-E/Smart; Freshpoint 200-E/Pro/L055/L07/L1 variants | Breezy/Freshpoint parameter variant, handled through the dedicated `breezy` profile |
-| `0x1800` | Breezy Eco 200 | Freshpoint Eco 200 | Breezy/Freshpoint parameter variant, handled through the dedicated `breezy` profile |
+| `0x0200` | Blauberg Freshbox 100 WiFi / VENTS Micra 100 WiFi | Freshbox 100 WiFi/ERV/E/E2 variants; Vents Micra 100 WiFi/ERV/E/E2 variants | Dedicated `freshbox` AHU profile |
+| `0x0300` | Blauberg VENTO Expert / VENTS TwinFresh Expert | VENTO Expert A50/A85/A100 V.2; VENTO Expert A50 V.3; TwinFresh Expert RW1-50/85/100 V.2; TwinFresh Expert RW1-50 V.3 | SIKU RV 50, DUKA One S6W, RL 50RVW, and Winzel RW1-50 are tracked as relabels; Flexit Roomie One, DUKA One Pro 50, and NIBE DVC 10-50W remain candidates |
+| `0x0400` | Blauberg VENTO Expert Duo / VENTS TwinFresh Expert Duo | VENTO Expert DUO A30 V.2; TwinFresh Expert Duo RW1-30 V.2 | SIKU RV 30 DW, Flexit Roomie Dual, DUKA One S6BW, and RL 30DVW are tracked as relabel/candidate evidence |
+| `0x0500` | Blauberg VENTO Expert A30 / VENTS TwinFresh Expert RW-30 | VENTO Expert A30 V.2; TwinFresh Expert RW-30 V.2 | SIKU RV 25 and RL 25RVW remain candidates until live `0x00B9` evidence |
+| `0x0600` | Blauberg Smart Wi-Fi / VENTS iFan Wi-Fi | Smart Wi-Fi; Smart IR Wi-Fi; Vents iFan Wi-Fi; Vents iFan Move Wi-Fi | Dedicated `extract_fan` profile |
+| `0x0D00` | VENTS Arc Smart / Blauberg O2 Supreme | Vents Arc Smart white/black; Blauberg O2 Supreme white/black | Dedicated `arc` profile |
+| `0x0E00` | VENTS TwinFresh Style Wi-Fi | TwinFresh Style Wi-Fi/Frost/mini | OXXIFY.smart 50 is kept as observed relabel evidence on this unit type; Oxxify.smart 30 and 50k remain candidates |
+| `0x1100` | VENTS Breezy 160 / Blauberg Freshpoint 160 | Breezy 160/E/Smart; Freshpoint 160 and package variants | Dedicated `breezy` profile |
+| `0x1400` | VENTS Breezy Eco 160 / Blauberg Freshpoint Eco 160 | Breezy Eco 160/E; Freshpoint Eco 160 and package variants | Dedicated `breezy` profile |
+| `0x1600` | VENTS Breezy 200 / Blauberg Freshpoint 200 | Breezy 200-E/Smart; Freshpoint 200 and package variants | Dedicated `breezy` profile |
+| `0x1800` | VENTS Breezy Eco 200 / Blauberg Freshpoint Eco 200 | Breezy Eco 200; Freshpoint Eco 200 | Dedicated `breezy` profile |
 | `0x1A00` | VENTO inHome old / TwinFresh Atmo old | VENTO inHome; TwinFresh Atmo | Same `vento` profile |
-| `0x1B00` | VENTO inHome 100 | Vento inHome S11 W; VENTO inHome mini/W; TwinFresh Atmo 100; Vents TwinFresh Atmo mini/Wi-Fi | Same `vento` profile |
-| `0x1C00` | VENTO inHome 160 | VENTO inHome W; TwinFresh Atmo 160; Vents TwinFresh Atmo/Wi-Fi | Same `vento` profile |
+| `0x1B00` | VENTO inHome 100 / TwinFresh Atmo 100 | VENTO inHome mini/W; TwinFresh Atmo mini/Wi-Fi | Same `vento` profile |
+| `0x1C00` | VENTO inHome 160 / TwinFresh Atmo 160 | VENTO inHome W; TwinFresh Atmo Wi-Fi | Same `vento` profile |
 
 No reviewed manufacturer PDF documents device type `7` / parser key `0x0700`.
 Rows such as `0x0007` in the source tables are timer/status parameters, not

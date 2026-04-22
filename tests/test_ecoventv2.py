@@ -414,6 +414,15 @@ class ParseResponseTest(unittest.TestCase):
 
         self.assertEqual(fan.profile_key, "freshbox")
         self.assertEqual(fan.speed, "speed_5")
+        self.assertEqual(
+            fan.fan_preset_modes,
+            ["speed_1", "speed_2", "speed_3", "speed_4", "speed_5"],
+        )
+        self.assertFalse(fan.supports_percentage_control)
+        self.assertEqual(
+            fan.parameter_options("speed"),
+            ["speed_1", "speed_2", "speed_3", "speed_4", "speed_5"],
+        )
         self.assertEqual(fan.supply_speed_low, 40)
         self.assertEqual(fan.exhaust_speed_low, 50)
         self.assertEqual(fan.supply_speed_4, 70)
@@ -427,6 +436,7 @@ class ParseResponseTest(unittest.TestCase):
         self.assertEqual(fan.wifi_connection_status, "off")
         self.assertEqual(fan.heater_blowing_status, "on")
         self.assertEqual(fan.preset_speed_percent("speed_5"), 95)
+        self.assertEqual(fan.preset_speed_percent("speed_1"), 45)
 
     def test_parse_response_uses_extract_fan_profile(self):
         fan = Fan("192.0.2.1")

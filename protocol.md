@@ -209,7 +209,7 @@ AHU-specific rows below are documented for the next profile-expansion pass.
 
 | Parameter | Functions | Description | Notes |
 | -- | -- | -- | -- |
-| 0x0002 | R/W/RW/INC/DEC | Speed mode 1-5 | five-speed, no manual `0xFF` mode in this PDF row |
+| 0x0002 | R/W/RW/INC/DEC | Speed mode 1-5 | exposed as `speed_1` through `speed_5`; `off` is parameter `0x0001`, and this PDF row has no manual `0xFF` mode |
 | 0x0003 | R/W/RW/INC/DEC | Maximum speed number | 3 or 5 speed configuration |
 | 0x0006 | R | Boost-mode status | Same ID as Vento boost status, compatible status meaning |
 | 0x0008 | R/W/RW/INC/DEC | Timer mode speed | Different from extract-fan humidity status at same ID |

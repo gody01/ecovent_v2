@@ -110,6 +110,14 @@ class Fan(object):
         0xFF: "manual",
     }
 
+    freshbox_speeds = {
+        1: "speed_1",
+        2: "speed_2",
+        3: "speed_3",
+        4: "speed_4",
+        5: "speed_5",
+    }
+
     battery_statuses = {0: "discharged", 1: "normal"}
 
     humidity_permission_modes = {
@@ -346,7 +354,7 @@ class Fan(object):
     # issue trace confirms which AHU-specific controls should become HA entities.
     freshbox_params = {
         0x0001: ["state", states],
-        0x0002: ["speed", speeds],
+        0x0002: ["speed", freshbox_speeds],
         0x0006: ["boost_status", statuses],
         0x0007: ["timer_status", states],
         0x000B: ["timer_counter", None],
@@ -590,6 +598,11 @@ class Fan(object):
     def supports_preset_speed_settings(self):
         """Return whether the profile has separate preset speed settings."""
         return self.device_profile.supports_preset_speed_settings
+
+    @property
+    def supports_percentage_control(self):
+        """Return whether HA may write arbitrary percentage speed commands."""
+        return self.device_profile.supports_percentage_control
 
     @property
     def uses_operating_mode_presets(self):
@@ -1638,6 +1651,9 @@ class Fan(object):
             return self.max_speed_setpoint
 
         preset_speeds = {
+            "speed_1": (self.supply_speed_low, self.exhaust_speed_low),
+            "speed_2": (self.supply_speed_medium, self.exhaust_speed_medium),
+            "speed_3": (self.supply_speed_high, self.exhaust_speed_high),
             "low": (self.supply_speed_low, self.exhaust_speed_low),
             "medium": (self.supply_speed_medium, self.exhaust_speed_medium),
             "high": (self.supply_speed_high, self.exhaust_speed_high),

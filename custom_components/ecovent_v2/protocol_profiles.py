@@ -56,6 +56,7 @@ class DeviceProfile:
     supports_preset_speed_settings: bool = False
     uses_operating_mode_presets: bool = False
     speed_percent_scale: str = "byte"
+    supports_percentage_control: bool = True
 
 
 @dataclass(frozen=True)
@@ -154,7 +155,7 @@ DEVICE_PROFILES = {
         params_name="freshbox_params",
         write_params_name="freshbox_write_params",
         quick_update_request="0006000B003200330081008300A100B6",
-        preset_modes=("off", "low", "medium", "high", "speed_4", "speed_5"),
+        preset_modes=("speed_1", "speed_2", "speed_3", "speed_4", "speed_5"),
         boost_statuses_name="statuses",
         humidity_sensor_states_name="states",
         capabilities=frozenset(
@@ -164,6 +165,7 @@ DEVICE_PROFILES = {
             }
         ),
         speed_percent_scale="percent",
+        supports_percentage_control=False,
     ),
 }
 

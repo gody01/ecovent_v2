@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from .ecoventv2 import Fan
 
 from homeassistant.components.binary_sensor import (
@@ -24,60 +26,83 @@ import logging
 _LOGGER = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class BinarySensorSpec:
+    """Binary sensor description guarded by protocol capabilities."""
+
+    key: str
+    name: str
+    method: str
+    enable_by_default: bool
+    icon: str
+    device_class: BinarySensorDeviceClass | None = None
+    required_capabilities: tuple[str, ...] = ("binary_diagnostics",)
+
+
+BINARY_SENSOR_SPECS = (
+    BinarySensorSpec(
+        "_relay_status",
+        "Relay status",
+        "relay_status",
+        False,
+        "mdi:electric-switch",
+    ),
+    BinarySensorSpec(
+        "_filter_replacement_status",
+        "Filter replacement required",
+        "filter_replacement_status",
+        True,
+        "mdi:air-filter",
+        BinarySensorDeviceClass.PROBLEM,
+    ),
+    BinarySensorSpec(
+        "_cloud_server_state",
+        "Cloud server",
+        "cloud_server_state",
+        False,
+        "mdi:cloud-check-outline",
+    ),
+    BinarySensorSpec(
+        "_humidity_status",
+        "Humidity status",
+        "humidity_status",
+        False,
+        "mdi:water-alert-outline",
+    ),
+    BinarySensorSpec(
+        "_analogV_status",
+        "Analog voltage status",
+        "analogV_status",
+        False,
+        "mdi:flash-alert-outline",
+    ),
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the entities."""
+    coordinator: EcoVentCoordinator = hass.data[DOMAIN][config.entry_id]
     async_add_entities(
         [
             VentoBinarySensor(
                 hass,
                 config,
-                "_relay_status",
-                "Relay status",
-                "relay_status",
-                False,
-                "mdi:electric-switch",
-            ),
-            VentoBinarySensor(
-                hass,
-                config,
-                "_filter_replacement_status",
-                "Filter replacement required",
-                "filter_replacement_status",
-                True,
-                "mdi:air-filter",
-                BinarySensorDeviceClass.PROBLEM,
-            ),
-            VentoBinarySensor(
-                hass,
-                config,
-                "_cloud_server_state",
-                "Cloud server",
-                "cloud_server_state",
-                False,
-                "mdi:cloud-check-outline",
-            ),
-            VentoBinarySensor(
-                hass,
-                config,
-                "_humidity_status",
-                "Humidity status",
-                "humidity_status",
-                False,
-                "mdi:water-alert-outline",
-            ),
-            VentoBinarySensor(
-                hass,
-                config,
-                "_analogV_status",
-                "Analog voltage status",
-                "analogV_status",
-                False,
-                "mdi:flash-alert-outline",
-            ),
+                spec.key,
+                spec.name,
+                spec.method,
+                spec.enable_by_default,
+                spec.icon,
+                spec.device_class,
+            )
+            for spec in BINARY_SENSOR_SPECS
+            if coordinator._fan.supports_entity(
+                required_params=(spec.method,),
+                required_capabilities=spec.required_capabilities,
+            )
         ]
     )
 

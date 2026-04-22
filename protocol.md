@@ -5,6 +5,186 @@ RW - 0x03
 INC - 0x04 
 DEC - 0x05
 
+## Implementation reference
+
+The table below is intentionally ordered by protocol parameter number so PR
+reviewers can compare `ecoventv2.py` with the source PDFs without translating
+Home Assistant entity names back into protocol rows. The full side-by-side PDF
+table remains below this section.
+
+Source PDFs:
+
+- [Connection to a "Smart Home" system - connection guide (B133-4-1EN-02)](https://blaubergventilatoren.net/download/vento-inhome-manual-14758.pdf)
+- `Smart Wifi b168_1en_01preview`
+- [TwinFresh Style Wi-Fi manual 19765](https://ventilation-system.com/download/twinfresh-style-wi-fi-manual-19765.pdf)
+- [TwinFresh Style Wi-Fi mini manual 19765](https://ventilation-system.com/download/twinfresh-style-wi-fi-mini-manual-19765.pdf)
+- [Breezy Eco manual 21433](https://ventilation-system.com/download/breezy-eco-manual-21433.pdf)
+- [Freshpoint manual 16999](https://blaubergventilatoren.net/download/freshpoint-manual-16999.pdf)
+
+### Relabelled model names
+
+These manuals describe the same local UDP protocol across Blauberg, Vento,
+Vents, TwinFresh, Oxxify, Breezy, and Freshpoint marketing names. The code keeps
+a stable primary model name and stores known relabels as aliases; Home Assistant
+gets a joined display name so reports from any brand can be matched to the same
+unit type.
+
+| Unit type | Primary name | Known relabels / compatible names | Notes |
+| -- | -- | -- | -- |
+| `0x0300` | Vento Expert A50-1/A85-1/A100-1 W V.2 | TwinFresh Expert RW1-50/85/100 V.2 | Same `vento` profile |
+| `0x0400` | Vento Expert Duo A30-1 W V.2 | TwinFresh Expert Duo RW1-30 V.2 | Same `vento` profile |
+| `0x0500` | Vento Expert A30 W V.2 | TwinFresh Expert RW-30 V.2 | Same `vento` profile |
+| `0x0E00` | TwinFresh Style Wifi V.2 | Oxxify smart 50 | Same `vento` profile |
+| `0x1100` | Breezy 160 | Freshpoint 160; Vents Breezy 160-E | Breezy/Freshpoint parameter variant, currently handled through the base `vento` profile |
+| `0x1400` | Breezy Eco 160 | Freshpoint Eco 160 | Breezy/Freshpoint parameter variant, currently handled through the base `vento` profile |
+| `0x1600` | Breezy 200 | Freshpoint 200 | Breezy/Freshpoint parameter variant, currently handled through the base `vento` profile |
+| `0x1800` | Breezy Eco 200 | Freshpoint Eco 200 | Breezy/Freshpoint parameter variant, currently handled through the base `vento` profile |
+| `0x1A00` | TwinFresh Atmo / newer Blauberg Vento |  | Same `vento` profile |
+| `0x1B00` | Vento inHome S11 W | TwinFresh Atmo 100 in the 2026 TwinFresh PDF | Conflicting reports; keep existing code name until hardware reports clarify it |
+| `0x1C00` | TwinFresh Atmo 160 |  | Same `vento` profile |
+
+### TwinFresh Style Wi-Fi / TwinFresh Atmo notes
+
+The 2026 TwinFresh "Smart House" PDFs for Style Wi-Fi and Style Wi-Fi mini
+appear to be the same document. They document the same UDP framing, port 4000,
+special command bytes, and Vento-family parameter map used by the `vento`
+profile. They add useful model and capability lists that are easier to review
+separately from the side-by-side table below.
+
+Documented unit type values from parameter `0x00B9`:
+
+| Value | Hex response | PDF model text | Code status |
+| -- | -- | -- | -- |
+| 3 | `0x0300` | TwinFresh Expert RW1-50 V.2 / RW1-85 V.2 / RW1-100 V.2 | `Vento Expert A50-1/A85-1/A100-1 W V.2` |
+| 4 | `0x0400` | TwinFresh Expert Duo RW1-30 V.2 | `Vento Expert Duo A30-1 W V.2` |
+| 5 | `0x0500` | TwinFresh Expert RW-30 V.2 | `Vento Expert A30 W V.2` |
+| 14 | `0x0E00` | TwinFresh Style | `TwinFresh Style Wifi V.2 / Oxxify smart 50` |
+| 26 | `0x1A00` | TwinFresh Atmo (old) | `TwinFresh Atmo / newer Blauberg Vento` |
+| 27 | `0x1B00` | TwinFresh Atmo 100 | `Vento inHome S11 W`; kept until hardware reports clarify the reused value |
+| 28 | `0x1C00` | TwinFresh Atmo 160 | `TwinFresh Atmo 160` |
+
+Parameters documented by the TwinFresh PDF that are not currently exposed:
+
+| Parameter | Functions | Description | Reason |
+| -- | -- | -- | -- |
+| 0x012A | R/W/RW | Restore fan speed settings for all modes to factory defaults | destructive reset; not needed for normal HA control |
+| 0x032A | R/W/RW | Enable Boost mode in passive ventilation mode, only for TF Atmo | Atmo-only capability not yet modelled |
+| 0x032B | R/W/RW | Passive ventilation mode, only for TF Atmo; higher priority than parameter 0x00B7 | Atmo-only capability not yet modelled |
+
+The TwinFresh PDF marks the preset fan speed parameters `0x003A` through
+`0x003F` and the filter replacement timer setup parameter `0x0063` as available
+for TwinFresh Style Wi-Fi, TwinFresh Style Wi-Fi Frost, TwinFresh Style Wi-Fi
+mini, and TwinFresh Expert RW1-50 V.3.
+
+### Breezy / Freshpoint Eco notes
+
+The 2025 Breezy Eco and Freshpoint manuals are relabels of the same protocol
+document: the parameter table is materially identical and only the marketing
+names differ. They diverge from the base `vento` profile enough to use a
+dedicated `breezy` profile instead of enabling every row as a Vento feature:
+Breezy/Freshpoint adds CO2/VOC/screen/heater rows, while Vento has several
+sensor rows that these manuals do not document.
+
+Documented unit type values from parameter `0x00B9`:
+
+| Value | Hex response | Breezy PDF text | Freshpoint PDF text | Code status |
+| -- | -- | -- | -- | -- |
+| 17 | `0x1100` | Breezy 160 | Freshpoint 160 | `Breezy 160 / Freshpoint 160 / Vents Breezy 160-E`, `breezy` profile |
+| 20 | `0x1400` | Breezy Eco 160 | Freshpoint Eco 160 | `Breezy Eco 160 / Freshpoint Eco 160`, `breezy` profile |
+| 22 | `0x1600` | Breezy 200 | Freshpoint 200 | `Breezy 200 / Freshpoint 200`, `breezy` profile |
+| 24 | `0x1800` | Breezy Eco 200 | Freshpoint Eco 200 | `Breezy Eco 200 / Freshpoint Eco 200`, `breezy` profile |
+
+Implemented Breezy/Freshpoint-specific parameters:
+
+| Parameter | Code field | Functions | Description | HA exposure |
+| -- | -- | -- | -- | -- |
+| 0x0011 | `co2_sensor_state` | R/W/RW | CO2 sensor-based control | switch |
+| 0x001A | `co2_treshold` | R/W/RW/INC/DEC | CO2 threshold setting | number |
+| 0x001F | `outdoor_temperature` | R | Current outdoor air temperature | sensor |
+| 0x0020 | `supply_temperature` | R | Current supply air temperature downstream of the reheater | sensor |
+| 0x0021 | `exhaust_in_temperature` | R | Current exhaust air temperature at the inlet | sensor |
+| 0x0022 | `exhaust_out_temperature` | R | Current exhaust air temperature at the outlet | sensor |
+| 0x0027 | `co2` | R | Current indoor CO2 level | sensor |
+| 0x0068 | `heater_state` | R/W/RW | Heater control | switch |
+| 0x007F | `alarm_list` | R | List of current alarms/warnings | diagnostic sensor |
+| 0x0081 | `heater_status` | R | Heater status | diagnostic sensor |
+| 0x0084 | `air_quality_status` | R | Air quality status: RH, CO2, reserved, reserved, VOC | diagnostic sensor |
+| 0x0129 | `recovery_efficiency` | R | Recovery efficiency | sensor |
+| 0x0306 | `schedule_speed` | R | Current speed in schedule mode | diagnostic sensor |
+| 0x030B | `frost_protection_status` | R | Frost protection status | diagnostic sensor |
+| 0x0315 | `voc_sensor_state` | R/W/RW | Air quality sensor-based VOC control | switch |
+| 0x031F | `voc_treshold` | R/W/RW/INC/DEC | Air quality sensor VOC setpoint | number |
+| 0x0320 | `voc` | R | Current air quality level VOC | sensor |
+| 0x0400 | `screen_brightness` | R/W/RW/INC/DEC | Screen backlight brightness, manual | number |
+| 0x0401 | `beeper` | R/W/RW | Activation of the sound emitter | runtime-probed select |
+| 0x0402 | `screen_backlight_mode` | R/W/RW | Screen backlight mode | disabled-by-default select |
+| 0x0403 | `screen_temperature_source` | R/W/RW/INC/DEC | Temperature sensor shown on the device screen | disabled-by-default select |
+| 0x0404 | `screen_air_quality_source` | R/W/RW/INC/DEC | Air quality sensor shown on the device screen | disabled-by-default select |
+| 0x0405 | `screen_display_mode` | R/W/RW/INC/DEC | Display of time or temperature/humidity on the screen | disabled-by-default select |
+| 0x0406 | `screen_standby_time_state` | R/W/RW | Display time in standby mode | disabled-by-default switch |
+| 0x0407 | `screen_display_state` | R/W/RW | Enabling/disabling all screen display | disabled-by-default select |
+| 0x0408 | `screen_off_start_time` | R/W/RW | Start time for turning off screen display | disabled-by-default diagnostic sensor |
+| 0x0409 | `screen_off_end_time` | R/W/RW | End time for turning off screen display | disabled-by-default diagnostic sensor |
+
+The Breezy/Freshpoint manuals extend `0x0002` and schedule speed values to five
+speed modes. The `breezy` profile exposes those fan presets as `low`, `medium`,
+`high`, `speed_4`, `speed_5`, and `manual`. Its speed setpoint rows use direct
+10-100 percent values, while the older Vento rows keep their legacy 0-255 scale.
+
+Parameter `0x012A` (restore all fan speed modes to factory defaults) remains
+unexposed because it is a destructive reset. Wi-Fi SSID/password/encryption rows
+remain intentionally unexposed for credential safety.
+
+### Smart Wi-Fi extract-fan profile (`0x0600`)
+
+Implemented from `Smart Wifi b168_1en_01preview`.
+
+| Parameter | Code field | Source | Functions | Description | Size |
+| -- | -- | -- | -- | -- | -- |
+| 0x0001 | `state` | PDF | R/W/RW | Fan On/Off | 1 |
+| 0x0002 | `battery_status` | PDF | R | Battery status | 1 |
+| 0x0003 | `all_day_mode` | PDF | R/W/RW | 24 hours mode selection | 1 |
+| 0x0004 | `fan1_speed` | PDF | R | Current fan speed (rpm) | 2 |
+| 0x0005 | `boost_status` | PDF | R/W/RW | BOOST mode On/Off | 1 |
+| 0x0006 | `boost_timer_countdown` | PDF | R | Current BOOST timer countdown in seconds | 3 |
+| 0x0007 | `timer_status` | PDF | R | Current status of the built-in timer | 1 |
+| 0x0008 | `humidity_status` | PDF | R | Current status of fan operation by humidity sensor | 1 |
+| 0x000A | `temperature_status` | PDF | R | Current status of fan operation by temperature sensor | 1 |
+| 0x000B | `motion_status` | PDF | R | Current status of fan operation by motion sensor | 1 |
+| 0x000C | `relay_status` | PDF | R | Current status of fan operation by signal from an external switch | 1 |
+| 0x000D | `interval_ventilation_status` | PDF | R | Current status of fan operation in interval ventilation mode | 1 |
+| 0x000E | `silent_mode_status` | PDF | R | Current status of fan operation in SILENT mode | 1 |
+| 0x000F | `humidity_sensor_state` | PDF | R/W/RW | Permission of operation based on humidity sensor readings | 1 |
+| 0x0011 | `temperature_sensor_state` | PDF | R/W/RW | Permission of operation based on temperature sensor readings | 1 |
+| 0x0012 | `motion_sensor_state` | PDF | R/W/RW | Permission of operation based on motion sensor readings | 1 |
+| 0x0013 | `relay_sensor_state` | PDF | R/W/RW | Permission of operation based on signal from an external switch | 1 |
+| 0x0014 | `humidity_treshold` | ynsgnr/blauberg-assistant | R/W/RW | Humidity Sensor Trigger Point | 1 |
+| 0x0016 | `temperature_treshold` | ynsgnr/blauberg-assistant | R/W/RW | Temperature Sensor Trigger Point | 1 |
+| 0x0018 | `max_speed_setpoint` | PDF | R/W/RW/INC/DEC | Max speed setpoint | 1 |
+| 0x001A | `silent_speed_setpoint` | PDF | R/W/RW/INC/DEC | Silent speed setpoint | 1 |
+| 0x001B | `interval_ventilation_speed_setpoint` | PDF | R/W/RW/INC/DEC | Interval ventilation speed setpoint | 1 |
+| 0x001D | `interval_ventilation_state` | PDF | R/W/RW | Interval ventilation mode activation | 1 |
+| 0x001E | `silent_mode_state` | PDF | R/W/RW | Silent mode activation | 1 |
+| 0x001F | `silent_mode_start_time` | PDF | R/W/RW | Silent Mode start time in seconds | 3 |
+| 0x0020 | `silent_mode_end_time` | PDF | R/W/RW | Silent Mode end time in seconds | 3 |
+| 0x0021 | `rtc_time` | PDF | R/W/RW | Current time of the fan internal clock in seconds | 3 |
+| 0x0023 | `boost_time` | PDF | R/W/RW/INC/DEC | Turn-off delay timer/BOOST setpoint | 1 |
+| 0x0024 | `turn_on_delay_timer` | PDF | R/W/RW/INC/DEC | Turn-on delay timer setpoint | 1 |
+| 0x0025 | `factory_reset` | PDF | W | Resetting parameters to factory settings | 1 |
+| 0x002E | `humidity` | ynsgnr/blauberg-assistant | R | Current humidity sensor value | 1 |
+| 0x0031 | `temperature` | ynsgnr/blauberg-assistant | R | Current temperature sensor value | 1 |
+| 0x007C | `device_search` | PDF | R | Device search on the local Ethernet network | 16 |
+| 0x0086 | `firmware` | PDF | R | Controller base firmware version and date | 6 |
+| 0x009C | `wifi_assigned_ip` | PDF | R/W/RW | IP address assigned to Wi-Fi module | 4 |
+| 0x00A0 | `wifi_apply_and_quit` | PDF | W | Apply new Wi-Fi parameters and quit Wi-Fi module Setup Mode | 1 |
+| 0x00A3 | `current_wifi_ip` | PDF | R | Current Wi-Fi module IP address | 4 |
+| 0x00B9 | `unit_type` | PDF | R | Unit type | 2 |
+
+The Smart Wi-Fi PDF also documents editable Wi-Fi SSID/password/encryption,
+subnet mask, gateway, DHCP mode, and channel parameters. The integration keeps
+those out of the profile because it does not expose Wi-Fi reconfiguration and
+should not read or store Wi-Fi credentials.
+
 
 | Smart Home (Vento) b133_4_1en_02_preview |                  |                                                                                                                                                                                                                                                                                                                                                                                                                                                 |                                                                                                                                                                                                                                                                                                                                                                                                                                                            |                  |  | Smart Wifi b168_1en_01preview |                                                                   |                                                                                                                                      |              |
 | -- | -- | -- | -- | -- | -- | -- | -- | -- | -- |

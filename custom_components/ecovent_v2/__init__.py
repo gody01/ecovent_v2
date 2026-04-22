@@ -28,6 +28,7 @@ _PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
     Platform.SWITCH,
     Platform.NUMBER,
+    Platform.SELECT,
     Platform.FAN,
 ]
 
@@ -65,7 +66,10 @@ def _async_migrate_entity_registry(
     beeper_select_entity_id = registry.async_get_entity_id(
         Platform.SELECT, DOMAIN, fan.id + "_beeper"
     )
-    if beeper_select_entity_id is not None:
+    if (
+        beeper_select_entity_id is not None
+        and not fan.supports_capability("beeper_control")
+    ):
         registry.async_remove(beeper_select_entity_id)
         _LOGGER.info(
             "Removed writable EcoVent V2 beeper select %s", beeper_select_entity_id

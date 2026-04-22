@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from .ecoventv2 import Fan
 
 from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
@@ -19,66 +21,145 @@ import logging
 _LOGGER = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class SwitchSpec:
+    """Switch description guarded by protocol capabilities."""
+
+    key: str
+    name: str
+    method: str
+    device_class: SwitchDeviceClass | None
+    state: bool
+    entity_category: EntityCategory
+    enable_by_default: bool
+    icon: str
+    assumed: bool
+    required_capabilities: tuple[str, ...] = ("sensor_switches",)
+
+
+SWITCH_SPECS = (
+    SwitchSpec(
+        "_humidity_sensor_state",
+        "Humidity sensor",
+        "humidity_sensor_state",
+        SwitchDeviceClass.SWITCH,
+        False,
+        EntityCategory.CONFIG,
+        True,
+        "mdi:water-percent-alert",
+        False,
+    ),
+    SwitchSpec(
+        "_relay_sensor_state",
+        "Relay sensor",
+        "relay_sensor_state",
+        SwitchDeviceClass.SWITCH,
+        False,
+        EntityCategory.CONFIG,
+        True,
+        "mdi:electric-switch",
+        False,
+    ),
+    SwitchSpec(
+        "_analogV_sensor_state",
+        "Analog voltage sensor",
+        "analogV_sensor_state",
+        SwitchDeviceClass.SWITCH,
+        False,
+        EntityCategory.CONFIG,
+        True,
+        "mdi:flash-alert-outline",
+        False,
+    ),
+    SwitchSpec(
+        "_weekly_schedule_state",
+        "Weekly schedule",
+        "weekly_schedule_state",
+        SwitchDeviceClass.SWITCH,
+        False,
+        EntityCategory.CONFIG,
+        True,
+        "mdi:calendar-clock",
+        False,
+    ),
+    SwitchSpec(
+        "_co2_sensor_state",
+        "CO2 sensor",
+        "co2_sensor_state",
+        SwitchDeviceClass.SWITCH,
+        False,
+        EntityCategory.CONFIG,
+        True,
+        "mdi:molecule-co2",
+        False,
+        required_capabilities=("co2",),
+    ),
+    SwitchSpec(
+        "_voc_sensor_state",
+        "VOC sensor",
+        "voc_sensor_state",
+        SwitchDeviceClass.SWITCH,
+        False,
+        EntityCategory.CONFIG,
+        True,
+        "mdi:air-filter",
+        False,
+        required_capabilities=("voc",),
+    ),
+    SwitchSpec(
+        "_heater_state",
+        "Heater",
+        "heater_state",
+        SwitchDeviceClass.SWITCH,
+        False,
+        EntityCategory.CONFIG,
+        True,
+        "mdi:heat-wave",
+        False,
+        required_capabilities=("heater",),
+    ),
+    SwitchSpec(
+        "_screen_standby_time_state",
+        "Screen standby time",
+        "screen_standby_time_state",
+        SwitchDeviceClass.SWITCH,
+        False,
+        EntityCategory.CONFIG,
+        False,
+        "mdi:clock-digital",
+        False,
+        required_capabilities=("breezy_screen",),
+    ),
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the fan switches."""
+    coordinator: EcoVentCoordinator = hass.data[DOMAIN][config.entry_id]
     async_add_entities(
         [
             VentoSwitch(
                 hass,
                 config,
-                "_humidity_sensor_state",
-                "Humidity sensor",
-                "humidity_sensor_state",
-                SwitchDeviceClass.SWITCH,
-                False,
-                EntityCategory.CONFIG,
-                True,
-                "mdi:water-percent-alert",
-                False,
-            ),
-            VentoSwitch(
-                hass,
-                config,
-                "_relay_sensor_state",
-                "Relay sensor",
-                "relay_sensor_state",
-                SwitchDeviceClass.SWITCH,
-                False,
-                EntityCategory.CONFIG,
-                True,
-                "mdi:electric-switch",
-                False,
-            ),
-            VentoSwitch(
-                hass,
-                config,
-                "_analogV_sensor_state",
-                "Analog voltage sensor",
-                "analogV_sensor_state",
-                SwitchDeviceClass.SWITCH,
-                False,
-                EntityCategory.CONFIG,
-                True,
-                "mdi:flash-alert-outline",
-                False,
-            ),
-            VentoSwitch(
-                hass,
-                config,
-                "_weekly_schedule_state",
-                "Weekly schedule",
-                "weekly_schedule_state",
-                SwitchDeviceClass.SWITCH,
-                False,
-                EntityCategory.CONFIG,
-                True,
-                "mdi:calendar-clock",
-                False,
-            ),
+                spec.key,
+                spec.name,
+                spec.method,
+                spec.device_class,
+                spec.state,
+                spec.entity_category,
+                spec.enable_by_default,
+                spec.icon,
+                spec.assumed,
+            )
+            for spec in SWITCH_SPECS
+            if coordinator._fan.supports_entity(
+                required_params=(spec.method,),
+                required_capabilities=spec.required_capabilities,
+            )
         ]
     )
 
@@ -155,6 +236,22 @@ class VentoSwitch(CoordinatorEntity, SwitchEntity):
     def weekly_schedule_state(self):
         """Weekly schedule state."""
         return self._fan.weekly_schedule_state
+
+    def co2_sensor_state(self):
+        """CO2 sensor state."""
+        return self._fan.co2_sensor_state
+
+    def voc_sensor_state(self):
+        """VOC sensor state."""
+        return self._fan.voc_sensor_state
+
+    def heater_state(self):
+        """Heater control state."""
+        return self._fan.heater_state
+
+    def screen_standby_time_state(self):
+        """Screen standby time display state."""
+        return self._fan.screen_standby_time_state
 
     @property
     def is_on(self) -> bool | None:

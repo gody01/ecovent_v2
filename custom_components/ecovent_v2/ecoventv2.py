@@ -4,10 +4,16 @@ import logging
 import math
 import socket
 import sys
+import time
 
 __version__ = "loc_0.9.29"
 
 _LOGGER = logging.getLogger(__name__)
+
+try:
+    from .protocol_profiles import DEVICE_MODELS, DEVICE_PROFILES, UNIT_TYPE_NAMES
+except ImportError:
+    from protocol_profiles import DEVICE_MODELS, DEVICE_PROFILES, UNIT_TYPE_NAMES
 
 """"
 # currently having entities in HA:
@@ -80,6 +86,8 @@ class Fan(object):
 
     HEADER = "FDFD"
     HEADER_BYTES = bytes.fromhex(HEADER)
+    beeper_probe_read_count = 3
+    beeper_probe_settle_seconds = 1
 
     func = {
         "read": "01",
@@ -92,15 +100,48 @@ class Fan(object):
 
     states = {0: "off", 1: "on", 2: "toggle"}
 
-    speeds = {0: "standby", 1: "low", 2: "medium", 3: "high", 0xFF: "manual"}
+    speeds = {
+        0: "standby",
+        1: "low",
+        2: "medium",
+        3: "high",
+        4: "speed_4",
+        5: "speed_5",
+        0xFF: "manual",
+    }
+
+    battery_statuses = {0: "discharged", 1: "normal"}
+
+    humidity_permission_modes = {
+        0: "off",
+        1: "automatic",
+        2: "manual",
+    }
 
     timer_modes = {0: "off", 1: "night", 2: "party"}
 
     statuses = {0: "off", 1: "on"}
+    air_quality_statuses = {0: "normal", 1: "over_setpoint"}
+    frost_protection_statuses = {0: "inactive", 1: "active"}
+    screen_backlight_modes = {0: "auto", 1: "manual", 2: "toggle"}
+    screen_temperature_sources = {
+        0: "alternating",
+        1: "supply_air",
+        2: "extract_air",
+    }
+    screen_air_quality_sources = {0: "alternating", 1: "co2", 2: "voc"}
+    screen_display_modes = {
+        0: "alternating",
+        1: "time",
+        2: "temperature_humidity",
+    }
+    screen_standby_time_states = {0: "off", 1: "on"}
+    screen_display_states = {0: "off", 1: "on", 2: "off_interval"}
 
     # Observed on a TwinFresh V.2 as a volatile command/status flag, not a stable
     # beeper preference. Writing 0 or 2 did not disable command beeps reliably.
     bstatuses = {0: "off", 1: "on", 2: "silent"}
+    sound_emitter_states = {0: "off", 1: "on", 2: "toggle"}
 
     boost_statuses = {0: "off", 1: "on", 2: "delay"}
 
@@ -123,15 +164,7 @@ class Fan(object):
 
     filters = {0: "filter replacement not required", 1: "replace filter"}
 
-    unit_types = {
-        0x0300: "Vento Expert A50-1/A85-1/A100-1 W V.2",
-        0x0400: "Vento Expert Duo A30-1 W V.2",
-        0x0500: "Vento Expert A30 W V.2",
-        0x0E00: "TwinFresh Style Wifi V.2 / Oxxify smart 50",
-        0x1100: "Vents Breezy 160-E",
-        0x1A00: "TwinFresh Atmo / newer Blauberg Vento",
-        0x1B00: "Vento inHome S11 W",
-    }
+    unit_types = UNIT_TYPE_NAMES
 
     wifi_operation_modes = {1: "client", 2: "ap"}
 
@@ -200,11 +233,132 @@ class Fan(object):
         0x0306: ["beeper", bstatuses],
     }
 
+    # Extract-fan profile. Keep this ordered by parameter number so
+    # it can be compared against the implementation reference in protocol.md and
+    # the PDF parameter table. Parameters 0x0014, 0x0016, 0x002E, and
+    # 0x0031 are not visible in the PDF table; they come from the
+    # ynsgnr/blauberg-assistant implementation linked from issue #11.
+    extract_fan_params = {
+        0x0001: ["state", states],
+        0x0002: ["battery_status", battery_statuses],
+        0x0003: ["all_day_mode", states],
+        0x0004: ["fan1_speed", None],
+        0x0005: ["boost_status", statuses],
+        0x0006: ["boost_timer_countdown", None],
+        0x0007: ["timer_status", statuses],
+        0x0008: ["humidity_status", statuses],
+        0x000A: ["temperature_status", statuses],
+        0x000B: ["motion_status", statuses],
+        0x000C: ["relay_status", statuses],
+        0x000D: ["interval_ventilation_status", statuses],
+        0x000E: ["silent_mode_status", statuses],
+        0x000F: ["humidity_sensor_state", humidity_permission_modes],
+        0x0011: ["temperature_sensor_state", states],
+        0x0012: ["motion_sensor_state", states],
+        0x0013: ["relay_sensor_state", states],
+        0x0014: ["humidity_treshold", None],
+        0x0016: ["temperature_treshold", None],
+        0x0018: ["max_speed_setpoint", None],
+        0x001A: ["silent_speed_setpoint", None],
+        0x001B: ["interval_ventilation_speed_setpoint", None],
+        0x001D: ["interval_ventilation_state", states],
+        0x001E: ["silent_mode_state", states],
+        0x001F: ["silent_mode_start_time", None],
+        0x0020: ["silent_mode_end_time", None],
+        0x0021: ["rtc_time", None],
+        0x0023: ["boost_time", None],
+        0x0024: ["turn_on_delay_timer", None],
+        0x002E: ["humidity", None],
+        0x0031: ["temperature", None],
+        0x007C: ["device_search", None],
+        0x0086: ["firmware", None],
+        0x009C: ["wifi_assigned_ip", None],
+        0x00A3: ["current_wifi_ip", None],
+        0x00B9: ["unit_type", unit_types],
+    }
+
+    # Breezy/Freshpoint profile from the 2025 Breezy Eco and Freshpoint manuals.
+    # It shares the UDP framing and several Vento rows, but it is not a pure
+    # superset: some same-number rows are device-family specific and Vento has
+    # parameters these manuals do not document.
+    breezy_params = {
+        0x0001: ["state", states],
+        0x0002: ["speed", speeds],
+        0x0007: ["timer_mode", timer_modes],
+        0x000B: ["timer_counter", None],
+        0x000F: ["humidity_sensor_state", states],
+        0x0011: ["co2_sensor_state", states],
+        0x0019: ["humidity_treshold", None],
+        0x001A: ["co2_treshold", None],
+        0x001F: ["outdoor_temperature", None],
+        0x0020: ["supply_temperature", None],
+        0x0021: ["exhaust_in_temperature", None],
+        0x0022: ["exhaust_out_temperature", None],
+        0x0024: ["battery_voltage", None],
+        0x0025: ["humidity", None],
+        0x0027: ["co2", None],
+        0x003A: ["supply_speed_low", None],
+        0x003B: ["exhaust_speed_low", None],
+        0x003C: ["supply_speed_medium", None],
+        0x003D: ["exhaust_speed_medium", None],
+        0x003E: ["supply_speed_high", None],
+        0x003F: ["exhaust_speed_high", None],
+        0x0044: ["man_speed", None],
+        0x004A: ["fan1_speed", None],
+        0x004B: ["fan2_speed", None],
+        0x0063: ["filter_timer_setpoint", None],
+        0x0064: ["filter_timer_countdown", None],
+        0x0068: ["heater_state", states],
+        0x007C: ["device_search", None],
+        0x007E: ["machine_hours", None],
+        0x007F: ["alarm_list", None],
+        0x0081: ["heater_status", statuses],
+        0x0083: ["alarm_status", alarms],
+        0x0084: ["air_quality_status", None],
+        0x0085: ["cloud_server_state", states],
+        0x0086: ["firmware", None],
+        0x0088: ["filter_replacement_status", statuses],
+        0x009C: ["wifi_assigned_ip", None],
+        0x00A3: ["current_wifi_ip", None],
+        0x00B7: ["airflow", airflows],
+        0x00B9: ["unit_type", unit_types],
+        0x0129: ["recovery_efficiency", None],
+        0x0302: ["night_mode_timer", None],
+        0x0303: ["party_mode_timer", None],
+        0x0306: ["schedule_speed", speeds],
+        0x030B: ["frost_protection_status", frost_protection_statuses],
+        0x0315: ["voc_sensor_state", states],
+        0x031F: ["voc_treshold", None],
+        0x0320: ["voc", None],
+        0x0400: ["screen_brightness", None],
+        0x0401: ["beeper", sound_emitter_states],
+        0x0402: ["screen_backlight_mode", screen_backlight_modes],
+        0x0403: ["screen_temperature_source", screen_temperature_sources],
+        0x0404: ["screen_air_quality_source", screen_air_quality_sources],
+        0x0405: ["screen_display_mode", screen_display_modes],
+        0x0406: ["screen_standby_time_state", screen_standby_time_states],
+        0x0407: ["screen_display_state", screen_display_states],
+        0x0408: ["screen_off_start_time", None],
+        0x0409: ["screen_off_end_time", None],
+    }
+
     write_params = {
         0x0065: ["filter_timer_reset", None],
         0x0080: ["reset_alarms", None],
     }
-    WRITE_ONLY_PARAMS = set(write_params)
+
+    extract_fan_write_params = {
+        0x0025: ["factory_reset", None],
+        0x00A0: ["wifi_apply_and_quit", None],
+    }
+
+    breezy_write_params = {
+        0x0065: ["filter_timer_reset", None],
+        0x0080: ["reset_alarms", None],
+    }
+
+    device_profiles = DEVICE_PROFILES
+    device_models = DEVICE_MODELS
 
     _name = None
     _host = None
@@ -261,12 +415,59 @@ class Fan(object):
     _airflow = None
     _analogV_treshold = None
     _unit_type = None
+    _unit_type_id = None
     _night_mode_timer = None
     _party_mode_timer = None
     _humidity_status = None
     _analogV_status = None
     _beeper = None
     _unknown_params = None
+    _profile_key = "vento"
+    _battery_status = None
+    _all_day_mode = None
+    _boost_timer_countdown = None
+    _timer_status = None
+    _temperature_status = None
+    _motion_status = None
+    _interval_ventilation_status = None
+    _silent_mode_status = None
+    _temperature_sensor_state = None
+    _motion_sensor_state = None
+    _temperature_treshold = None
+    _max_speed_setpoint = None
+    _silent_speed_setpoint = None
+    _interval_ventilation_speed_setpoint = None
+    _interval_ventilation_state = None
+    _silent_mode_state = None
+    _silent_mode_start_time = None
+    _silent_mode_end_time = None
+    _turn_on_delay_timer = None
+    _temperature = None
+    _co2_sensor_state = None
+    _co2_treshold = None
+    _co2 = None
+    _outdoor_temperature = None
+    _supply_temperature = None
+    _exhaust_in_temperature = None
+    _exhaust_out_temperature = None
+    _heater_state = None
+    _alarm_list = None
+    _air_quality_status = None
+    _recovery_efficiency = None
+    _schedule_speed = None
+    _frost_protection_status = None
+    _voc_sensor_state = None
+    _voc_treshold = None
+    _voc = None
+    _screen_brightness = None
+    _screen_backlight_mode = None
+    _screen_temperature_source = None
+    _screen_air_quality_source = None
+    _screen_display_mode = None
+    _screen_standby_time_state = None
+    _screen_display_state = None
+    _screen_off_start_time = None
+    _screen_off_end_time = None
 
     def __init__(
         self,
@@ -286,6 +487,9 @@ class Fan(object):
         self._unknown_params = {}
         self.socket = None
         self._bulk_read_supported = None
+        self._profile_key = "vento"
+        self._runtime_capabilities = set()
+        self._set_device_profile("vento")
 
     def init_device(self):
         if self._id == "DEFAULT_DEVICEID":
@@ -294,7 +498,186 @@ class Fan(object):
         _LOGGER.debug("EcoventV2: Initialized fan with ID: %s", self._id)
         if not self._id:
             return False
-        return self.update()
+        self.get_param("unit_type")
+        self._apply_device_profile()
+        success = self.update()
+        if success:
+            self.detect_runtime_capabilities()
+        return success
+
+    @property
+    def device_profile(self):
+        """Return the active device profile."""
+        return self.device_profiles[self._profile_key]
+
+    @property
+    def profile_key(self):
+        """Return the active device profile key."""
+        return self.device_profile.key
+
+    @property
+    def fan_preset_modes(self):
+        """Return the Home Assistant preset modes supported by this profile."""
+        return list(self.device_profile.preset_modes)
+
+    @property
+    def supports_direction(self):
+        """Return whether the profile exposes airflow direction control."""
+        return self.device_profile.supports_direction
+
+    @property
+    def supports_oscillation(self):
+        """Return whether the profile exposes heat-recovery oscillation control."""
+        return self.device_profile.supports_oscillation
+
+    @property
+    def supports_preset_speed_settings(self):
+        """Return whether the profile has separate preset speed settings."""
+        return self.device_profile.supports_preset_speed_settings
+
+    @property
+    def uses_operating_mode_presets(self):
+        """Return whether speed maps to autonomous operating modes."""
+        return self.device_profile.uses_operating_mode_presets
+
+    def supports_capability(self, capability):
+        """Return whether the active profile declares a named capability."""
+        return (
+            capability in self.device_profile.capabilities
+            or capability in self._runtime_capabilities
+        )
+
+    def supports_parameter(self, parameter):
+        """Return whether the active protocol profile knows a parameter."""
+        return self.get_params_index(parameter) is not None
+
+    def supports_entity(
+        self,
+        *,
+        required_params=(),
+        required_capabilities=(),
+        excluded_params=(),
+        excluded_capabilities=(),
+    ):
+        """Return whether an entity description applies to this profile."""
+        return (
+            all(self.supports_parameter(param) for param in required_params)
+            and all(
+                self.supports_capability(capability)
+                for capability in required_capabilities
+            )
+            and not any(self.supports_parameter(param) for param in excluded_params)
+            and not any(
+                self.supports_capability(capability)
+                for capability in excluded_capabilities
+            )
+        )
+
+    def parameter_options(self, parameter):
+        """Return enum options for a supported parameter, if it has any."""
+        index = self.get_params_index(parameter)
+        if index is None:
+            return None
+
+        param = self.params.get(index) or self.write_params.get(index)
+        if param[1] is None:
+            return None
+        return list(param[1].values())
+
+    def detect_runtime_capabilities(self):
+        """Probe optional writable capabilities that cannot be trusted by model id."""
+        self._runtime_capabilities.clear()
+        if self._detect_beeper_control():
+            self._runtime_capabilities.add("beeper_control")
+
+    def _detect_beeper_control(self):
+        """Return whether beeper can stay off after a command that may beep."""
+        original = self.beeper
+        options = self.parameter_options("beeper")
+        if original is None or not options or "off" not in options:
+            return False
+
+        restored = original == "off"
+        try:
+            if not self.set_param("beeper", "off"):
+                return False
+            if not self._trigger_beeper_probe_command():
+                return False
+            if not self._beeper_stays_off_after_probe():
+                return False
+
+            if original != "off":
+                if not self.set_param("beeper", original):
+                    return False
+                if not self.get_param("beeper"):
+                    return False
+                restored = self.beeper == original
+            return restored
+        finally:
+            if not restored and self.beeper != original:
+                self.set_param("beeper", original)
+                self.get_param("beeper")
+
+    def _beeper_stays_off_after_probe(self):
+        """Return whether repeated reads show the command did not re-enable beep."""
+        for attempt in range(self.beeper_probe_read_count):
+            if attempt:
+                time.sleep(self.beeper_probe_settle_seconds)
+            if not self.get_param("beeper"):
+                return False
+            if self.beeper != "off":
+                return False
+        return True
+
+    def _trigger_beeper_probe_command(self):
+        """Send a no-op command that exercises the device command beeper path."""
+        if self.supports_parameter("state") and self.state is not None:
+            return self.set_param("state", self.state)
+        if self.supports_parameter("speed") and self.speed is not None:
+            return self.set_param("speed", self.speed)
+        return False
+
+    def _profile_enum(self, enum_name):
+        """Return a profile-specific enum map by class attribute name."""
+        return getattr(type(self), enum_name)
+
+    def _decode_uint(self, input, byteorder="little"):
+        """Decode unsigned protocol integers from hex payload bytes."""
+        return int.from_bytes(bytes.fromhex(input), byteorder=byteorder, signed=False)
+
+    def _decode_signed_temperature(self, input):
+        """Decode Breezy/Freshpoint signed tenths-of-degree temperature values."""
+        value = int.from_bytes(bytes.fromhex(input), byteorder="little", signed=True)
+        if value in (-32768, 32767):
+            return None
+        return round(value / 10, 1)
+
+    def _decode_time_minutes_hours(self, input):
+        """Decode two-byte minute/hour protocol time into HH:MM text."""
+        value = bytes.fromhex(input)
+        if len(value) < 2:
+            return None
+        return f"{value[1]:02d}:{value[0]:02d}"
+
+    def _set_device_profile(self, profile_key):
+        """Apply protocol maps for the selected device family."""
+        profile = self.device_profiles[profile_key]
+        previous_profile = getattr(self, "_profile_key", None)
+        if previous_profile != profile_key:
+            _LOGGER.info("EcoVentV2: using %s parameter profile", profile_key)
+
+        self._profile_key = profile_key
+        self.params = getattr(type(self), profile.params_name).copy()
+        self.write_params = getattr(type(self), profile.write_params_name).copy()
+        self._write_only_params = set(self.write_params)
+        if previous_profile != profile_key:
+            self._bulk_read_supported = None
+
+    def _apply_device_profile(self):
+        """Select parameter meanings after reading the model id."""
+        model = self.device_models.get(self._unit_type_id)
+        profile_key = model.profile_key if model is not None else "vento"
+        self._set_device_profile(profile_key)
 
     def search_devices(self, addr="0.0.0.0", port=4000):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -493,13 +876,13 @@ class Fan(object):
     def update(self):
         request = ""
         for param in self.params:
-            if param in self.WRITE_ONLY_PARAMS:
+            if param in self._write_only_params:
                 continue
             request += hex(param).replace("0x", "").zfill(4)
-        return self._read_params(request)
+        success = self._read_params(request)
+        return success
 
     def quick_update(self):
-        request = "0006000B002D003200440016004A004B03040305"
         # just update following states ...
         # 0x0006: ["boost_status", statuses],
         # 0x000B: ["timer_counter", None],
@@ -510,9 +893,12 @@ class Fan(object):
         # 0x004B: ["fan2_speed", None],
         # 0x0304: ["humidity_status", statuses],
         # 0x0305: ["analogV_status", statuses],
-        return self._read_params(request)
+        return self._read_params(self.device_profile.quick_update_request)
 
     def update_preset_speed_settings(self):
+        if not self.supports_preset_speed_settings:
+            return True
+
         request = "003A003B003C003D003E003F"
         return self._read_params(request)
 
@@ -537,23 +923,42 @@ class Fan(object):
         # print ( "EcoventV2: " + " " + param + "/" + value , file = sys.stderr )
         if valpar[0] is not None:
             if valpar[1] is not None:
-                self.do_func(
+                return self.do_func(
                     self.func["write_return"],
                     hex(valpar[0]).replace("0x", "").zfill(4),
                     hex(valpar[1]).replace("0x", "").zfill(2),
                 )
             else:
-                self.do_func(
+                return self.do_func(
                     self.func["write_return"],
                     hex(valpar[0]).replace("0x", "").zfill(4),
                     value,
                 )
+        return False
+
+    def set_params(self, values):
+        """Write several profile-mapped parameters in one command."""
+        request = ""
+        for param, value in values.items():
+            valpar = self.get_params_values(param, value)
+            if valpar[0] is None:
+                continue
+
+            request += hex(valpar[0]).replace("0x", "").zfill(4)
+            if valpar[1] is not None:
+                request += hex(valpar[1]).replace("0x", "").zfill(2)
+            else:
+                request += value
+
+        if request:
+            self.do_func(self.func["write_return"], request)
 
     def get_param(self, param):
         idx = self.get_params_index(param)
         if idx is not None:
             #  _LOGGER.debug(f"Getting parameter {param} with index {idx}")
-            self.do_func(self.func["read"], hex(idx).replace("0x", "").zfill(4))
+            return self.do_func(self.func["read"], hex(idx).replace("0x", "").zfill(4))
+        return False
 
     def set_state_on(self):
         request = "0001"
@@ -568,7 +973,7 @@ class Fan(object):
             self.do_func(self.func["write_return"], request, value)
 
     def set_speed(self, speed):
-        if speed >= 1 and speed <= 3:
+        if speed >= 1 and speed <= 5:
             request = "0002"
             value = hex(speed).replace("0x", "").zfill(2)
             self.do_func(self.func["write_return"], request, value)
@@ -576,7 +981,10 @@ class Fan(object):
     def set_man_speed_percent(self, speed):
         if speed >= 2 and speed <= 100:
             request = "0044"
-            value = math.ceil(255 / 100 * speed)
+            if self.device_profile.speed_percent_scale == "percent":
+                value = speed
+            else:
+                value = math.ceil(255 / 100 * speed)
             value = hex(value).replace("0x", "").zfill(2)
             self.do_func(self.func["write_return"], request, value)
 
@@ -600,6 +1008,67 @@ class Fan(object):
             request = "00b7"
             value = hex(val).replace("0x", "").zfill(2)
             self.do_func(self.func["write_return"], request, value)
+
+    @property
+    def operating_mode_preset(self):
+        if self.all_day_mode == "on":
+            return "all_day"
+        if self.humidity_sensor_state == "automatic":
+            return "humidity_trigger"
+        if self.humidity_sensor_state == "manual":
+            return "humidity_manual"
+        if self.temperature_sensor_state == "on":
+            return "temperature_trigger"
+        if self.motion_sensor_state == "on":
+            return "motion_trigger"
+        if self.relay_sensor_state == "on":
+            return "external_switch_trigger"
+        if self.interval_ventilation_state == "on":
+            return "interval_ventilation"
+        if self.silent_mode_state == "on":
+            return "silent"
+        if self.boost_status == "on":
+            return "boost"
+        return None
+
+    def set_speed_setpoint_percent(self, percentage):
+        """Set speed setpoints used by autonomous operating modes."""
+        target = max(30, min(100, int(percentage)))
+        value = hex(target).replace("0x", "").zfill(2)
+        self.set_param("max_speed_setpoint", value)
+        self.set_param("interval_ventilation_speed_setpoint", value)
+        self.set_param("all_day_mode", "on")
+        self.set_param("silent_mode_state", "off")
+
+    def set_operating_mode_preset(self, preset_mode):
+        """Activate one autonomous operating mode and disable the others."""
+        reset = {
+            "all_day_mode": "off",
+            "humidity_sensor_state": "off",
+            "temperature_sensor_state": "off",
+            "motion_sensor_state": "off",
+            "relay_sensor_state": "off",
+            "interval_ventilation_state": "off",
+            "silent_mode_state": "off",
+            "boost_status": "off",
+        }
+        targets = {
+            "all_day": {"all_day_mode": "on"},
+            "humidity_trigger": {"humidity_sensor_state": "automatic"},
+            "humidity_manual": {"humidity_sensor_state": "manual"},
+            "temperature_trigger": {"temperature_sensor_state": "on"},
+            "motion_trigger": {"motion_sensor_state": "on"},
+            "external_switch_trigger": {"relay_sensor_state": "on"},
+            "interval_ventilation": {"interval_ventilation_state": "on"},
+            "silent": {"silent_mode_state": "on"},
+            "boost": {"boost_status": "on"},
+        }
+        target = targets.get(preset_mode)
+        if target is None:
+            raise ValueError(f"Invalid operating-mode preset: {preset_mode}")
+
+        reset.update(target)
+        self.set_params(reset)
 
     def parse_response(self, data):
         if not self.validate_packet(data):
@@ -679,7 +1148,7 @@ class Fan(object):
             return
         try:
             setattr(self, self.params[param_id][0], value)
-        except (KeyError, TypeError, ValueError, OverflowError):
+        except (AttributeError, KeyError, TypeError, ValueError, OverflowError):
             self._unknown_params[param_id] = value
 
     def _map_value(self, mapping, value, label):
@@ -743,6 +1212,8 @@ class Fan(object):
 
     @property
     def speed(self):
+        if self.uses_operating_mode_presets:
+            return self.operating_mode_preset
         return self._speed
 
     @speed.setter
@@ -757,7 +1228,11 @@ class Fan(object):
     @boost_status.setter
     def boost_status(self, input):
         val = int(input, 16)
-        self._boost_status = self._map_value(self.boost_statuses, val, "boost_status")
+        self._boost_status = self._map_value(
+            self._profile_enum(self.device_profile.boost_statuses_name),
+            val,
+            "boost_status",
+        )
 
     @property
     def heater_status(self):
@@ -789,6 +1264,46 @@ class Fan(object):
         )
 
     @property
+    def battery_status(self):
+        return self._battery_status
+
+    @battery_status.setter
+    def battery_status(self, input):
+        val = int(input, 16)
+        self._battery_status = self._map_value(
+            self.battery_statuses, val, "battery_status"
+        )
+
+    @property
+    def all_day_mode(self):
+        return self._all_day_mode
+
+    @all_day_mode.setter
+    def all_day_mode(self, input):
+        val = int(input, 16)
+        self._all_day_mode = self._map_value(self.states, val, "all_day_mode")
+
+    @property
+    def boost_timer_countdown(self):
+        return self._boost_timer_countdown
+
+    @boost_timer_countdown.setter
+    def boost_timer_countdown(self, input):
+        val = int(input, 16).to_bytes(3, "big")
+        self._boost_timer_countdown = (
+            str(val[2]) + "h " + str(val[1]) + "m " + str(val[0]) + "s "
+        )
+
+    @property
+    def timer_status(self):
+        return self._timer_status
+
+    @timer_status.setter
+    def timer_status(self, input):
+        val = int(input, 16)
+        self._timer_status = self._map_value(self.statuses, val, "timer_status")
+
+    @property
     def humidity_sensor_state(self):
         return self._humidity_sensor_state
 
@@ -796,7 +1311,9 @@ class Fan(object):
     def humidity_sensor_state(self, input):
         val = int(input, 16)
         self._humidity_sensor_state = self._map_value(
-            self.states, val, "humidity_sensor_state"
+            self._profile_enum(self.device_profile.humidity_sensor_states_name),
+            val,
+            "humidity_sensor_state",
         )
 
     @property
@@ -822,6 +1339,28 @@ class Fan(object):
         )
 
     @property
+    def temperature_sensor_state(self):
+        return self._temperature_sensor_state
+
+    @temperature_sensor_state.setter
+    def temperature_sensor_state(self, input):
+        val = int(input, 16)
+        self._temperature_sensor_state = self._map_value(
+            self.states, val, "temperature_sensor_state"
+        )
+
+    @property
+    def motion_sensor_state(self):
+        return self._motion_sensor_state
+
+    @motion_sensor_state.setter
+    def motion_sensor_state(self, input):
+        val = int(input, 16)
+        self._motion_sensor_state = self._map_value(
+            self.states, val, "motion_sensor_state"
+        )
+
+    @property
     def humidity_treshold(self):
         return self._humidity_treshold
 
@@ -829,6 +1368,15 @@ class Fan(object):
     def humidity_treshold(self, input):
         val = int(input, 16)
         self._humidity_treshold = str(val)
+
+    @property
+    def temperature_treshold(self):
+        return self._temperature_treshold
+
+    @temperature_treshold.setter
+    def temperature_treshold(self, input):
+        val = int(input, 16)
+        self._temperature_treshold = str(val)
 
     @property
     def battery_voltage(self):
@@ -851,6 +1399,15 @@ class Fan(object):
         self._humidity = str(val)
 
     @property
+    def temperature(self):
+        return self._temperature
+
+    @temperature.setter
+    def temperature(self, input):
+        val = int(input, 16)
+        self._temperature = str(val)
+
+    @property
     def analogV(self):
         return self._analogV
 
@@ -868,8 +1425,52 @@ class Fan(object):
         val = int(input, 16)
         self._relay_status = self._map_value(self.statuses, val, "relay_status")
 
+    @property
+    def temperature_status(self):
+        return self._temperature_status
+
+    @temperature_status.setter
+    def temperature_status(self, input):
+        val = int(input, 16)
+        self._temperature_status = self._map_value(
+            self.statuses, val, "temperature_status"
+        )
+
+    @property
+    def motion_status(self):
+        return self._motion_status
+
+    @motion_status.setter
+    def motion_status(self, input):
+        val = int(input, 16)
+        self._motion_status = self._map_value(self.statuses, val, "motion_status")
+
+    @property
+    def interval_ventilation_status(self):
+        return self._interval_ventilation_status
+
+    @interval_ventilation_status.setter
+    def interval_ventilation_status(self, input):
+        val = int(input, 16)
+        self._interval_ventilation_status = self._map_value(
+            self.statuses, val, "interval_ventilation_status"
+        )
+
+    @property
+    def silent_mode_status(self):
+        return self._silent_mode_status
+
+    @silent_mode_status.setter
+    def silent_mode_status(self, input):
+        val = int(input, 16)
+        self._silent_mode_status = self._map_value(
+            self.statuses, val, "silent_mode_status"
+        )
+
     def _preset_speed_percent(self, input):
         val = int(input, 16)
+        if self.device_profile.speed_percent_scale == "percent":
+            return val
         if val >= 0 and val <= 255:
             return int(val / 255 * 100)
         return None
@@ -923,10 +1524,15 @@ class Fan(object):
         self._exhaust_speed_high = self._preset_speed_percent(input)
 
     def preset_speed_percent(self, preset):
+        if self.uses_operating_mode_presets:
+            return self.max_speed_setpoint
+
         preset_speeds = {
             "low": (self.supply_speed_low, self.exhaust_speed_low),
             "medium": (self.supply_speed_medium, self.exhaust_speed_medium),
             "high": (self.supply_speed_high, self.exhaust_speed_high),
+            "speed_4": (None, None),
+            "speed_5": (None, None),
         }
         preset_speed = preset_speeds.get(preset)
         if preset_speed is None:
@@ -952,8 +1558,38 @@ class Fan(object):
     @man_speed.setter
     def man_speed(self, input):
         val = int(input, 16)
+        if self.device_profile.speed_percent_scale == "percent":
+            self._man_speed = val
+            return
         if val >= 0 and val <= 255:
             self._man_speed = int(val / 255 * 100)
+
+    @property
+    def max_speed_setpoint(self):
+        return self._max_speed_setpoint
+
+    @max_speed_setpoint.setter
+    def max_speed_setpoint(self, input):
+        val = int(input, 16)
+        self._max_speed_setpoint = val
+
+    @property
+    def silent_speed_setpoint(self):
+        return self._silent_speed_setpoint
+
+    @silent_speed_setpoint.setter
+    def silent_speed_setpoint(self, input):
+        val = int(input, 16)
+        self._silent_speed_setpoint = val
+
+    @property
+    def interval_ventilation_speed_setpoint(self):
+        return self._interval_ventilation_speed_setpoint
+
+    @interval_ventilation_speed_setpoint.setter
+    def interval_ventilation_speed_setpoint(self, input):
+        val = int(input, 16)
+        self._interval_ventilation_speed_setpoint = val
 
     @property
     def fan1_speed(self):
@@ -1016,6 +1652,15 @@ class Fan(object):
         self._boost_time = str(val) + " m"
 
     @property
+    def turn_on_delay_timer(self):
+        return self._turn_on_delay_timer
+
+    @turn_on_delay_timer.setter
+    def turn_on_delay_timer(self, input):
+        val = int(input, 16)
+        self._turn_on_delay_timer = str(val)
+
+    @property
     def rtc_time(self):
         return self._rtc_time
 
@@ -1023,6 +1668,28 @@ class Fan(object):
     def rtc_time(self, input):
         val = int(input, 16).to_bytes(3, "big")
         self._rtc_time = str(val[2]) + "h " + str(val[1]) + "m " + str(val[0]) + "s "
+
+    @property
+    def silent_mode_start_time(self):
+        return self._silent_mode_start_time
+
+    @silent_mode_start_time.setter
+    def silent_mode_start_time(self, input):
+        val = int(input, 16).to_bytes(3, "big")
+        self._silent_mode_start_time = (
+            str(val[2]) + "h " + str(val[1]) + "m " + str(val[0]) + "s "
+        )
+
+    @property
+    def silent_mode_end_time(self):
+        return self._silent_mode_end_time
+
+    @silent_mode_end_time.setter
+    def silent_mode_end_time(self, input):
+        val = int(input, 16).to_bytes(3, "big")
+        self._silent_mode_end_time = (
+            str(val[2]) + "h " + str(val[1]) + "m " + str(val[0]) + "s "
+        )
 
     @property
     def rtc_date(self):
@@ -1252,6 +1919,243 @@ class Fan(object):
         )
 
     @property
+    def co2_sensor_state(self):
+        return self._co2_sensor_state
+
+    @co2_sensor_state.setter
+    def co2_sensor_state(self, input):
+        val = int(input, 16)
+        self._co2_sensor_state = self._map_value(self.states, val, "co2_sensor_state")
+
+    @property
+    def co2_treshold(self):
+        return self._co2_treshold
+
+    @co2_treshold.setter
+    def co2_treshold(self, input):
+        self._co2_treshold = self._decode_uint(input)
+
+    @property
+    def co2(self):
+        return self._co2
+
+    @co2.setter
+    def co2(self, input):
+        self._co2 = self._decode_uint(input)
+
+    @property
+    def outdoor_temperature(self):
+        return self._outdoor_temperature
+
+    @outdoor_temperature.setter
+    def outdoor_temperature(self, input):
+        self._outdoor_temperature = self._decode_signed_temperature(input)
+
+    @property
+    def supply_temperature(self):
+        return self._supply_temperature
+
+    @supply_temperature.setter
+    def supply_temperature(self, input):
+        self._supply_temperature = self._decode_signed_temperature(input)
+
+    @property
+    def exhaust_in_temperature(self):
+        return self._exhaust_in_temperature
+
+    @exhaust_in_temperature.setter
+    def exhaust_in_temperature(self, input):
+        self._exhaust_in_temperature = self._decode_signed_temperature(input)
+
+    @property
+    def exhaust_out_temperature(self):
+        return self._exhaust_out_temperature
+
+    @exhaust_out_temperature.setter
+    def exhaust_out_temperature(self, input):
+        self._exhaust_out_temperature = self._decode_signed_temperature(input)
+
+    @property
+    def heater_state(self):
+        return self._heater_state
+
+    @heater_state.setter
+    def heater_state(self, input):
+        val = int(input, 16)
+        self._heater_state = self._map_value(self.states, val, "heater_state")
+
+    @property
+    def alarm_list(self):
+        return self._alarm_list
+
+    @alarm_list.setter
+    def alarm_list(self, input):
+        data = bytes.fromhex(input)
+        alarms = []
+        for index in range(0, len(data) - 1, 2):
+            alarm_type = self._map_value(self.alarms, data[index + 1], "alarm_type")
+            alarms.append(f"{data[index]}:{alarm_type}")
+        self._alarm_list = ", ".join(alarms) if alarms else "none"
+
+    @property
+    def air_quality_status(self):
+        return self._air_quality_status
+
+    @air_quality_status.setter
+    def air_quality_status(self, input):
+        data = bytes.fromhex(input)
+        parts = []
+        labels = ("humidity", "co2", "reserved_1", "reserved_2", "voc")
+        for label, value in zip(labels, data):
+            parts.append(
+                f"{label}:{self._map_value(self.air_quality_statuses, value, label)}"
+            )
+        self._air_quality_status = ", ".join(parts)
+
+    @property
+    def recovery_efficiency(self):
+        return self._recovery_efficiency
+
+    @recovery_efficiency.setter
+    def recovery_efficiency(self, input):
+        self._recovery_efficiency = int(input, 16)
+
+    @property
+    def schedule_speed(self):
+        return self._schedule_speed
+
+    @schedule_speed.setter
+    def schedule_speed(self, input):
+        val = int(input, 16)
+        self._schedule_speed = self._map_value(self.speeds, val, "schedule_speed")
+
+    @property
+    def frost_protection_status(self):
+        return self._frost_protection_status
+
+    @frost_protection_status.setter
+    def frost_protection_status(self, input):
+        val = int(input, 16)
+        self._frost_protection_status = self._map_value(
+            self.frost_protection_statuses, val, "frost_protection_status"
+        )
+
+    @property
+    def voc_sensor_state(self):
+        return self._voc_sensor_state
+
+    @voc_sensor_state.setter
+    def voc_sensor_state(self, input):
+        val = int(input, 16)
+        self._voc_sensor_state = self._map_value(self.states, val, "voc_sensor_state")
+
+    @property
+    def voc_treshold(self):
+        return self._voc_treshold
+
+    @voc_treshold.setter
+    def voc_treshold(self, input):
+        self._voc_treshold = self._decode_uint(input)
+
+    @property
+    def voc(self):
+        return self._voc
+
+    @voc.setter
+    def voc(self, input):
+        self._voc = self._decode_uint(input)
+
+    @property
+    def screen_brightness(self):
+        return self._screen_brightness
+
+    @screen_brightness.setter
+    def screen_brightness(self, input):
+        self._screen_brightness = int(input, 16)
+
+    @property
+    def screen_backlight_mode(self):
+        return self._screen_backlight_mode
+
+    @screen_backlight_mode.setter
+    def screen_backlight_mode(self, input):
+        val = int(input, 16)
+        self._screen_backlight_mode = self._map_value(
+            self.screen_backlight_modes, val, "screen_backlight_mode"
+        )
+
+    @property
+    def screen_temperature_source(self):
+        return self._screen_temperature_source
+
+    @screen_temperature_source.setter
+    def screen_temperature_source(self, input):
+        val = int(input, 16)
+        self._screen_temperature_source = self._map_value(
+            self.screen_temperature_sources, val, "screen_temperature_source"
+        )
+
+    @property
+    def screen_air_quality_source(self):
+        return self._screen_air_quality_source
+
+    @screen_air_quality_source.setter
+    def screen_air_quality_source(self, input):
+        val = int(input, 16)
+        self._screen_air_quality_source = self._map_value(
+            self.screen_air_quality_sources, val, "screen_air_quality_source"
+        )
+
+    @property
+    def screen_display_mode(self):
+        return self._screen_display_mode
+
+    @screen_display_mode.setter
+    def screen_display_mode(self, input):
+        val = int(input, 16)
+        self._screen_display_mode = self._map_value(
+            self.screen_display_modes, val, "screen_display_mode"
+        )
+
+    @property
+    def screen_standby_time_state(self):
+        return self._screen_standby_time_state
+
+    @screen_standby_time_state.setter
+    def screen_standby_time_state(self, input):
+        val = int(input, 16)
+        self._screen_standby_time_state = self._map_value(
+            self.screen_standby_time_states, val, "screen_standby_time_state"
+        )
+
+    @property
+    def screen_display_state(self):
+        return self._screen_display_state
+
+    @screen_display_state.setter
+    def screen_display_state(self, input):
+        val = int(input, 16)
+        self._screen_display_state = self._map_value(
+            self.screen_display_states, val, "screen_display_state"
+        )
+
+    @property
+    def screen_off_start_time(self):
+        return self._screen_off_start_time
+
+    @screen_off_start_time.setter
+    def screen_off_start_time(self, input):
+        self._screen_off_start_time = self._decode_time_minutes_hours(input)
+
+    @property
+    def screen_off_end_time(self):
+        return self._screen_off_end_time
+
+    @screen_off_end_time.setter
+    def screen_off_end_time(self, input):
+        self._screen_off_end_time = self._decode_time_minutes_hours(input)
+
+    @property
     def airflow(self):
         return self._airflow
 
@@ -1276,7 +2180,31 @@ class Fan(object):
     @unit_type.setter
     def unit_type(self, input):
         val = int(input, 16)
+        self._unit_type_id = val
         self._unit_type = self._map_value(self.unit_types, val, "model")
+        self._apply_device_profile()
+
+    @property
+    def interval_ventilation_state(self):
+        return self._interval_ventilation_state
+
+    @interval_ventilation_state.setter
+    def interval_ventilation_state(self, input):
+        val = int(input, 16)
+        self._interval_ventilation_state = self._map_value(
+            self.states, val, "interval_ventilation_state"
+        )
+
+    @property
+    def silent_mode_state(self):
+        return self._silent_mode_state
+
+    @silent_mode_state.setter
+    def silent_mode_state(self, input):
+        val = int(input, 16)
+        self._silent_mode_state = self._map_value(
+            self.states, val, "silent_mode_state"
+        )
 
     @property
     def night_mode_timer(self):
@@ -1325,7 +2253,10 @@ class Fan(object):
     @beeper.setter
     def beeper(self, input):
         val = int(input, 16)
-        self._beeper = self._map_value(self.bstatuses, val, "beeper")
+        index = self.get_params_index("beeper")
+        param = self.params.get(index) if index is not None else None
+        mapping = param[1] if param and param[1] is not None else self.bstatuses
+        self._beeper = self._map_value(mapping, val, "beeper")
 
     @property
     def unknown_params(self):

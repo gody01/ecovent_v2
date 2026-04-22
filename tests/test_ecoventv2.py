@@ -79,47 +79,50 @@ class ParseResponseTest(unittest.TestCase):
     def test_unit_type_metadata_selects_device_profiles(self):
         self.assertEqual(
             Fan.device_models[0x1A00].name,
-            "TwinFresh Atmo / newer Blauberg Vento",
+            "VENTO inHome old / TwinFresh Atmo old",
         )
+        self.assertIn("VENTO inHome", Fan.device_models[0x1A00].aliases)
+        self.assertIn("TwinFresh Atmo", Fan.device_models[0x1A00].aliases)
         self.assertEqual(Fan.device_models[0x1A00].profile_key, "vento")
         self.assertEqual(
-            Fan.device_models[0x0E00].display_name,
-            "TwinFresh Style Wifi V.2 / Oxxify smart 50",
+            Fan.device_models[0x0E00].name,
+            "Vents TwinFresh Style Wi-Fi",
         )
-        self.assertEqual(
-            Fan.device_models[0x1100].display_name,
-            "Breezy 160 / Freshpoint 160 / Vents Breezy 160-E",
-        )
+        self.assertIn("TwinFresh Style Wi-Fi V.2", Fan.device_models[0x0E00].aliases)
+        self.assertIn("Oxxify smart 50", Fan.device_models[0x0E00].aliases)
+        self.assertIn("Vents Breezy 160-E", Fan.device_models[0x1100].aliases)
+        self.assertIn("Freshpoint 160-E Pro L055", Fan.device_models[0x1100].aliases)
         self.assertEqual(Fan.device_models[0x1100].profile_key, "breezy")
-        self.assertEqual(
-            Fan.device_models[0x1400].display_name,
-            "Breezy Eco 160 / Freshpoint Eco 160",
-        )
+        self.assertIn("Freshpoint Eco 160-E L07", Fan.device_models[0x1400].aliases)
         self.assertEqual(Fan.device_models[0x1400].profile_key, "breezy")
-        self.assertEqual(
-            Fan.device_models[0x1600].display_name,
-            "Breezy 200 / Freshpoint 200",
-        )
+        self.assertIn("Vents Breezy 200-E Smart", Fan.device_models[0x1600].aliases)
         self.assertEqual(
             Fan.device_models[0x1800].display_name,
             "Breezy Eco 200 / Freshpoint Eco 200",
         )
-        self.assertEqual(Fan.device_models[0x1C00].name, "TwinFresh Atmo 160")
+        self.assertEqual(Fan.device_models[0x1C00].name, "VENTO inHome 160")
+        self.assertIn("TwinFresh Atmo 160", Fan.device_models[0x1C00].aliases)
         self.assertEqual(Fan.device_models[0x1C00].profile_key, "vento")
         self.assertEqual(
-            Fan.device_models[0x1B00].display_name,
-            "Vento inHome S11 W / TwinFresh Atmo 100",
+            Fan.device_models[0x1B00].name,
+            "VENTO inHome 100",
         )
+        self.assertIn("Vento inHome S11 W", Fan.device_models[0x1B00].aliases)
+        self.assertIn("TwinFresh Atmo 100", Fan.device_models[0x1B00].aliases)
         self.assertEqual(Fan.device_models[0x1B00].profile_key, "vento")
         self.assertEqual(Fan.device_models[0x0600].profile_key, "extract_fan")
+        self.assertEqual(Fan.device_models[0x0600].name, "Blauberg Smart Wi-Fi")
+        self.assertIn("Vents iFan Move Wi-Fi", Fan.device_models[0x0600].aliases)
+        self.assertEqual(Fan.device_models[0x0D00].name, "Vents Arc Smart")
         self.assertEqual(
-            Fan.unit_types[0x0600],
-            "Blauberg Smart Wi-Fi extract fan",
-        )
-        self.assertEqual(Fan.device_models[0x0D00].name, "Arc Smart")
-        self.assertEqual(
-            Fan.device_models[0x0D00].display_name,
-            "Arc Smart / O2 Supreme",
+            Fan.device_models[0x0D00].aliases,
+            (
+                "Vents Arc Smart white",
+                "Vents Arc Smart black",
+                "Blauberg O2 Supreme",
+                "Blauberg O2 Supreme white",
+                "Blauberg O2 Supreme black",
+            ),
         )
         self.assertEqual(Fan.device_models[0x0D00].profile_key, "arc")
 
@@ -150,10 +153,8 @@ class ParseResponseTest(unittest.TestCase):
             ),
         )
         self.assertEqual(Fan.device_models[0x0200].name, "Freshbox 100 WiFi")
-        self.assertEqual(
-            Fan.device_models[0x0200].display_name,
-            "Freshbox 100 WiFi / Micra 100 WiFi",
-        )
+        self.assertIn("Freshbox E2-100 ERV WiFi", Fan.device_models[0x0200].aliases)
+        self.assertIn("Vents Micra 100 E2 ERV WiFi", Fan.device_models[0x0200].aliases)
         self.assertEqual(Fan.device_models[0x0200].profile_key, "freshbox")
         self.assertEqual(
             Fan.device_models[0x0200].source_documents,
@@ -228,14 +229,14 @@ class ParseResponseTest(unittest.TestCase):
     def test_parse_response_names_shared_oxxify_unit_type(self):
         fan = Fan("192.0.2.1")
         self.assertTrue(fan.parse_response(packet_with_payload([0xFE, 0x02, 0xB9, 0x0E, 0x00])))
-        self.assertEqual(fan.unit_type, "TwinFresh Style Wifi V.2 / Oxxify smart 50")
+        self.assertEqual(fan.unit_type, Fan.device_models[0x0E00].display_name)
 
     def test_parse_response_names_breezy_freshpoint_relabels(self):
         fan = Fan("192.0.2.1")
         self.assertTrue(
             fan.parse_response(packet_with_payload([0xFE, 0x02, 0xB9, 0x14, 0x00]))
         )
-        self.assertEqual(fan.unit_type, "Breezy Eco 160 / Freshpoint Eco 160")
+        self.assertEqual(fan.unit_type, Fan.device_models[0x1400].display_name)
         self.assertEqual(fan.profile_key, "breezy")
 
     def test_parse_response_uses_breezy_freshpoint_profile(self):
@@ -401,21 +402,21 @@ class ParseResponseTest(unittest.TestCase):
         self.assertTrue(
             fan.parse_response(packet_with_payload([0xFE, 0x02, 0xB9, 0x1A, 0x00]))
         )
-        self.assertEqual(fan.unit_type, "TwinFresh Atmo / newer Blauberg Vento")
+        self.assertEqual(fan.unit_type, Fan.device_models[0x1A00].display_name)
 
     def test_parse_response_names_twinfresh_atmo_160_unit_type(self):
         fan = Fan("192.0.2.1")
         self.assertTrue(
             fan.parse_response(packet_with_payload([0xFE, 0x02, 0xB9, 0x1C, 0x00]))
         )
-        self.assertEqual(fan.unit_type, "TwinFresh Atmo 160")
+        self.assertEqual(fan.unit_type, Fan.device_models[0x1C00].display_name)
 
     def test_parse_response_names_freshbox_unit_type(self):
         fan = Fan("192.0.2.1")
         self.assertTrue(
             fan.parse_response(packet_with_payload([0xFE, 0x02, 0xB9, 0x02, 0x00]))
         )
-        self.assertEqual(fan.unit_type, "Freshbox 100 WiFi / Micra 100 WiFi")
+        self.assertEqual(fan.unit_type, Fan.device_models[0x0200].display_name)
         self.assertEqual(fan.profile_key, "freshbox")
 
     def test_parse_response_uses_arc_smart_profile(self):
@@ -568,7 +569,7 @@ class ParseResponseTest(unittest.TestCase):
         )
 
         self.assertEqual(fan.profile_key, "arc")
-        self.assertEqual(fan.unit_type, "Arc Smart / O2 Supreme")
+        self.assertEqual(fan.unit_type, Fan.device_models[0x0D00].display_name)
         self.assertEqual(fan.fan_preset_modes, [])
         self.assertFalse(fan.supports_percentage_control)
         self.assertFalse(fan.supports_parameter("state"))
@@ -725,7 +726,7 @@ class ParseResponseTest(unittest.TestCase):
         self.assertEqual(fan.profile_key, "extract_fan")
         self.assertTrue(fan.uses_operating_mode_presets)
         self.assertFalse(fan.supports_direction)
-        self.assertEqual(fan.unit_type, "Blauberg Smart Wi-Fi extract fan")
+        self.assertEqual(fan.unit_type, Fan.device_models[0x0600].display_name)
         self.assertEqual(fan.state, "on")
         self.assertEqual(fan.battery_status, "normal")
         self.assertEqual(fan.speed, "all_day")

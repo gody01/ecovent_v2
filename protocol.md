@@ -35,19 +35,23 @@ unit type.
 
 | Unit type | Primary name | Known relabels / compatible names | Notes |
 | -- | -- | -- | -- |
-| `0x0300` | Vento Expert A50-1/A85-1/A100-1 W V.2 | TwinFresh Expert RW1-50/85/100 V.2 | Same `vento` profile |
+| `0x0300` | Vento Expert A50-1/A85-1/A100-1 W V.2 | TwinFresh Expert RW1-50/85/100 V.2; VENTO Expert A50-1 W V.3; TwinFresh Expert RW1-50 V.3 | Same `vento` profile; no separate V.3 unit type found |
 | `0x0400` | Vento Expert Duo A30-1 W V.2 | TwinFresh Expert Duo RW1-30 V.2 | Same `vento` profile |
 | `0x0500` | Vento Expert A30 W V.2 | TwinFresh Expert RW-30 V.2 | Same `vento` profile |
-| `0x0D00` | Arc Smart | O2 Supreme | Dedicated `arc` profile |
-| `0x0E00` | TwinFresh Style Wifi V.2 | Oxxify smart 50 | Same `vento` profile |
-| `0x0200` | Freshbox 100 WiFi | Micra 100 WiFi | Dedicated `freshbox` AHU profile |
-| `0x1100` | Breezy 160 | Freshpoint 160; Vents Breezy 160-E | Breezy/Freshpoint parameter variant, handled through the dedicated `breezy` profile |
-| `0x1400` | Breezy Eco 160 | Freshpoint Eco 160 | Breezy/Freshpoint parameter variant, handled through the dedicated `breezy` profile |
-| `0x1600` | Breezy 200 | Freshpoint 200 | Breezy/Freshpoint parameter variant, handled through the dedicated `breezy` profile |
+| `0x0D00` | Vents Arc Smart | Vents Arc Smart white/black; Blauberg O2 Supreme white/black | Dedicated `arc` profile |
+| `0x0E00` | Vents TwinFresh Style Wi-Fi | TwinFresh Style Wi-Fi; TwinFresh Style Wi-Fi V.2; Vents TwinFresh Style Frost Wi-Fi; Vents TwinFresh Style Wi-Fi mini; Oxxify smart 50 | Same `vento` profile |
+| `0x0200` | Freshbox 100 WiFi | Freshbox ERV/E/E1/E2 WiFi variants; Micra 100 WiFi; Vents Micra 100 ERV/E/E1/E2 WiFi variants | Dedicated `freshbox` AHU profile |
+| `0x1100` | Breezy 160 | Freshpoint 160; Vents Breezy 160-E/Smart; Freshpoint 160-E/Pro/L055/L07/L1 variants | Breezy/Freshpoint parameter variant, handled through the dedicated `breezy` profile |
+| `0x1400` | Breezy Eco 160 | Freshpoint Eco 160; Freshpoint Eco 160-E/L055/L07/L1 variants | Breezy/Freshpoint parameter variant, handled through the dedicated `breezy` profile |
+| `0x1600` | Breezy 200 | Freshpoint 200; Vents Breezy 200-E/Smart; Freshpoint 200-E/Pro/L055/L07/L1 variants | Breezy/Freshpoint parameter variant, handled through the dedicated `breezy` profile |
 | `0x1800` | Breezy Eco 200 | Freshpoint Eco 200 | Breezy/Freshpoint parameter variant, handled through the dedicated `breezy` profile |
-| `0x1A00` | TwinFresh Atmo / newer Blauberg Vento |  | Same `vento` profile |
-| `0x1B00` | Vento inHome S11 W | TwinFresh Atmo 100 | Same `vento` profile |
-| `0x1C00` | TwinFresh Atmo 160 |  | Same `vento` profile |
+| `0x1A00` | VENTO inHome old / TwinFresh Atmo old | VENTO inHome; TwinFresh Atmo | Same `vento` profile |
+| `0x1B00` | VENTO inHome 100 | Vento inHome S11 W; VENTO inHome mini/W; TwinFresh Atmo 100; Vents TwinFresh Atmo mini/Wi-Fi | Same `vento` profile |
+| `0x1C00` | VENTO inHome 160 | VENTO inHome W; TwinFresh Atmo 160; Vents TwinFresh Atmo/Wi-Fi | Same `vento` profile |
+
+No reviewed manufacturer PDF documents device type `7` / parser key `0x0700`.
+Rows such as `0x0007` in the source tables are timer/status parameters, not
+unit-type values.
 
 ### TwinFresh Style Wi-Fi / TwinFresh Atmo notes
 
@@ -67,13 +71,13 @@ Documented unit type values from parameter `0x00B9`:
 
 | Value | Hex response | PDF model text | Code status |
 | -- | -- | -- | -- |
-| 3 | `0x0300` | TwinFresh Expert RW1-50 V.2 / RW1-85 V.2 / RW1-100 V.2 | `Vento Expert A50-1/A85-1/A100-1 W V.2` |
+| 3 | `0x0300` | TwinFresh Expert RW1-50 V.2 / RW1-85 V.2 / RW1-100 V.2 | `Vento Expert A50-1/A85-1/A100-1 W V.2`; V.3 aliases only |
 | 4 | `0x0400` | TwinFresh Expert Duo RW1-30 V.2 | `Vento Expert Duo A30-1 W V.2` |
 | 5 | `0x0500` | TwinFresh Expert RW-30 V.2 | `Vento Expert A30 W V.2` |
-| 14 | `0x0E00` | TwinFresh Style | `TwinFresh Style Wifi V.2 / Oxxify smart 50` |
-| 26 | `0x1A00` | TwinFresh Atmo (old) | `TwinFresh Atmo / newer Blauberg Vento` |
-| 27 | `0x1B00` | TwinFresh Atmo 100 | `Vento inHome S11 W / TwinFresh Atmo 100` |
-| 28 | `0x1C00` | TwinFresh Atmo 160 | `TwinFresh Atmo 160` |
+| 14 | `0x0E00` | TwinFresh Style | `Vents TwinFresh Style Wi-Fi`, plus Style/Frost/mini/Oxxify aliases |
+| 26 | `0x1A00` | TwinFresh Atmo (old) | `VENTO inHome old / TwinFresh Atmo old` |
+| 27 | `0x1B00` | TwinFresh Atmo 100 | `VENTO inHome 100`, plus inHome mini and Atmo mini aliases |
+| 28 | `0x1C00` | TwinFresh Atmo 160 | `VENTO inHome 160`, plus Atmo 160 aliases |
 
 Parameters documented by the TwinFresh PDF that are not currently exposed:
 
@@ -101,9 +105,9 @@ Documented unit type values from parameter `0x00B9`:
 
 | Value | Hex response | Breezy PDF text | Freshpoint PDF text | Code status |
 | -- | -- | -- | -- | -- |
-| 17 | `0x1100` | Breezy 160 | Freshpoint 160 | `Breezy 160 / Freshpoint 160 / Vents Breezy 160-E`, `breezy` profile |
-| 20 | `0x1400` | Breezy Eco 160 | Freshpoint Eco 160 | `Breezy Eco 160 / Freshpoint Eco 160`, `breezy` profile |
-| 22 | `0x1600` | Breezy 200 | Freshpoint 200 | `Breezy 200 / Freshpoint 200`, `breezy` profile |
+| 17 | `0x1100` | Breezy 160 | Freshpoint 160 | `Breezy 160`, plus Freshpoint/Breezy 160-E aliases, `breezy` profile |
+| 20 | `0x1400` | Breezy Eco 160 | Freshpoint Eco 160 | `Breezy Eco 160`, plus Freshpoint Eco 160 aliases, `breezy` profile |
+| 22 | `0x1600` | Breezy 200 | Freshpoint 200 | `Breezy 200`, plus Freshpoint/Breezy 200-E aliases, `breezy` profile |
 | 24 | `0x1800` | Breezy Eco 200 | Freshpoint Eco 200 | `Breezy Eco 200 / Freshpoint Eco 200`, `breezy` profile |
 
 Implemented Breezy/Freshpoint-specific parameters:
@@ -147,12 +151,16 @@ Parameter `0x012A` (restore all fan speed modes to factory defaults) remains
 unexposed because it is a destructive reset. Wi-Fi SSID/password/encryption rows
 remain intentionally unexposed for credential safety.
 
-### Smart Wi-Fi extract-fan profile (`0x0600`)
+### Smart Wi-Fi / iFan extract-fan profile (`0x0600`)
 
 Implemented from [Smart Wi-Fi connection guide B168-1EN-01](https://blaubergventilatoren.net/download/smart-wi-fi-manual-8533.pdf).
 The guide uses the same UDP/BGCP framing and port 4000 as the Vento-family
 manuals, but its parameter table is a distinct extract-fan map. Unit type
-parameter `0x00B9` identifies these devices as `0x0600`.
+parameter `0x00B9` identifies these devices as `0x0600`. The same profile also
+tracks manufacturer relabels for Blauberg Smart IR Wi-Fi, Vents iFan Wi-Fi, and
+Vents iFan Move Wi-Fi. No working manufacturer PDF URL for the iFan connection
+guide has been added yet; the known Smart Wi-Fi guide remains the verified
+source document for this profile.
 
 | Parameter | Code field | Source | Functions | Description | Size |
 | -- | -- | -- | -- | -- | -- |
@@ -213,7 +221,7 @@ Documented unit type from parameter `0x00B9`:
 
 | PDF value | Parser value | PDF model text | Code status |
 | -- | -- | -- | -- |
-| `0x0002` | `0x0200` | Freshbox 100 WiFi / Micra 100 WiFi | `freshbox` profile, conservative HA exposure |
+| `0x0002` | `0x0200` | Freshbox 100 WiFi / Micra 100 WiFi | `freshbox` profile, conservative HA exposure; Freshbox/Micra ERV/E/E1/E2 variants are aliases |
 
 Freshbox rows that overlap useful HA concepts. The current `freshbox` profile
 keeps basic fan/filter/timer parsing separate from Vento/Breezy; the
@@ -283,7 +291,7 @@ Documented unit type from parameter `0x00B9`:
 
 | PDF value | Parser value | PDF model text | Code status |
 | -- | -- | -- | -- |
-| `13` | `0x0D00` | Arc Smart / O2 Supreme | `arc` profile |
+| `13` | `0x0D00` | Arc Smart / O2 Supreme | `arc` profile; Vents Arc Smart and Blauberg O2 Supreme white/black variants are aliases |
 
 Implemented Arc Smart / O2 Supreme parameters:
 

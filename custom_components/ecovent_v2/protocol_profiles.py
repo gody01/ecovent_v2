@@ -200,7 +200,11 @@ DEVICE_PROFILES = {
 DEVICE_MODELS = {
     0x0300: DeviceModel(
         "Vento Expert A50-1/A85-1/A100-1 W V.2",
-        aliases=("TwinFresh Expert RW1-50/85/100 V.2",),
+        aliases=(
+            "TwinFresh Expert RW1-50/85/100 V.2",
+            "VENTO Expert A50-1 W V.3",
+            "TwinFresh Expert RW1-50 V.3",
+        ),
         source_documents=(
             VENTO_SMART_HOME_MANUAL_URL,
             TWINFRESH_STYLE_MANUAL_URL,
@@ -226,23 +230,49 @@ DEVICE_MODELS = {
         ),
     ),
     0x0E00: DeviceModel(
-        "TwinFresh Style Wifi V.2",
-        aliases=("Oxxify smart 50",),
+        "Vents TwinFresh Style Wi-Fi",
+        aliases=(
+            "TwinFresh Style Wi-Fi",
+            "TwinFresh Style Wi-Fi V.2",
+            "Vents TwinFresh Style Frost Wi-Fi",
+            "TwinFresh Style Frost Wi-Fi",
+            "Vents TwinFresh Style Wi-Fi mini",
+            "TwinFresh Style Wi-Fi mini",
+            "Oxxify smart 50",
+        ),
         source_documents=(
             TWINFRESH_STYLE_MANUAL_URL,
             TWINFRESH_STYLE_MINI_MANUAL_URL,
         ),
     ),
     0x0D00: DeviceModel(
-        "Arc Smart",
+        "Vents Arc Smart",
         "arc",
-        aliases=("O2 Supreme",),
+        aliases=(
+            "Vents Arc Smart white",
+            "Vents Arc Smart black",
+            "Blauberg O2 Supreme",
+            "Blauberg O2 Supreme white",
+            "Blauberg O2 Supreme black",
+        ),
         source_documents=(ARC_SMART_MANUAL_URL, O2_SUPREME_MANUAL_URL),
     ),
     0x1100: DeviceModel(
         "Breezy 160",
         profile_key="breezy",
-        aliases=("Freshpoint 160", "Vents Breezy 160-E"),
+        aliases=(
+            "Freshpoint 160",
+            "Vents Breezy 160-E",
+            "Vents Breezy 160-E Smart",
+            "Freshpoint 160-E",
+            "Freshpoint 160-E Pro",
+            "Freshpoint 160-E L055",
+            "Freshpoint 160-E L07",
+            "Freshpoint 160-E L1",
+            "Freshpoint 160-E Pro L055",
+            "Freshpoint 160-E Pro L07",
+            "Freshpoint 160-E Pro L1",
+        ),
         source_documents=(
             BREEZY_ECO_MANUAL_URL,
             FRESHPOINT_MANUAL_URL,
@@ -251,7 +281,16 @@ DEVICE_MODELS = {
     0x1400: DeviceModel(
         "Breezy Eco 160",
         profile_key="breezy",
-        aliases=("Freshpoint Eco 160",),
+        aliases=(
+            "Freshpoint Eco 160",
+            "Freshpoint Eco 160 L055",
+            "Freshpoint Eco 160 L07",
+            "Freshpoint Eco 160 L1",
+            "Freshpoint Eco 160-E",
+            "Freshpoint Eco 160-E L055",
+            "Freshpoint Eco 160-E L07",
+            "Freshpoint Eco 160-E L1",
+        ),
         source_documents=(
             BREEZY_ECO_MANUAL_URL,
             FRESHPOINT_MANUAL_URL,
@@ -260,7 +299,19 @@ DEVICE_MODELS = {
     0x1600: DeviceModel(
         "Breezy 200",
         profile_key="breezy",
-        aliases=("Freshpoint 200",),
+        aliases=(
+            "Freshpoint 200",
+            "Vents Breezy 200-E",
+            "Vents Breezy 200-E Smart",
+            "Freshpoint 200-E",
+            "Freshpoint 200-E Pro",
+            "Freshpoint 200-E L055",
+            "Freshpoint 200-E L07",
+            "Freshpoint 200-E L1",
+            "Freshpoint 200-E Pro L055",
+            "Freshpoint 200-E Pro L07",
+            "Freshpoint 200-E Pro L1",
+        ),
         source_documents=(
             BREEZY_ECO_MANUAL_URL,
             FRESHPOINT_MANUAL_URL,
@@ -276,7 +327,11 @@ DEVICE_MODELS = {
         ),
     ),
     0x1A00: DeviceModel(
-        "TwinFresh Atmo / newer Blauberg Vento",
+        "VENTO inHome old / TwinFresh Atmo old",
+        aliases=(
+            "VENTO inHome",
+            "TwinFresh Atmo",
+        ),
         source_documents=(
             VENTO_SMART_HOME_MANUAL_URL,
             TWINFRESH_STYLE_MANUAL_URL,
@@ -284,8 +339,15 @@ DEVICE_MODELS = {
         ),
     ),
     0x1B00: DeviceModel(
-        "Vento inHome S11 W",
-        aliases=("TwinFresh Atmo 100",),
+        "VENTO inHome 100",
+        aliases=(
+            "Vento inHome S11 W",
+            "VENTO inHome mini",
+            "VENTO inHome mini W",
+            "TwinFresh Atmo 100",
+            "Vents TwinFresh Atmo mini",
+            "Vents TwinFresh Atmo mini Wi-Fi",
+        ),
         source_documents=(
             VENTO_SMART_HOME_MANUAL_URL,
             TWINFRESH_STYLE_MANUAL_URL,
@@ -293,15 +355,28 @@ DEVICE_MODELS = {
         ),
     ),
     0x1C00: DeviceModel(
-        "TwinFresh Atmo 160",
+        "VENTO inHome 160",
+        aliases=(
+            "VENTO inHome W",
+            "TwinFresh Atmo 160",
+            "Vents TwinFresh Atmo",
+            "Vents TwinFresh Atmo Wi-Fi",
+        ),
         source_documents=(
+            VENTO_SMART_HOME_MANUAL_URL,
             TWINFRESH_STYLE_MANUAL_URL,
             TWINFRESH_STYLE_MINI_MANUAL_URL,
         ),
     ),
     0x0600: DeviceModel(
-        "Blauberg Smart Wi-Fi extract fan",
+        "Blauberg Smart Wi-Fi",
         "extract_fan",
+        aliases=(
+            "Blauberg Smart Wi-Fi extract fan",
+            "Blauberg Smart IR Wi-Fi",
+            "Vents iFan Wi-Fi",
+            "Vents iFan Move Wi-Fi",
+        ),
         source_documents=(SMART_WIFI_MANUAL_URL,),
     ),
     # Freshbox uses the same BGCP/UDP framing but a different AHU parameter map.
@@ -310,7 +385,24 @@ DEVICE_MODELS = {
     0x0200: DeviceModel(
         "Freshbox 100 WiFi",
         "freshbox",
-        aliases=("Micra 100 WiFi",),
+        aliases=(
+            "Freshbox 100 ERV WiFi",
+            "Freshbox E-100 WiFi",
+            "Freshbox E-100 ERV WiFi",
+            "Freshbox E1-100 WiFi",
+            "Freshbox E1-100 ERV WiFi",
+            "Freshbox E2-100 WiFi",
+            "Freshbox E2-100 ERV WiFi",
+            "Micra 100 WiFi",
+            "Vents Micra 100 WiFi",
+            "Vents Micra 100 ERV WiFi",
+            "Vents Micra 100 E WiFi",
+            "Vents Micra 100 E ERV WiFi",
+            "Vents Micra 100 E1 WiFi",
+            "Vents Micra 100 E1 ERV WiFi",
+            "Vents Micra 100 E2 WiFi",
+            "Vents Micra 100 E2 ERV WiFi",
+        ),
         source_documents=(FRESHBOX_100_WIFI_MANUAL_URL, MICRA_100_WIFI_MANUAL_URL),
     ),
 }

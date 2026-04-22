@@ -252,6 +252,7 @@ DEVICE_MODELS = {
     ),
     0x1B00: DeviceModel(
         "Vento inHome S11 W",
+        aliases=("TwinFresh Atmo 100",),
         source_documents=(
             VENTO_SMART_HOME_MANUAL_URL,
             TWINFRESH_STYLE_MANUAL_URL,

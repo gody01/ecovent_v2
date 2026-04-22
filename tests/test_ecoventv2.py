@@ -106,6 +106,11 @@ class ParseResponseTest(unittest.TestCase):
         )
         self.assertEqual(Fan.device_models[0x1C00].name, "TwinFresh Atmo 160")
         self.assertEqual(Fan.device_models[0x1C00].profile_key, "vento")
+        self.assertEqual(
+            Fan.device_models[0x1B00].display_name,
+            "Vento inHome S11 W / TwinFresh Atmo 100",
+        )
+        self.assertEqual(Fan.device_models[0x1B00].profile_key, "vento")
         self.assertEqual(Fan.device_models[0x0600].profile_key, "extract_fan")
         self.assertEqual(
             Fan.unit_types[0x0600],

@@ -37,7 +37,7 @@ FULL_SUPPORT = (
 
 
 PRESET_MODES = ["off", "low", "medium", "high", "manual"]
-DIRECTIONS = ["ventilation", "air_supply", "heat_recovery"]
+DIRECTIONS = ["forward", "reverse"]
 
 
 async def async_setup_entry(

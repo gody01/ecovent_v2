@@ -1,0 +1,290 @@
+"""EcoVent Fan mixin extracted from the vendored protocol client."""
+
+import logging
+import socket
+
+
+_LOGGER = logging.getLogger(__name__)
+
+
+class FanProtocolMixin:
+    def search_devices(self, addr="0.0.0.0", port=4000):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            sock.bind((addr, port))
+            sock.settimeout(0.5)
+            ips = []
+            target_host = self._host or "<broadcast>"
+            target_port = self._port or port
+            payload = bytes.fromhex(
+                self.build_packet(
+                    self.func["read"] + self.encode_params("007c"),
+                    fan_id="DEFAULT_DEVICEID",
+                )
+            )
+            i = 10
+            while i > 1:
+                i = i - 1
+                self._device_search = self._id
+                try:
+                    sock.sendto(payload, (target_host, target_port))
+                    data, addr = sock.recvfrom(1024)
+                except socket.timeout:
+                    continue
+                except OSError:
+                    continue
+                if (
+                    self.parse_response(data)
+                    and self._device_search != "DEFAULT_DEVICEID"
+                ):
+                    ips.append(addr[0])
+                    ips = list(set(ips))
+            return ips
+        finally:
+            sock.close()
+
+    def connect(self):
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        self.socket.settimeout(0.4)
+        self._socket_connected = False
+        while not self._socket_connected:
+            try:
+                self.socket.connect((self._host, self._port))
+                return self.socket
+            except OSError:
+                self.socket.close()
+                return None
+
+    def str2hex(self, str_msg):
+        return "".join("{:02x}".format(ord(c)) for c in str_msg)
+
+    def hex2str(self, hex_msg):
+        return "".join(
+            chr(int("0x" + hex_msg[i : (i + 2)], 16)) for i in range(0, len(hex_msg), 2)
+        )
+
+    def hexstr2tuple(self, hex_msg):
+        return [int(hex_msg[i : (i + 2)], 16) for i in range(0, len(hex_msg), 2)]
+
+    def chksum(self, hex_msg):
+        checksum = sum(self.hexstr2tuple(hex_msg)) & 0xFFFF
+        return f"{checksum & 0xFF:02x}{checksum >> 8:02x}"
+
+    def get_size(self, str):
+        return hex(len(str)).replace("0x", "").zfill(2)
+
+    def get_header(self, fan_id=None, password=None, packet_type=None):
+        fan_id = self._id if fan_id is None else fan_id
+        password = self._password if password is None else password
+        packet_type = self._type if packet_type is None else packet_type
+        id_size = self.get_size(fan_id)
+        pwd_size = self.get_size(password)
+        id = self.str2hex(fan_id)
+        password = self.str2hex(password)
+        str = f"{packet_type}{id_size}{id}{pwd_size}{password}"
+        return str
+
+    def build_packet(self, data, fan_id=None, password=None, packet_type=None):
+        payload = (
+            self.get_header(fan_id=fan_id, password=password, packet_type=packet_type)
+            + data
+        )
+        return self.HEADER + payload + self.chksum(payload)
+
+    def validate_packet(self, data):
+        if not isinstance(data, (bytes, bytearray)):
+            return False
+        if len(data) < 24:
+            return False
+        if bytes(data[:2]) != self.HEADER_BYTES:
+            return False
+        checksum = int.from_bytes(data[-2:], byteorder="little", signed=False)
+        payload_sum = sum(data[2:-2]) & 0xFFFF
+        return checksum == payload_sum
+
+    def get_params_index(self, value):
+        for params in (self.params, self.write_params):
+            for i in params:
+                if params[i][0] == value:
+                    return i
+
+    def get_params_values(self, idx, value):
+        # print ( "EcoventV2: " + idx,  file = sys.stderr )
+        index = self.get_params_index(idx)
+        if index is not None:
+            param = self.params.get(index) or self.write_params.get(index)
+            if param[1] is not None:
+                for i in param[1]:
+                    if param[1][i] == value:
+                        return [index, i]
+            return [index, None]
+        else:
+            return [None, None]
+
+    def encode_params(self, param, value=""):
+        parameter = ""
+        for i in range(0, len(param), 4):
+            n_out = ""
+            out = param[i : (i + 4)]
+            if out == "0077" and value == "":
+                value = "0101"
+            if value != "":
+                val_bytes = int(len(value) / 2)
+            else:
+                val_bytes = 0
+            if out[:2] != "00":
+                n_out = "ff" + out[:2]
+            if val_bytes > 1:
+                n_out += "fe" + hex(val_bytes).replace("0x", "").zfill(2) + out[2:4]
+            else:
+                n_out += out[2:4]
+            parameter += n_out + value
+            if out == "0077":
+                value = ""
+        return parameter
+
+    def send(self, data):
+        # print ( "EcoventV2: " + data , file = sys.stderr )
+        try:
+            self.socket = self.connect()
+            if self.socket is None:
+                return None
+            payload = self.build_packet(data)
+            response = self.socket.sendall(bytes.fromhex(payload))
+        except socket.timeout:
+            # print ( "EcoventV2: Connection timeout send to device: " + self._host , file = sys.stderr )
+            return None
+        except (
+            OSError
+        ):  # this shall include all connection errors like Aborted, Refused and Reset
+            return None
+        except TypeError:
+            return (
+                None  # this can happen if the socket connection fails and returns None
+            )
+        else:
+            return response
+
+    def receive(self):
+        try:
+            if self.socket is None:
+                return False
+            response = self.socket.recv(1024)
+        except socket.timeout:
+            # print ( "EcoventV2: Connection timeout receive from device: " + self._host , file = sys.stderr )
+            return False
+        except OSError:
+            return False
+        else:
+            return response
+        finally:
+            if self.socket is not None:
+                self.socket.close()
+
+    def do_func(self, func, param, value="", retries=10):
+        _LOGGER.debug(f"Executing function {func} with param {param} and value {value}")
+        data = func + self.encode_params(param, value)
+        response = False
+        i = 0
+        while not response:
+            i = i + 1
+            self.send(data)
+            response = self.receive()
+            if response:
+                if self.parse_response(response):
+                    return True
+                response = False
+            if i >= retries:
+                # print ("EcoventV2: Timeout device: " + self._host + " bail out after " + str(i) + " retries" , file = sys.stderr )
+                return False
+
+    def update(self):
+        request = ""
+        for param in self.params:
+            if param in self._write_only_params:
+                continue
+            request += hex(param).replace("0x", "").zfill(4)
+        success = self._read_params(request)
+        return success
+
+    def quick_update(self):
+        # just update following states ...
+        # 0x0006: ["boost_status", statuses],
+        # 0x000B: ["timer_counter", None],
+        # 0x002D: ["analogV", None],
+        # 0x0032: ["relay_status", statuses],
+        # 0x0044: ["man_speed", None],
+        # 0x004A: ["fan1_speed", None],
+        # 0x004B: ["fan2_speed", None],
+        # 0x0304: ["humidity_status", statuses],
+        # 0x0305: ["analogV_status", statuses],
+        return self._read_params(self.device_profile.quick_update_request)
+
+    def update_preset_speed_settings(self):
+        if not self.supports_preset_speed_settings:
+            return True
+
+        request = "003A003B003C003D003E003F"
+        return self._read_params(request)
+
+    def _read_params(self, request):
+        if self._bulk_read_supported is not False and self.do_func(
+            self.func["read"], request, retries=3
+        ):
+            self._bulk_read_supported = True
+            return True
+
+        self._bulk_read_supported = False
+        success = False
+        for i in range(0, len(request), 4):
+            success = (
+                self.do_func(self.func["read"], request[i : i + 4], retries=1)
+                or success
+            )
+        return success
+
+    def set_param(self, param, value):
+        valpar = self.get_params_values(param, value)
+        # print ( "EcoventV2: " + " " + param + "/" + value , file = sys.stderr )
+        if valpar[0] is not None:
+            if valpar[1] is not None:
+                return self.do_func(
+                    self.func["write_return"],
+                    hex(valpar[0]).replace("0x", "").zfill(4),
+                    hex(valpar[1]).replace("0x", "").zfill(2),
+                )
+            else:
+                return self.do_func(
+                    self.func["write_return"],
+                    hex(valpar[0]).replace("0x", "").zfill(4),
+                    value,
+                )
+        return False
+
+    def set_params(self, values):
+        """Write several profile-mapped parameters in one command."""
+        request = ""
+        for param, value in values.items():
+            valpar = self.get_params_values(param, value)
+            if valpar[0] is None:
+                continue
+
+            request += hex(valpar[0]).replace("0x", "").zfill(4)
+            if valpar[1] is not None:
+                request += hex(valpar[1]).replace("0x", "").zfill(2)
+            else:
+                request += value
+
+        if request:
+            self.do_func(self.func["write_return"], request)
+
+    def get_param(self, param):
+        idx = self.get_params_index(param)
+        if idx is not None:
+            #  _LOGGER.debug(f"Getting parameter {param} with index {idx}")
+            return self.do_func(self.func["read"], hex(idx).replace("0x", "").zfill(4))
+        return False

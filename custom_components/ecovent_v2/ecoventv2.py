@@ -4,7 +4,6 @@ import logging
 import math
 import socket
 import sys
-import time
 
 __version__ = "loc_0.9.29"
 
@@ -80,6 +79,7 @@ class Fan(object):
     """Class to communicate with the ecofan"""
 
     HEADER = "FDFD"
+    HEADER_BYTES = bytes.fromhex(HEADER)
 
     func = {
         "read": "01",
@@ -127,7 +127,7 @@ class Fan(object):
         0x0300: "Vento Expert A50-1/A85-1/A100-1 W V.2",
         0x0400: "Vento Expert Duo A30-1 W V.2",
         0x0500: "Vento Expert A30 W V.2",
-        0x0E00: "TwinFresh Style Wifi V.2",
+        0x0E00: "TwinFresh Style Wifi V.2 / Oxxify smart 50",
         0x1100: "Vents Breezy 160-E",
         0x1B00: "Vento inHome S11 W",
     }
@@ -203,6 +203,7 @@ class Fan(object):
         0x0065: ["filter_timer_reset", None],
         0x0080: ["reset_alarms", None],
     }
+    WRITE_ONLY_PARAMS = set(write_params)
 
     _name = None
     _host = None
@@ -282,6 +283,7 @@ class Fan(object):
         self._pwd_size = 0
         self._password = password
         self._unknown_params = {}
+        self.socket = None
 
     def init_device(self):
         if self._id == "DEFAULT_DEVICEID":
@@ -293,30 +295,41 @@ class Fan(object):
         return self.update()
 
     def search_devices(self, addr="0.0.0.0", port=4000):
-        payload = "FDFD021044454641554c545f44455649434549440431313131017cf805"
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        sock.bind((addr, port))
-        sock.settimeout(0.5)
-        ips = []
-        i = 10
-        while i > 1:
-            i = i - 1
-            self._device_search = self._id
-            if self._host is None:
-                self._host = "<broadcast>"
-            if self._port is None:
-                self._port = port
-            sock.sendto(bytes.fromhex(payload), (self._host, self._port))
-            data, addr = sock.recvfrom(1024)
-            self.parse_response(data)
-            if self._device_search != "DEFAULT_DEVICEID":
-                ips.append(addr[0])
-                ips = list(set(ips))
-            time.sleep(0.2)
-        sock.close()
-        return ips
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            sock.bind((addr, port))
+            sock.settimeout(0.5)
+            ips = []
+            target_host = self._host or "<broadcast>"
+            target_port = self._port or port
+            payload = bytes.fromhex(
+                self.build_packet(
+                    self.func["read"] + self.encode_params("007c"),
+                    fan_id="DEFAULT_DEVICEID",
+                )
+            )
+            i = 10
+            while i > 1:
+                i = i - 1
+                self._device_search = self._id
+                try:
+                    sock.sendto(payload, (target_host, target_port))
+                    data, addr = sock.recvfrom(1024)
+                except socket.timeout:
+                    continue
+                except OSError:
+                    continue
+                if (
+                    self.parse_response(data)
+                    and self._device_search != "DEFAULT_DEVICEID"
+                ):
+                    ips.append(addr[0])
+                    ips = list(set(ips))
+            return ips
+        finally:
+            sock.close()
 
     def connect(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -344,23 +357,40 @@ class Fan(object):
         return [int(hex_msg[i : (i + 2)], 16) for i in range(0, len(hex_msg), 2)]
 
     def chksum(self, hex_msg):
-        checksum = hex(sum(self.hexstr2tuple(hex_msg))).replace("0x", "").zfill(4)
-        byte_array = bytearray.fromhex(checksum)
-        chksum = hex(byte_array[1]).replace("0x", "").zfill(2) + hex(
-            byte_array[0]
-        ).replace("0x", "").zfill(2)
-        return f"{chksum}"
+        checksum = sum(self.hexstr2tuple(hex_msg)) & 0xFFFF
+        return f"{checksum & 0xFF:02x}{checksum >> 8:02x}"
 
     def get_size(self, str):
         return hex(len(str)).replace("0x", "").zfill(2)
 
-    def get_header(self):
-        id_size = self.get_size(self._id)
-        pwd_size = self.get_size(self._password)
-        id = self.str2hex(self._id)
-        password = self.str2hex(self._password)
-        str = f"{self._type}{id_size}{id}{pwd_size}{password}"
+    def get_header(self, fan_id=None, password=None, packet_type=None):
+        fan_id = self._id if fan_id is None else fan_id
+        password = self._password if password is None else password
+        packet_type = self._type if packet_type is None else packet_type
+        id_size = self.get_size(fan_id)
+        pwd_size = self.get_size(password)
+        id = self.str2hex(fan_id)
+        password = self.str2hex(password)
+        str = f"{packet_type}{id_size}{id}{pwd_size}{password}"
         return str
+
+    def build_packet(self, data, fan_id=None, password=None, packet_type=None):
+        payload = (
+            self.get_header(fan_id=fan_id, password=password, packet_type=packet_type)
+            + data
+        )
+        return self.HEADER + payload + self.chksum(payload)
+
+    def validate_packet(self, data):
+        if not isinstance(data, (bytes, bytearray)):
+            return False
+        if len(data) < 24:
+            return False
+        if bytes(data[:2]) != self.HEADER_BYTES:
+            return False
+        checksum = int.from_bytes(data[-2:], byteorder="little", signed=False)
+        payload_sum = sum(data[2:-2]) & 0xFFFF
+        return checksum == payload_sum
 
     def get_params_index(self, value):
         for params in (self.params, self.write_params):
@@ -381,44 +411,8 @@ class Fan(object):
         else:
             return [None, None]
 
-    def send(self, data):
-        # print ( "EcoventV2: " + data , file = sys.stderr )
-        try:
-            self.socket = self.connect()
-            payload = self.get_header() + data
-            payload = self.HEADER + payload + self.chksum(payload)
-            response = self.socket.sendall(bytes.fromhex(payload))
-        except socket.timeout:
-            # print ( "EcoventV2: Connection timeout send to device: " + self._host , file = sys.stderr )
-            return None
-        except (
-            OSError
-        ):  # this shall include all connection errors like Aborted, Refused and Reset
-            return None
-        except TypeError:
-            return (
-                None  # this can happen if the socket connection fails and returns None
-            )
-        else:
-            return response
-
-    def receive(self):
-        try:
-            response = self.socket.recv(1024)
-        except socket.timeout:
-            # print ( "EcoventV2: Connection timeout receive from device: " + self._host , file = sys.stderr )
-            return False
-        except OSError:
-            return False
-        else:
-            return response
-        finally:
-            self.socket.close()
-
-    def do_func(self, func, param, value=""):
-        out = ""
+    def encode_params(self, param, value=""):
         parameter = ""
-        _LOGGER.debug(f"Executing function {func} with param {param} and value {value}")
         for i in range(0, len(param), 4):
             n_out = ""
             out = param[i : (i + 4)]
@@ -437,8 +431,49 @@ class Fan(object):
             parameter += n_out + value
             if out == "0077":
                 value = ""
-            # _LOGGER.debug(f"Constructed parameter: {n_out + value}")
-        data = func + parameter
+        return parameter
+
+    def send(self, data):
+        # print ( "EcoventV2: " + data , file = sys.stderr )
+        try:
+            self.socket = self.connect()
+            if self.socket is None:
+                return None
+            payload = self.build_packet(data)
+            response = self.socket.sendall(bytes.fromhex(payload))
+        except socket.timeout:
+            # print ( "EcoventV2: Connection timeout send to device: " + self._host , file = sys.stderr )
+            return None
+        except (
+            OSError
+        ):  # this shall include all connection errors like Aborted, Refused and Reset
+            return None
+        except TypeError:
+            return (
+                None  # this can happen if the socket connection fails and returns None
+            )
+        else:
+            return response
+
+    def receive(self):
+        try:
+            if self.socket is None:
+                return False
+            response = self.socket.recv(1024)
+        except socket.timeout:
+            # print ( "EcoventV2: Connection timeout receive from device: " + self._host , file = sys.stderr )
+            return False
+        except OSError:
+            return False
+        else:
+            return response
+        finally:
+            if self.socket is not None:
+                self.socket.close()
+
+    def do_func(self, func, param, value=""):
+        _LOGGER.debug(f"Executing function {func} with param {param} and value {value}")
+        data = func + self.encode_params(param, value)
         response = False
         i = 0
         while not response:
@@ -446,18 +481,18 @@ class Fan(object):
             self.send(data)
             response = self.receive()
             if response:
-                self.parse_response(response)
-                return True
+                if self.parse_response(response):
+                    return True
+                response = False
             if i > 10:
                 # print ("EcoventV2: Timeout device: " + self._host + " bail out after " + str(i) + " retries" , file = sys.stderr )
                 return False
-            time.sleep(
-                0.5
-            )  # wait for network calm down and prevent receiving old responses
 
     def update(self):
         request = ""
         for param in self.params:
+            if param in self.WRITE_ONLY_PARAMS:
+                continue
             request += hex(param).replace("0x", "").zfill(4)
         return self.do_func(self.func["read"], request)
 
@@ -548,34 +583,23 @@ class Fan(object):
             value = hex(val).replace("0x", "").zfill(2)
             self.do_func(self.func["write_return"], request, value)
 
-    def _handle_param_response(self, param_id, value):
-        param = self.params.get(param_id)
-        if param is None:
-            self.unknown_params[param_id] = value
-            _LOGGER.debug(
-                "EcoventV2: skipping unknown parameter 0x%04x=%s",
-                param_id,
-                value,
-            )
-            return
-
-        if value is None:
-            _LOGGER.debug(
-                "EcoventV2: skipping no-value parameter 0x%04x (%s)",
-                param_id,
-                param[0],
-            )
-            return
-
-        setattr(self, param[0], value)
-        # _LOGGER.debug(f"Updated parameter {param[0]} with value {value}")
-
     def parse_response(self, data):
-        pointer = 20  # discard header bytes
+        if not self.validate_packet(data):
+            return False
+        pointer = 2  # discard frame marker
         length = len(data) - 2
+        if len(data) < pointer + 2:
+            return False
+        pointer += 1  # packet type
+        id_size = data[pointer]
+        pointer += 1
+        if len(data) < pointer + id_size + 3:
+            return False
+        pointer += id_size
         pwd_size = data[pointer]
         pointer += 1
-        # password = data[pointer:pwd_size]  not used
+        if len(data) < pointer + pwd_size + 3:
+            return False
         pointer += pwd_size
         # function = data[pointer]  not used
         pointer += 1
@@ -604,17 +628,14 @@ class Fan(object):
                     value_counter = p
                     ext_function = 2
                 elif ext_function == 0xFD:
-                    self._handle_param_response(p, None)
                     ext_function = 0
-                    parameter = 1
-                    value_counter = 1
-                    high_byte_value = 0
                     response = bytearray()
                 else:
                     if parameter == 1:
                         # print ("appending: " + hex(high_byte_value))
                         response.append(high_byte_value)
                         parameter = 0
+                        ext_function = 0
                     else:
                         value_counter -= 1
                     response.append(p)
@@ -623,10 +644,31 @@ class Fan(object):
                 parameter = 1
                 value_counter = 1
                 high_byte_value = 0
-                param_id = int(response[:2].hex(), 16)
-                value = response[2:].hex()
-                self._handle_param_response(param_id, value)
+                ext_function = 0
+                if len(response) < 2:
+                    return False
+                self._store_param(response)
                 response = bytearray()
+        return (
+            ext_function == 0 and parameter == 1 and value_counter == 1 and not response
+        )
+
+    def _store_param(self, response):
+        param_id = int(response[:2].hex(), 16)
+        value = response[2:].hex()
+        if param_id not in self.params:
+            self._unknown_params[param_id] = value
+            return
+        try:
+            setattr(self, self.params[param_id][0], value)
+        except (KeyError, TypeError, ValueError, OverflowError):
+            self._unknown_params[param_id] = value
+
+    def _map_value(self, mapping, value, label):
+        mapped_value = mapping.get(value)
+        if mapped_value is None:
+            return f"Unknown {label} {value}"
+        return mapped_value
 
     @property
     def name(self):
@@ -678,7 +720,8 @@ class Fan(object):
 
     @state.setter
     def state(self, val):
-        self._state = self.states.get(int(val), "Unknown %s" % val)
+        value = int(val, 16) if isinstance(val, str) else int(val)
+        self._state = self._map_value(self.states, value, "state")
 
     @property
     def speed(self):
@@ -687,7 +730,7 @@ class Fan(object):
     @speed.setter
     def speed(self, input):
         val = int(input, 16)
-        self._speed = self.speeds.get(val, "Unknown %s" % val)
+        self._speed = self._map_value(self.speeds, val, "speed")
 
     @property
     def boost_status(self):
@@ -696,7 +739,7 @@ class Fan(object):
     @boost_status.setter
     def boost_status(self, input):
         val = int(input, 16)
-        self._boost_status = self.boost_statuses.get(val, "Unknown %s" % val)
+        self._boost_status = self._map_value(self.boost_statuses, val, "boost_status")
 
     @property
     def heater_status(self):
@@ -705,7 +748,7 @@ class Fan(object):
     @heater_status.setter
     def heater_status(self, input):
         val = int(input, 16)
-        self._heater_status = self.heater_status.get(val, "Unknown %s" % val)
+        self._heater_status = self._map_value(self.statuses, val, "heater_status")
 
     @property
     def timer_mode(self):
@@ -714,7 +757,7 @@ class Fan(object):
     @timer_mode.setter
     def timer_mode(self, input):
         val = int(input, 16)
-        self._timer_mode = self.timer_modes.get(val, "Unknown %s" % val)
+        self._timer_mode = self._map_value(self.timer_modes, val, "timer_mode")
 
     @property
     def timer_counter(self):
@@ -734,7 +777,9 @@ class Fan(object):
     @humidity_sensor_state.setter
     def humidity_sensor_state(self, input):
         val = int(input, 16)
-        self._humidity_sensor_state = self.states.get(val, "Unknown %s" % val)
+        self._humidity_sensor_state = self._map_value(
+            self.states, val, "humidity_sensor_state"
+        )
 
     @property
     def relay_sensor_state(self):
@@ -743,7 +788,9 @@ class Fan(object):
     @relay_sensor_state.setter
     def relay_sensor_state(self, input):
         val = int(input, 16)
-        self._relay_sensor_state = self.states.get(val, "Unknown %s" % val)
+        self._relay_sensor_state = self._map_value(
+            self.states, val, "relay_sensor_state"
+        )
 
     @property
     def analogV_sensor_state(self):
@@ -752,7 +799,9 @@ class Fan(object):
     @analogV_sensor_state.setter
     def analogV_sensor_state(self, input):
         val = int(input, 16)
-        self._analogV_sensor_state = self.states.get(val, "Unknown %s" % val)
+        self._analogV_sensor_state = self._map_value(
+            self.states, val, "analogV_sensor_state"
+        )
 
     @property
     def humidity_treshold(self):
@@ -799,7 +848,7 @@ class Fan(object):
     @relay_status.setter
     def relay_status(self, input):
         val = int(input, 16)
-        self._relay_status = self.statuses.get(val, "Unknown %s" % val)
+        self._relay_status = self._map_value(self.statuses, val, "relay_status")
 
     def _preset_speed_percent(self, input):
         val = int(input, 16)
@@ -975,7 +1024,10 @@ class Fan(object):
 
     @weekly_schedule_state.setter
     def weekly_schedule_state(self, val):
-        self._weekly_schedule_state = self.states.get(int(val), "Unknown %s" % val)
+        value = int(val, 16) if isinstance(val, str) else int(val)
+        self._weekly_schedule_state = self._map_value(
+            self.states, value, "weekly_schedule_state"
+        )
 
     @property
     def weekly_schedule_setup(self):
@@ -1035,7 +1087,7 @@ class Fan(object):
     @alarm_status.setter
     def alarm_status(self, input):
         val = int(input, 16)
-        self._alarm_status = self.alarms.get(val, "Unknown %s" % val)
+        self._alarm_status = self._map_value(self.alarms, val, "alarm_status")
 
     @property
     def cloud_server_state(self):
@@ -1044,7 +1096,9 @@ class Fan(object):
     @cloud_server_state.setter
     def cloud_server_state(self, input):
         val = int(input, 16)
-        self._cloud_server_state = self.states.get(val, "Unknown %s" % val)
+        self._cloud_server_state = self._map_value(
+            self.states, val, "cloud_server_state"
+        )
 
     @property
     def firmware(self):
@@ -1072,7 +1126,9 @@ class Fan(object):
     @filter_replacement_status.setter
     def filter_replacement_status(self, input):
         val = int(input, 16)
-        self._filter_replacement_status = self.statuses.get(val, "Unknown %s" % val)
+        self._filter_replacement_status = self._map_value(
+            self.statuses, val, "filter_replacement_status"
+        )
 
     @property
     def wifi_operation_mode(self):
@@ -1081,8 +1137,8 @@ class Fan(object):
     @wifi_operation_mode.setter
     def wifi_operation_mode(self, input):
         val = int(input, 16)
-        self._wifi_operation_mode = self.wifi_operation_modes.get(
-            val, "Unknown %s" % val
+        self._wifi_operation_mode = self._map_value(
+            self.wifi_operation_modes, val, "wifi_operation_mode"
         )
 
     @property
@@ -1108,7 +1164,7 @@ class Fan(object):
     @wifi_enc_type.setter
     def wifi_enc_type(self, input):
         val = int(input, 16)
-        self._wifi_enc_type = self.wifi_enc_types.get(val, "Unknown %s" % val)
+        self._wifi_enc_type = self._map_value(self.wifi_enc_types, val, "wifi_enc_type")
 
     @property
     def wifi_freq_channel(self):
@@ -1126,7 +1182,7 @@ class Fan(object):
     @wifi_dhcp.setter
     def wifi_dhcp(self, input):
         val = int(input, 16)
-        self._wifi_dhcp = self.wifi_dhcps.get(val, "Unknown %s" % val)
+        self._wifi_dhcp = self._map_value(self.wifi_dhcps, val, "wifi_dhcp")
 
     @property
     def wifi_assigned_ip(self):
@@ -1179,7 +1235,7 @@ class Fan(object):
     @airflow.setter
     def airflow(self, input):
         val = int(input, 16)
-        self._airflow = self.airflows.get(val, "Unknown %s" % val)
+        self._airflow = self._map_value(self.airflows, val, "airflow")
 
     @property
     def analogV_treshold(self):
@@ -1197,7 +1253,7 @@ class Fan(object):
     @unit_type.setter
     def unit_type(self, input):
         val = int(input, 16)
-        self._unit_type = self.unit_types.get(val, "Unknown model %s" % val)
+        self._unit_type = self._map_value(self.unit_types, val, "model")
 
     @property
     def night_mode_timer(self):
@@ -1228,7 +1284,7 @@ class Fan(object):
     @humidity_status.setter
     def humidity_status(self, input):
         val = int(input, 16)
-        self._humidity_status = self.statuses.get(val, "Unknown %s" % val)
+        self._humidity_status = self._map_value(self.statuses, val, "humidity_status")
 
     @property
     def analogV_status(self):
@@ -1237,7 +1293,7 @@ class Fan(object):
     @analogV_status.setter
     def analogV_status(self, input):
         val = int(input, 16)
-        self._analogV_status = self.statuses.get(val, "Unknown %s" % val)
+        self._analogV_status = self._map_value(self.statuses, val, "analogV_status")
 
     @property
     def beeper(self):
@@ -1246,7 +1302,7 @@ class Fan(object):
     @beeper.setter
     def beeper(self, input):
         val = int(input, 16)
-        self._beeper = self.bstatuses.get(val, "Unknown %s" % val)
+        self._beeper = self._map_value(self.bstatuses, val, "beeper")
 
     @property
     def unknown_params(self):

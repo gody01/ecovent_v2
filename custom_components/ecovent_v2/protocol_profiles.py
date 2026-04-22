@@ -37,6 +37,9 @@ FRESHPOINT_MANUAL_URL = (
 FRESHBOX_100_WIFI_MANUAL_URL = (
     "https://blaubergventilatoren.net/download/freshbox-100-wifi-datasheet-7508.pdf"
 )
+ARC_SMART_MANUAL_URL = (
+    "https://ventilation-system.com/download/arc-smart-manual-21863.pdf"
+)
 
 
 @dataclass(frozen=True)
@@ -167,6 +170,24 @@ DEVICE_PROFILES = {
         speed_percent_scale="percent",
         supports_percentage_control=False,
     ),
+    "arc": DeviceProfile(
+        key="arc",
+        params_name="arc_params",
+        write_params_name="arc_write_params",
+        quick_update_request="0007000B00210025004B0304030E030F0310031103120320",
+        preset_modes=(),
+        boost_statuses_name="states",
+        humidity_sensor_states_name="humidity_permission_modes",
+        capabilities=frozenset(
+            {
+                "arc_environment",
+                "battery_voltage",
+                "binary_diagnostics",
+                "timer_mode",
+            }
+        ),
+        supports_percentage_control=False,
+    ),
 }
 
 
@@ -205,6 +226,11 @@ DEVICE_MODELS = {
             TWINFRESH_STYLE_MANUAL_URL,
             TWINFRESH_STYLE_MINI_MANUAL_URL,
         ),
+    ),
+    0x0D00: DeviceModel(
+        "Arc Smart",
+        "arc",
+        source_documents=(ARC_SMART_MANUAL_URL,),
     ),
     0x1100: DeviceModel(
         "Breezy 160",

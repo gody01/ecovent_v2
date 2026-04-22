@@ -392,6 +392,45 @@ class Fan(object):
         0x00B9: ["unit_type", unit_types],
     }
 
+    # Arc Smart profile from the 2025 Smart House guide. This device does not
+    # document normal unit on/off or speed-mode rows, so expose it conservatively
+    # as a read-focused environmental fan profile.
+    arc_params = {
+        0x0006: ["boost_status", states],
+        0x0007: ["timer_status", statuses],
+        0x000B: ["timer_counter", None],
+        0x000F: ["humidity_sensor_state", humidity_permission_modes],
+        0x0019: ["humidity_treshold", None],
+        0x0021: ["room_temperature", None],
+        0x0024: ["battery_voltage", None],
+        0x0025: ["humidity", None],
+        0x004B: ["fan1_speed", None],
+        0x0066: ["boost_time", None],
+        0x007C: ["device_search", None],
+        0x0083: ["low_battery_status", statuses],
+        0x0085: ["cloud_server_state", states],
+        0x0086: ["firmware", None],
+        0x00A3: ["current_wifi_ip", None],
+        0x00B9: ["unit_type", unit_types],
+        0x0304: ["humidity_status", statuses],
+        0x030D: ["all_day_mode", states],
+        0x030E: ["light_status", statuses],
+        0x030F: ["motion_status", statuses],
+        0x0310: ["interval_ventilation_status", statuses],
+        0x0311: ["silent_mode_status", statuses],
+        0x0312: ["air_quality_status", statuses],
+        0x0313: ["light_sensor_state", states],
+        0x0314: ["motion_sensor_state", states],
+        0x0315: ["air_quality_sensor_state", humidity_permission_modes],
+        0x0316: ["interval_ventilation_state", states],
+        0x0317: ["silent_mode_state", states],
+        0x031F: ["air_quality_treshold", None],
+        0x0320: ["air_quality", None],
+        0x0323: ["temperature_status", statuses],
+        0x0324: ["temperature_sensor_state", states],
+        0x0325: ["temperature_treshold", None],
+    }
+
     write_params = {
         0x0065: ["filter_timer_reset", None],
         0x0080: ["reset_alarms", None],
@@ -411,6 +450,8 @@ class Fan(object):
         0x0065: ["filter_timer_reset", None],
         0x0080: ["reset_alarms", None],
     }
+
+    arc_write_params = {}
 
     device_profiles = DEVICE_PROFILES
     device_models = DEVICE_MODELS
@@ -479,15 +520,19 @@ class Fan(object):
     _unknown_params = None
     _profile_key = "vento"
     _battery_status = None
+    _low_battery_status = None
     _all_day_mode = None
     _boost_timer_countdown = None
     _timer_status = None
     _temperature_status = None
     _motion_status = None
+    _light_status = None
     _interval_ventilation_status = None
     _silent_mode_status = None
     _temperature_sensor_state = None
     _motion_sensor_state = None
+    _light_sensor_state = None
+    _air_quality_sensor_state = None
     _temperature_treshold = None
     _max_speed_setpoint = None
     _silent_speed_setpoint = None
@@ -498,6 +543,9 @@ class Fan(object):
     _silent_mode_end_time = None
     _turn_on_delay_timer = None
     _temperature = None
+    _room_temperature = None
+    _air_quality = None
+    _air_quality_treshold = None
     _co2_sensor_state = None
     _co2_treshold = None
     _co2 = None
@@ -1344,6 +1392,17 @@ class Fan(object):
         )
 
     @property
+    def low_battery_status(self):
+        return self._low_battery_status
+
+    @low_battery_status.setter
+    def low_battery_status(self, input):
+        val = int(input, 16)
+        self._low_battery_status = self._map_value(
+            self.statuses, val, "low_battery_status"
+        )
+
+    @property
     def all_day_mode(self):
         return self._all_day_mode
 
@@ -1430,6 +1489,28 @@ class Fan(object):
         )
 
     @property
+    def light_sensor_state(self):
+        return self._light_sensor_state
+
+    @light_sensor_state.setter
+    def light_sensor_state(self, input):
+        val = int(input, 16)
+        self._light_sensor_state = self._map_value(
+            self.states, val, "light_sensor_state"
+        )
+
+    @property
+    def air_quality_sensor_state(self):
+        return self._air_quality_sensor_state
+
+    @air_quality_sensor_state.setter
+    def air_quality_sensor_state(self, input):
+        val = int(input, 16)
+        self._air_quality_sensor_state = self._map_value(
+            self.humidity_permission_modes, val, "air_quality_sensor_state"
+        )
+
+    @property
     def humidity_treshold(self):
         return self._humidity_treshold
 
@@ -1475,6 +1556,30 @@ class Fan(object):
     def temperature(self, input):
         val = int(input, 16)
         self._temperature = str(val)
+
+    @property
+    def room_temperature(self):
+        return self._room_temperature
+
+    @room_temperature.setter
+    def room_temperature(self, input):
+        self._room_temperature = self._decode_signed_temperature(input)
+
+    @property
+    def air_quality(self):
+        return self._air_quality
+
+    @air_quality.setter
+    def air_quality(self, input):
+        self._air_quality = self._decode_uint(input)
+
+    @property
+    def air_quality_treshold(self):
+        return self._air_quality_treshold
+
+    @air_quality_treshold.setter
+    def air_quality_treshold(self, input):
+        self._air_quality_treshold = self._decode_uint(input)
 
     @property
     def analogV(self):
@@ -1535,6 +1640,15 @@ class Fan(object):
     def motion_status(self, input):
         val = int(input, 16)
         self._motion_status = self._map_value(self.statuses, val, "motion_status")
+
+    @property
+    def light_status(self):
+        return self._light_status
+
+    @light_status.setter
+    def light_status(self, input):
+        val = int(input, 16)
+        self._light_status = self._map_value(self.statuses, val, "light_status")
 
     @property
     def interval_ventilation_status(self):
@@ -2163,6 +2277,12 @@ class Fan(object):
     @air_quality_status.setter
     def air_quality_status(self, input):
         data = bytes.fromhex(input)
+        if len(data) == 1:
+            self._air_quality_status = self._map_value(
+                self.statuses, data[0], "air_quality_status"
+            )
+            return
+
         parts = []
         labels = ("humidity", "co2", "reserved_1", "reserved_2", "voc")
         for label, value in zip(labels, data):

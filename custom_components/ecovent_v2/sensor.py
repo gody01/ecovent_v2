@@ -69,6 +69,16 @@ SENSOR_SPECS = (
         required_capabilities=("temperature",),
     ),
     SensorSpec(
+        "_room_temperature",
+        "Room temperature",
+        "room_temperature",
+        UnitOfTemperature.CELSIUS,
+        SensorDeviceClass.TEMPERATURE,
+        SensorStateClass.MEASUREMENT,
+        icon="mdi:home-thermometer-outline",
+        required_params=("room_temperature",),
+    ),
+    SensorSpec(
         "_outdoor_temperature",
         "Outdoor temperature",
         "outdoor_temperature",
@@ -125,6 +135,15 @@ SENSOR_SPECS = (
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:air-filter",
         required_capabilities=("voc",),
+    ),
+    SensorSpec(
+        "_air_quality",
+        "Air quality",
+        "air_quality",
+        "index",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:air-filter",
+        required_params=("air_quality",),
     ),
     SensorSpec(
         "_speed",
@@ -218,6 +237,16 @@ SENSOR_SPECS = (
         required_capabilities=("timer_mode",),
     ),
     SensorSpec(
+        "_timer_status",
+        "Timer status",
+        "timer_status",
+        device_class=SensorDeviceClass.ENUM,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        enable_by_default=False,
+        icon="mdi:timer-check-outline",
+        required_capabilities=("arc_environment",),
+    ),
+    SensorSpec(
         "_alarm_status",
         "Alarm status",
         "alarm_status",
@@ -251,6 +280,14 @@ SENSOR_SPECS = (
         entity_category=EntityCategory.DIAGNOSTIC,
         icon="mdi:air-filter",
         required_capabilities=("air_quality",),
+    ),
+    SensorSpec(
+        "_air_quality_status",
+        "Air quality status",
+        "air_quality_status",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:air-filter",
+        required_capabilities=("arc_environment",),
     ),
     SensorSpec(
         "_recovery_efficiency",
@@ -536,6 +573,10 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         """Get temperature sensor value."""
         return self._fan.temperature
 
+    def room_temperature(self):
+        """Get room temperature value."""
+        return self._fan.room_temperature
+
     def outdoor_temperature(self):
         """Get outdoor air temperature."""
         return self._fan.outdoor_temperature
@@ -559,6 +600,10 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
     def voc(self):
         """Get indoor VOC air quality index."""
         return self._fan.voc
+
+    def air_quality(self):
+        """Get indoor air quality index."""
+        return self._fan.air_quality
 
     def fan1_speed(self):
         """Get fan1 speed value."""
@@ -587,6 +632,10 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
     def timer_mode(self):
         """Get timer mode."""
         return self._fan.timer_mode
+
+    def timer_status(self):
+        """Get timer status."""
+        return self._fan.timer_status
 
     def alarm_status(self):
         """Get alarm status."""

@@ -65,11 +65,13 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         self._attr_icon = "mdi:fan"
         self._attr_translation_key = "vent"
         self._attr_extra_state_attributes = {"ipv4_address": self._fan.current_wifi_ip}
-        self._attr_supported_features = (
-            FanEntityFeature.PRESET_MODE
-            | FanEntityFeature.TURN_OFF
-            | FanEntityFeature.TURN_ON
-        )
+        self._attr_supported_features = FanEntityFeature(0)
+        if self._fan.fan_preset_modes:
+            self._attr_supported_features |= FanEntityFeature.PRESET_MODE
+        if self._fan.supports_parameter("state"):
+            self._attr_supported_features |= (
+                FanEntityFeature.TURN_OFF | FanEntityFeature.TURN_ON
+            )
         if self._fan.supports_percentage_control:
             self._attr_supported_features |= FanEntityFeature.SET_SPEED
         if self._fan.supports_oscillation:

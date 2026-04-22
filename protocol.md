@@ -21,6 +21,7 @@ Source PDFs:
 - [Breezy Eco manual 21433](https://ventilation-system.com/download/breezy-eco-manual-21433.pdf)
 - [Freshpoint manual 16999](https://blaubergventilatoren.net/download/freshpoint-manual-16999.pdf)
 - [Freshbox 100 WiFi connection guide B73-9-1EN-01](https://blaubergventilatoren.net/download/freshbox-100-wifi-datasheet-7508.pdf)
+- [Arc Smart Smart House CO2 connection guide](https://ventilation-system.com/download/arc-smart-manual-21863.pdf)
 
 ### Relabelled model names
 
@@ -35,6 +36,7 @@ unit type.
 | `0x0300` | Vento Expert A50-1/A85-1/A100-1 W V.2 | TwinFresh Expert RW1-50/85/100 V.2 | Same `vento` profile |
 | `0x0400` | Vento Expert Duo A30-1 W V.2 | TwinFresh Expert Duo RW1-30 V.2 | Same `vento` profile |
 | `0x0500` | Vento Expert A30 W V.2 | TwinFresh Expert RW-30 V.2 | Same `vento` profile |
+| `0x0D00` | Arc Smart |  | Dedicated `arc` profile |
 | `0x0E00` | TwinFresh Style Wifi V.2 | Oxxify smart 50 | Same `vento` profile |
 | `0x1100` | Breezy 160 | Freshpoint 160; Vents Breezy 160-E | Breezy/Freshpoint parameter variant, handled through the dedicated `breezy` profile |
 | `0x1400` | Breezy Eco 160 | Freshpoint Eco 160 | Breezy/Freshpoint parameter variant, handled through the dedicated `breezy` profile |
@@ -261,6 +263,65 @@ AHU-specific rows below are documented for the next profile-expansion pass.
 The Freshbox guide also documents Wi-Fi SSID/password/encryption, DHCP, DNS,
 gateway, and setup-mode commands. Those rows remain intentionally out of scope
 for HA exposure for the same credential-safety reasons as the other profiles.
+
+### Arc Smart notes
+
+Implemented from [Arc Smart Smart House CO2 connection guide](https://ventilation-system.com/download/arc-smart-manual-21863.pdf).
+The guide uses the same BGCP/UDP framing, default password, port 4000, special
+commands, and checksum rules as the other Smart Home PDFs, but its parameter
+table is not a Vento/Freshbox fan-control table. It does not document the normal
+`0x0001` unit on/off row or `0x0002` speed-mode row. The current `arc` profile
+therefore exposes it as a read-focused environmental/status device plus the
+explicit mode toggles documented in the PDF.
+
+Documented unit type from parameter `0x00B9`:
+
+| PDF value | Parser value | PDF model text | Code status |
+| -- | -- | -- | -- |
+| `13` | `0x0D00` | Arc Smart | `arc` profile |
+
+Implemented Arc Smart parameters:
+
+| Parameter | Code field | Functions | Description | HA exposure |
+| -- | -- | -- | -- | -- |
+| 0x0006 | `boost_status` | R/W/RW | Boost mode | switch |
+| 0x0007 | `timer_status` | R | Current status of the built-in timer | diagnostic sensor |
+| 0x000B | `timer_counter` | R | Current timer countdown | diagnostic sensor |
+| 0x000F | `humidity_sensor_state` | R/W/RW | Humidity sensor operating permission | select |
+| 0x0019 | `humidity_treshold` | R/W/RW/INC/DEC | Humidity setpoint | number |
+| 0x0021 | `room_temperature` | R | Room temperature | sensor |
+| 0x0024 | `battery_voltage` | R | Battery voltage | diagnostic sensor |
+| 0x0025 | `humidity` | R | Humidity | sensor |
+| 0x004B | `fan1_speed` | R | Current fan speed | diagnostic sensor |
+| 0x0066 | `boost_time` | R/W/RW/INC/DEC | Boost timer setpoint | number |
+| 0x007C | `device_search` | R | Device search on the local Ethernet network | discovery/internal |
+| 0x0083 | `low_battery_status` | R | Low battery warning indicator | diagnostic binary sensor |
+| 0x0085 | `cloud_server_state` | R | Cloud server connection state | diagnostic binary sensor |
+| 0x0086 | `firmware` | R | Controller base firmware version and date | device info |
+| 0x00A3 | `current_wifi_ip` | R | Current Wi-Fi module IP address | diagnostic sensor |
+| 0x00B9 | `unit_type` | R | Unit type | model/profile selection |
+| 0x0304 | `humidity_status` | R | Current humidity over-setpoint status | diagnostic binary sensor |
+| 0x030D | `all_day_mode` | R/W/RW | 24 hours mode selection | switch |
+| 0x030E | `light_status` | R | Light sensor status | diagnostic binary sensor |
+| 0x030F | `motion_status` | R | Motion sensor status | diagnostic binary sensor |
+| 0x0310 | `interval_ventilation_status` | R | Interval ventilation status | diagnostic binary sensor |
+| 0x0311 | `silent_mode_status` | R | Silent mode status | diagnostic binary sensor |
+| 0x0312 | `air_quality_status` | R | Air quality status | diagnostic sensor |
+| 0x0313 | `light_sensor_state` | R/W/RW | Light sensor-based control | switch |
+| 0x0314 | `motion_sensor_state` | R/W/RW | Motion sensor-based control | switch |
+| 0x0315 | `air_quality_sensor_state` | R/W/RW | Air quality sensor-based control | select |
+| 0x0316 | `interval_ventilation_state` | R/W/RW | Interval ventilation mode activation | switch |
+| 0x0317 | `silent_mode_state` | R/W/RW | Silent mode activation | switch |
+| 0x031F | `air_quality_treshold` | R/W/RW/INC/DEC | Air quality threshold setting | number |
+| 0x0320 | `air_quality` | R | Current air quality level | sensor |
+| 0x0323 | `temperature_status` | R | Temperature sensor status | diagnostic binary sensor |
+| 0x0324 | `temperature_sensor_state` | R/W/RW | Temperature sensor-based control | switch |
+| 0x0325 | `temperature_treshold` | R/W/RW/INC/DEC | Temperature threshold setting | number |
+
+The Arc PDF also documents Wi-Fi setup mode, SSID/password/encryption, DHCP,
+DNS, gateway, and setup apply/discard rows. Those remain intentionally
+unexposed for credential safety and because the integration is not a Wi-Fi
+provisioning tool.
 
 
 | Smart Home (Vento) B133-4-1EN-02 |                  |                                                                                                                                                                                                                                                                                                                                                                                                                                                 |                                                                                                                                                                                                                                                                                                                                                                                                                                                            |                  |  | Smart Wi-Fi B168-1EN-01 |                                                                   |                                                                                                                                      |              |

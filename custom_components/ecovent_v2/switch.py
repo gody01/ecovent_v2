@@ -72,6 +72,90 @@ SWITCH_SPECS = (
         False,
     ),
     SwitchSpec(
+        "_light_sensor_state",
+        "Light sensor",
+        "light_sensor_state",
+        SwitchDeviceClass.SWITCH,
+        False,
+        EntityCategory.CONFIG,
+        True,
+        "mdi:brightness-5",
+        False,
+        required_capabilities=("arc_environment",),
+    ),
+    SwitchSpec(
+        "_motion_sensor_state",
+        "Motion sensor",
+        "motion_sensor_state",
+        SwitchDeviceClass.SWITCH,
+        False,
+        EntityCategory.CONFIG,
+        True,
+        "mdi:motion-sensor",
+        False,
+        required_capabilities=("arc_environment",),
+    ),
+    SwitchSpec(
+        "_temperature_sensor_state",
+        "Temperature sensor",
+        "temperature_sensor_state",
+        SwitchDeviceClass.SWITCH,
+        False,
+        EntityCategory.CONFIG,
+        True,
+        "mdi:thermometer",
+        False,
+        required_capabilities=("arc_environment",),
+    ),
+    SwitchSpec(
+        "_boost_status",
+        "Boost",
+        "boost_status",
+        SwitchDeviceClass.SWITCH,
+        False,
+        EntityCategory.CONFIG,
+        True,
+        "mdi:fan-chevron-up",
+        False,
+        required_capabilities=("arc_environment",),
+    ),
+    SwitchSpec(
+        "_all_day_mode",
+        "All day mode",
+        "all_day_mode",
+        SwitchDeviceClass.SWITCH,
+        False,
+        EntityCategory.CONFIG,
+        True,
+        "mdi:hours-24",
+        False,
+        required_capabilities=("arc_environment",),
+    ),
+    SwitchSpec(
+        "_interval_ventilation_state",
+        "Interval ventilation",
+        "interval_ventilation_state",
+        SwitchDeviceClass.SWITCH,
+        False,
+        EntityCategory.CONFIG,
+        True,
+        "mdi:fan-auto",
+        False,
+        required_capabilities=("arc_environment",),
+    ),
+    SwitchSpec(
+        "_silent_mode_state",
+        "Silent mode",
+        "silent_mode_state",
+        SwitchDeviceClass.SWITCH,
+        False,
+        EntityCategory.CONFIG,
+        True,
+        "mdi:volume-off",
+        False,
+        required_capabilities=("arc_environment",),
+    ),
+    SwitchSpec(
         "_weekly_schedule_state",
         "Weekly schedule",
         "weekly_schedule_state",
@@ -232,6 +316,34 @@ class VentoSwitch(CoordinatorEntity, SwitchEntity):
         # _LOGGER.debug(f"Getting analogV_sensor_state: {self._fan.analogV_sensor_state}")
         # _LOGGER.debug(f"Attribute2 value: {self._attribute2}")
         return self._fan.analogV_sensor_state
+
+    def light_sensor_state(self):
+        """Light sensor state."""
+        return self._fan.light_sensor_state
+
+    def motion_sensor_state(self):
+        """Motion sensor state."""
+        return self._fan.motion_sensor_state
+
+    def temperature_sensor_state(self):
+        """Temperature sensor state."""
+        return self._fan.temperature_sensor_state
+
+    def boost_status(self):
+        """Boost mode state."""
+        return self._fan.boost_status
+
+    def all_day_mode(self):
+        """All day mode state."""
+        return self._fan.all_day_mode
+
+    def interval_ventilation_state(self):
+        """Interval ventilation state."""
+        return self._fan.interval_ventilation_state
+
+    def silent_mode_state(self):
+        """Silent mode state."""
+        return self._fan.silent_mode_state
 
     def weekly_schedule_state(self):
         """Weekly schedule state."""

@@ -116,6 +116,8 @@ class ParseResponseTest(unittest.TestCase):
             Fan.unit_types[0x0600],
             "Blauberg Smart Wi-Fi extract fan",
         )
+        self.assertEqual(Fan.device_models[0x0D00].name, "Arc Smart")
+        self.assertEqual(Fan.device_models[0x0D00].profile_key, "arc")
 
     def test_unit_type_metadata_keeps_source_documents_with_models(self):
         self.assertIn(
@@ -149,6 +151,12 @@ class ParseResponseTest(unittest.TestCase):
             Fan.device_models[0x0200].source_documents,
             (
                 "https://blaubergventilatoren.net/download/freshbox-100-wifi-datasheet-7508.pdf",
+            ),
+        )
+        self.assertEqual(
+            Fan.device_models[0x0D00].source_documents,
+            (
+                "https://ventilation-system.com/download/arc-smart-manual-21863.pdf",
             ),
         )
 
@@ -197,6 +205,13 @@ class ParseResponseTest(unittest.TestCase):
 
         for param_id in feature_param_ids:
             field = Fan.breezy_params[param_id][0]
+            with self.subTest(param_id=param_id, field=field):
+                self.assertIn(f"| 0x{param_id:04X} | `{field}` |", reference)
+
+    def test_protocol_reference_documents_arc_param_map(self):
+        reference = PROTOCOL_REFERENCE_PATH.read_text()
+
+        for param_id, (field, _values) in sorted(Fan.arc_params.items()):
             with self.subTest(param_id=param_id, field=field):
                 self.assertIn(f"| 0x{param_id:04X} | `{field}` |", reference)
 
@@ -392,6 +407,150 @@ class ParseResponseTest(unittest.TestCase):
         )
         self.assertEqual(fan.unit_type, "Freshbox 100 WiFi")
         self.assertEqual(fan.profile_key, "freshbox")
+
+    def test_parse_response_uses_arc_smart_profile(self):
+        fan = Fan("192.0.2.1")
+        self.assertTrue(
+            fan.parse_response(
+                packet_with_payload(
+                    [
+                        0xFE,
+                        0x02,
+                        0xB9,
+                        0x0D,
+                        0x00,
+                        0x06,
+                        0x01,
+                        0x07,
+                        0x00,
+                        0x0F,
+                        0x02,
+                        0x19,
+                        0x2D,
+                        0xFE,
+                        0x02,
+                        0x21,
+                        0xE1,
+                        0x00,
+                        0xFE,
+                        0x02,
+                        0x24,
+                        0xE4,
+                        0x0C,
+                        0x25,
+                        0x32,
+                        0xFE,
+                        0x02,
+                        0x4B,
+                        0xB0,
+                        0x04,
+                        0x83,
+                        0x01,
+                        0xFF,
+                        0x03,
+                        0x04,
+                        0x01,
+                        0xFF,
+                        0x03,
+                        0x0D,
+                        0x01,
+                        0xFF,
+                        0x03,
+                        0x0E,
+                        0x01,
+                        0xFF,
+                        0x03,
+                        0x0F,
+                        0x00,
+                        0xFF,
+                        0x03,
+                        0x12,
+                        0x01,
+                        0xFF,
+                        0x03,
+                        0x13,
+                        0x01,
+                        0xFF,
+                        0x03,
+                        0x14,
+                        0x00,
+                        0xFF,
+                        0x03,
+                        0x15,
+                        0x02,
+                        0xFF,
+                        0x03,
+                        0x16,
+                        0x01,
+                        0xFF,
+                        0x03,
+                        0x17,
+                        0x00,
+                        0xFF,
+                        0x03,
+                        0xFE,
+                        0x02,
+                        0x1F,
+                        0xC8,
+                        0x00,
+                        0xFF,
+                        0x03,
+                        0xFE,
+                        0x02,
+                        0x20,
+                        0x2C,
+                        0x01,
+                        0xFF,
+                        0x03,
+                        0x23,
+                        0x01,
+                        0xFF,
+                        0x03,
+                        0x24,
+                        0x01,
+                        0xFF,
+                        0x03,
+                        0x25,
+                        0x18,
+                    ]
+                )
+            )
+        )
+
+        self.assertEqual(fan.profile_key, "arc")
+        self.assertEqual(fan.unit_type, "Arc Smart")
+        self.assertEqual(fan.fan_preset_modes, [])
+        self.assertFalse(fan.supports_percentage_control)
+        self.assertFalse(fan.supports_parameter("state"))
+        self.assertFalse(fan.supports_parameter("speed"))
+        self.assertEqual(fan.boost_status, "on")
+        self.assertEqual(fan.timer_status, "off")
+        self.assertEqual(fan.humidity_sensor_state, "manual")
+        self.assertEqual(fan.humidity_treshold, "45")
+        self.assertEqual(fan.room_temperature, 22.5)
+        self.assertEqual(fan.battery_voltage, "3300 mV")
+        self.assertEqual(fan.humidity, "50")
+        self.assertEqual(fan.fan1_speed, "1200")
+        self.assertEqual(fan.low_battery_status, "on")
+        self.assertEqual(fan.humidity_status, "on")
+        self.assertEqual(fan.all_day_mode, "on")
+        self.assertEqual(fan.light_status, "on")
+        self.assertEqual(fan.motion_status, "off")
+        self.assertEqual(fan.air_quality_status, "on")
+        self.assertEqual(fan.light_sensor_state, "on")
+        self.assertEqual(fan.motion_sensor_state, "off")
+        self.assertEqual(fan.air_quality_sensor_state, "manual")
+        self.assertEqual(fan.interval_ventilation_state, "on")
+        self.assertEqual(fan.silent_mode_state, "off")
+        self.assertEqual(fan.air_quality_treshold, 200)
+        self.assertEqual(fan.air_quality, 300)
+        self.assertEqual(fan.temperature_status, "on")
+        self.assertEqual(fan.temperature_sensor_state, "on")
+        self.assertEqual(fan.temperature_treshold, "24")
+        self.assertEqual(
+            fan.parameter_options("air_quality_sensor_state"),
+            ["off", "automatic", "manual"],
+        )
 
     def test_parse_response_uses_freshbox_profile(self):
         fan = Fan("192.0.2.1")

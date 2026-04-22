@@ -83,6 +83,20 @@ SELECT_SPECS = (
         ("breezy_screen",),
         enable_by_default=False,
     ),
+    SelectSpec(
+        "_humidity_sensor_state",
+        "Humidity sensor mode",
+        "humidity_sensor_state",
+        "mdi:water-percent-alert",
+        ("arc_environment",),
+    ),
+    SelectSpec(
+        "_air_quality_sensor_state",
+        "Air quality sensor mode",
+        "air_quality_sensor_state",
+        "mdi:air-filter",
+        ("arc_environment",),
+    ),
 )
 
 

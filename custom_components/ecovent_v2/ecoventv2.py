@@ -129,6 +129,7 @@ class Fan(object):
         0x0500: "Vento Expert A30 W V.2",
         0x0E00: "TwinFresh Style Wifi V.2 / Oxxify smart 50",
         0x1100: "Vents Breezy 160-E",
+        0x1A00: "TwinFresh Atmo / newer Blauberg Vento",
         0x1B00: "Vento inHome S11 W",
     }
 
@@ -284,6 +285,7 @@ class Fan(object):
         self._password = password
         self._unknown_params = {}
         self.socket = None
+        self._bulk_read_supported = None
 
     def init_device(self):
         if self._id == "DEFAULT_DEVICEID":
@@ -471,7 +473,7 @@ class Fan(object):
             if self.socket is not None:
                 self.socket.close()
 
-    def do_func(self, func, param, value=""):
+    def do_func(self, func, param, value="", retries=10):
         _LOGGER.debug(f"Executing function {func} with param {param} and value {value}")
         data = func + self.encode_params(param, value)
         response = False
@@ -484,7 +486,7 @@ class Fan(object):
                 if self.parse_response(response):
                     return True
                 response = False
-            if i > 10:
+            if i >= retries:
                 # print ("EcoventV2: Timeout device: " + self._host + " bail out after " + str(i) + " retries" , file = sys.stderr )
                 return False
 
@@ -494,7 +496,7 @@ class Fan(object):
             if param in self.WRITE_ONLY_PARAMS:
                 continue
             request += hex(param).replace("0x", "").zfill(4)
-        return self.do_func(self.func["read"], request)
+        return self._read_params(request)
 
     def quick_update(self):
         request = "0006000B002D003200440016004A004B03040305"
@@ -508,11 +510,27 @@ class Fan(object):
         # 0x004B: ["fan2_speed", None],
         # 0x0304: ["humidity_status", statuses],
         # 0x0305: ["analogV_status", statuses],
-        return self.do_func(self.func["read"], request)
+        return self._read_params(request)
 
     def update_preset_speed_settings(self):
         request = "003A003B003C003D003E003F"
-        return self.do_func(self.func["read"], request)
+        return self._read_params(request)
+
+    def _read_params(self, request):
+        if self._bulk_read_supported is not False and self.do_func(
+            self.func["read"], request, retries=3
+        ):
+            self._bulk_read_supported = True
+            return True
+
+        self._bulk_read_supported = False
+        success = False
+        for i in range(0, len(request), 4):
+            success = (
+                self.do_func(self.func["read"], request[i : i + 4], retries=1)
+                or success
+            )
+        return success
 
     def set_param(self, param, value):
         valpar = self.get_params_values(param, value)

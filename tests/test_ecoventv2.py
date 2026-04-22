@@ -33,6 +33,13 @@ class ParseResponseTest(unittest.TestCase):
         self.assertTrue(fan.parse_response(packet_with_payload([0xFE, 0x02, 0xB9, 0x0E, 0x00])))
         self.assertEqual(fan.unit_type, "TwinFresh Style Wifi V.2 / Oxxify smart 50")
 
+    def test_parse_response_names_newer_atmo_unit_type(self):
+        fan = Fan("192.0.2.1")
+        self.assertTrue(
+            fan.parse_response(packet_with_payload([0xFE, 0x02, 0xB9, 0x1A, 0x00]))
+        )
+        self.assertEqual(fan.unit_type, "TwinFresh Atmo / newer Blauberg Vento")
+
     def test_parse_response_skips_unknown_parameter_ids(self):
         fan = Fan("192.0.2.1")
         self.assertTrue(
@@ -125,7 +132,7 @@ class PacketBuilderTest(unittest.TestCase):
         fan = Fan("192.0.2.1")
         calls = []
 
-        def do_func(func, param, value=""):
+        def do_func(func, param, value="", retries=10):
             calls.append((func, param, value))
             return True
 
@@ -134,6 +141,21 @@ class PacketBuilderTest(unittest.TestCase):
         _, params, _ = calls[0]
         self.assertNotIn("0065", params)
         self.assertNotIn("0080", params)
+
+    def test_update_falls_back_to_individual_reads_after_bulk_failure(self):
+        fan = Fan("192.0.2.1")
+        calls = []
+
+        def do_func(func, param, value="", retries=10):
+            calls.append((param, retries))
+            return len(param) == 4 and param == "0001"
+
+        fan.params = {0x0001: ["state", fan.states], 0x0002: ["speed", fan.speeds]}
+        fan.do_func = do_func
+
+        self.assertTrue(fan.update())
+        self.assertEqual(calls, [("00010002", 3), ("0001", 1), ("0002", 1)])
+        self.assertFalse(fan._bulk_read_supported)
 
 
 class DiscoveryTest(unittest.TestCase):

@@ -3,6 +3,67 @@
 # Blauberg EcoVent VENTO Expert A50/80/100 V.2 Fans
 Home Assistant Integration. Integration for newest Fans with api version 2
 
+This integration talks to the local BGCP/UDP Wi-Fi protocol used by devices on
+the Blauberg Group / VENTS platform. VENTS is an official sibling brand, not
+just a Blauberg relabel. The exact feature set is selected from the protocol
+device type reported by parameter `0x00B9`.
+
+## Device names and search keywords
+
+Use this list for search/discovery. Some third-party/OEM names are recorded as
+compatibility evidence or candidates; if your device is listed as a candidate,
+please open an issue with its reported unit type (`0x00B9`) so it can be mapped
+confidently.
+
+Official Blauberg / VENTS platform families and names:
+
+* Blauberg Ventilatoren, VENTS, Vento, VENTO, TwinFresh, EcoVent
+* Blauberg VENTO Expert, VENTO Expert A50-1 W V.2, VENTO Expert A50-1 S10 W V.2,
+  VENTO Expert A85-1 S10 W V.2, VENTO Expert A100-1 S10 W V.2,
+  VENTO Expert A50-1 W V.3
+* VENTS TwinFresh Expert, TwinFresh Expert RW1-50 V.2,
+  TwinFresh Expert RW1-85 V.2, TwinFresh Expert RW1-100 V.2,
+  TwinFresh Expert RW1-50 V.3
+* Blauberg VENTO Expert DUO A30-1 W V.2,
+  VENTO Expert DUO A30-1 S10 W V.2,
+  VENTS TwinFresh Expert Duo RW1-30 V.2
+* Blauberg VENTO Expert A30 W V.2, VENTO Expert A30 S10 W V.2,
+  VENTS TwinFresh Expert RW-30 V.2
+* Blauberg VENTO inHome, VENTO inHome W, VENTO inHome mini,
+  VENTO inHome mini W, VENTO inHome 100, VENTO inHome 160
+* VENTS TwinFresh Atmo, TwinFresh Atmo 100, TwinFresh Atmo 160,
+  TwinFresh Atmo mini, TwinFresh Atmo Wi-Fi, TwinFresh Atmo mini Wi-Fi
+* VENTS TwinFresh Style Wi-Fi, TwinFresh Style Frost Wi-Fi,
+  TwinFresh Style Wi-Fi mini
+* Blauberg Smart Wi-Fi, Smart IR Wi-Fi, VENTS iFan Wi-Fi,
+  VENTS iFan Move Wi-Fi
+* Blauberg Freshbox 100 WiFi, Freshbox 100 ERV WiFi, Freshbox E-100 WiFi,
+  Freshbox E1-100 WiFi, Freshbox E2-100 WiFi
+* VENTS Micra 100 WiFi, Micra 100 ERV WiFi, Micra 100 E WiFi,
+  Micra 100 E1 WiFi, Micra 100 E2 WiFi
+* VENTS Breezy, Breezy 160, Breezy 160-E, Breezy 160-E Smart,
+  Breezy 200-E, Breezy 200-E Smart, Breezy Eco 160, Breezy Eco 200
+* Blauberg Freshpoint, Freshpoint 160, Freshpoint 160-E,
+  Freshpoint 160-E Pro, Freshpoint 200, Freshpoint 200-E,
+  Freshpoint 200-E Pro, Freshpoint Eco 160, Freshpoint Eco 200
+* VENTS Arc Smart, Arc Smart white, Arc Smart black,
+  Blauberg O2 Supreme, O2 Supreme white, O2 Supreme black
+
+External relabels and OEM names tracked as evidence or candidates:
+
+* OXXIFY.smart 50, Oxxify.smart 50, Oxxify smart 50,
+  Oxxify.smart 30, oxxify.smart 50k, OXXIFY.pro 50, OXXIFY.eco 50
+* SIKU RV, SIKU RV 50 W Pro WiFi V2, SIKU RV 50 W PRO WIFI V2,
+  SIKU RV 30 DW Pro Duo WiFi V2, SIKU RV 30 DW PRO DUO WIFI V2,
+  SIKU RV 25 W Pro WiFi V2
+* Flexit Roomie One WiFi V2, Roomie One Wifi V2, Roomie Dual Wifi,
+  Roomie Dual WiFi V2, Flexit Aura, Flexit Muto
+* DUKA One, DUKA One S6W, DUKA One S6BW, DUKA One S4 Wi-Fi,
+  DUKA One S6 Wi-Fi, DUKA One Pro 25 S Wi-Fi, DUKA One Pro 50 S Wi-Fi
+* RL Raumklima, RL PRO-Serie, RL 50RVW, RL 30DVW, RL 25RVW
+* Winzel V.2, Winzel Expert WiFi RW1-50 P,
+  Blauberg Winzel Expert WiFi RW1-50 P
+* NIBE DVC 10, NIBE DVC 10-50W, NIBE DVC 10-D30W
 
 # Tested on:
 * Blauberg VENTO Expert A50-1 W V.2

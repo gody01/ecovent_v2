@@ -8,12 +8,10 @@ import re
 from .ecoventv2 import Fan
 
 from homeassistant.components.sensor import (
-    SensorDeviceClass,
     SensorEntity,
-    SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE, REVOLUTIONS_PER_MINUTE, EntityCategory
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -23,6 +21,9 @@ from .const import DOMAIN
 from .coordinator import EcoVentCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+
+from .sensor_specs import SENSOR_SPECS
 
 
 def _parse_hours(
@@ -66,243 +67,31 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Vento Sensors."""
+    coordinator: EcoVentCoordinator = hass.data[DOMAIN][config.entry_id]
     async_add_entities(
         [
             VentoSensor(
                 hass,
                 config,
-                "_humidity",
-                "Humidity",
-                "humidity",
-                PERCENTAGE,
-                SensorDeviceClass.HUMIDITY,
-                SensorStateClass.MEASUREMENT,
-                None,
-                True,
-                "mdi:water-percent",
-            ),
-            VentoSensor(
-                hass,
-                config,
-                "_speed1",
-                "Fan 1 speed",
-                "fan1_speed",
-                REVOLUTIONS_PER_MINUTE,
-                None,
-                SensorStateClass.MEASUREMENT,
-                EntityCategory.DIAGNOSTIC,
-                True,
-                "mdi:fan-speed-1",
-            ),
-            VentoSensor(
-                hass,
-                config,
-                "_speed2",
-                "Fan 2 speed",
-                "fan2_speed",
-                REVOLUTIONS_PER_MINUTE,
-                None,
-                SensorStateClass.MEASUREMENT,
-                EntityCategory.DIAGNOSTIC,
-                False,
-                "mdi:fan-speed-2",
-            ),
-            VentoSensor(
-                hass,
-                config,
-                "_airflow",
-                "Airflow",
-                "airflow",
-                None,
-                SensorDeviceClass.ENUM,
-                None,
-                None,
-                True,
-                "mdi:hvac",
-                ["ventilation", "heat_recovery", "air_supply"],
-                translation_key="airflow",
-            ),
-            VentoSensor(
-                hass,
-                config,
-                "_beeper",
-                "Beeper",
-                "beeper",
-                None,
-                SensorDeviceClass.ENUM,
-                None,
-                EntityCategory.DIAGNOSTIC,
-                True,
-                "mdi:volume-high",
-                ["off", "on", "silent"],
-                translation_key="beeper",
-            ),
-            VentoSensor(
-                hass,
-                config,
-                "_boost_status",
-                "Boost status",
-                "boost_status",
-                None,
-                SensorDeviceClass.ENUM,
-                None,
-                EntityCategory.DIAGNOSTIC,
-                True,
-                "mdi:fan-chevron-up",
-                ["off", "on", "delay"],
-                translation_key="boost_status",
-            ),
-            VentoSensor(
-                hass,
-                config,
-                "_timer_mode",
-                "Timer mode",
-                "timer_mode",
-                None,
-                SensorDeviceClass.ENUM,
-                None,
-                EntityCategory.DIAGNOSTIC,
-                False,
-                "mdi:timer-cog-outline",
-                ["off", "night", "party"],
-                translation_key="timer_mode",
-            ),
-            VentoSensor(
-                hass,
-                config,
-                "_alarm_status",
-                "Alarm status",
-                "alarm_status",
-                None,
-                SensorDeviceClass.ENUM,
-                None,
-                EntityCategory.DIAGNOSTIC,
-                True,
-                "mdi:alert-outline",
-                ["no", "alarm", "warning"],
-                translation_key="alarm_status",
-            ),
-            VentoSensor(
-                hass,
-                config,
-                "_timer_counter",
-                "Timer counter",
-                "timer_counter",
-                "h",
-                SensorDeviceClass.DURATION,
-                SensorStateClass.MEASUREMENT,
-                EntityCategory.DIAGNOSTIC,
-                False,
-                "mdi:timer-play-outline",
-            ),
-            VentoSensor(
-                hass,
-                config,
-                "_battery",
-                "Battery",
-                "battery_voltage",
-                PERCENTAGE,
-                SensorDeviceClass.BATTERY,
-                SensorStateClass.MEASUREMENT,
-                EntityCategory.DIAGNOSTIC,
-                True,
-                "mdi:battery",
-            ),
-            VentoSensor(
-                hass,
-                config,
-                "_filter_change_in",
-                "Filter change in",
-                "filter_timer_countdown",
-                "h",
-                SensorDeviceClass.DURATION,
-                SensorStateClass.MEASUREMENT,
-                EntityCategory.DIAGNOSTIC,
-                True,
-                "mdi:timer-sand",
-                suggested_display_precision=1,
-            ),
-            VentoSensor(
-                hass,
-                config,
-                "_filter_remaining",
-                "Filter remaining",
-                "filter_remaining",
-                PERCENTAGE,
-                None,
-                SensorStateClass.MEASUREMENT,
-                EntityCategory.DIAGNOSTIC,
-                True,
-                "mdi:air-filter",
-                suggested_display_precision=0,
-            ),
-            VentoSensor(
-                hass,
-                config,
-                "_night_mode_timer",
-                "Night mode timer",
-                "night_mode_timer",
-                "h",
-                SensorDeviceClass.DURATION,
-                SensorStateClass.MEASUREMENT,
-                EntityCategory.DIAGNOSTIC,
-                False,
-                "mdi:weather-night",
-                suggested_display_precision=2,
-            ),
-            VentoSensor(
-                hass,
-                config,
-                "_party_mode_timer",
-                "Party mode timer",
-                "party_mode_timer",
-                "h",
-                SensorDeviceClass.DURATION,
-                SensorStateClass.MEASUREMENT,
-                EntityCategory.DIAGNOSTIC,
-                False,
-                "mdi:party-popper",
-                suggested_display_precision=2,
-            ),
-            VentoSensor(
-                hass,
-                config,
-                "_analogv",
-                "Analog voltage",
-                "analogv",
-                None,
-                None,
-                None,
-                EntityCategory.DIAGNOSTIC,
-                False,
-                "mdi:flash",
-            ),
-            VentoSensor(
-                hass,
-                config,
-                "_machine_hours",
-                "Machine hours",
-                "machine_hours",
-                "h",
-                SensorDeviceClass.DURATION,
-                SensorStateClass.MEASUREMENT,
-                EntityCategory.DIAGNOSTIC,
-                False,
-                "mdi:timer-outline",
-            ),
-            VentoSensor(
-                hass,
-                config,
-                "_ip",
-                "IP address",
-                "current_wifi_ip",
-                None,
-                None,
-                None,
-                EntityCategory.DIAGNOSTIC,
-                True,
-                "mdi:ip-network",
-            ),
+                spec.key,
+                spec.name,
+                spec.method,
+                spec.native_unit_of_measurement,
+                spec.device_class,
+                spec.state_class,
+                spec.entity_category,
+                spec.enable_by_default,
+                spec.icon,
+                translation_key=spec.translation_key,
+                suggested_display_precision=spec.suggested_display_precision,
+            )
+            for spec in SENSOR_SPECS
+            if coordinator._fan.supports_entity(
+                required_params=spec.required_params or (spec.method,),
+                required_capabilities=spec.required_capabilities,
+                excluded_params=spec.excluded_params,
+                excluded_capabilities=spec.excluded_capabilities,
+            )
         ]
     )
 
@@ -345,7 +134,7 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         self._attr_entity_registry_enabled_default = enable_by_default
         self._method = getattr(self, method)
         self._attr_icon = icon
-        self._attr_options = options
+        self._attr_options = options or self._fan.parameter_options(method)
         self._attr_translation_key = translation_key
         if suggested_display_precision is not None:
             self._attr_suggested_display_precision = suggested_display_precision
@@ -369,6 +158,42 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         """Get humidity sensor value."""
         return self._fan.humidity
 
+    def temperature(self):
+        """Get temperature sensor value."""
+        return self._fan.temperature
+
+    def room_temperature(self):
+        """Get room temperature value."""
+        return self._fan.room_temperature
+
+    def outdoor_temperature(self):
+        """Get outdoor air temperature."""
+        return self._fan.outdoor_temperature
+
+    def supply_temperature(self):
+        """Get supply air temperature after reheater."""
+        return self._fan.supply_temperature
+
+    def exhaust_in_temperature(self):
+        """Get exhaust air temperature at the inlet."""
+        return self._fan.exhaust_in_temperature
+
+    def exhaust_out_temperature(self):
+        """Get exhaust air temperature at the outlet."""
+        return self._fan.exhaust_out_temperature
+
+    def co2(self):
+        """Get indoor CO2 level."""
+        return self._fan.co2
+
+    def voc(self):
+        """Get indoor VOC air quality index."""
+        return self._fan.voc
+
+    def air_quality(self):
+        """Get indoor air quality index."""
+        return self._fan.air_quality
+
     def fan1_speed(self):
         """Get fan1 speed value."""
         return self._fan.fan1_speed
@@ -385,6 +210,10 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         """Get beeper command mode reported by the device."""
         return self._fan.beeper
 
+    def battery_status(self):
+        """Get enum battery status."""
+        return self._fan.battery_status
+
     def boost_status(self):
         """Get boost status."""
         return self._fan.boost_status
@@ -393,18 +222,53 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         """Get timer mode."""
         return self._fan.timer_mode
 
+    def timer_status(self):
+        """Get timer status."""
+        return self._fan.timer_status
+
     def alarm_status(self):
         """Get alarm status."""
         return self._fan.alarm_status
+
+    def alarm_list(self):
+        """Get current alarm list."""
+        return self._fan.alarm_list
+
+    def heater_status(self):
+        """Get heater status."""
+        return self._fan.heater_status
+
+    def air_quality_status(self):
+        """Get compound air quality status."""
+        return self._fan.air_quality_status
+
+    def recovery_efficiency(self):
+        """Get recovery efficiency."""
+        return self._fan.recovery_efficiency
+
+    def schedule_speed(self):
+        """Get current schedule speed."""
+        return self._fan.schedule_speed
+
+    def frost_protection_status(self):
+        """Get frost protection status."""
+        return self._fan.frost_protection_status
 
     def battery_voltage(self):
         """Get battery used percentage."""
         high = 3300
         low = 2500
-        if self._fan.battery_voltage is None:
+        value = self._fan.battery_voltage
+        if value is None:
             return None
 
-        voltage = int(self._fan.battery_voltage.split()[0])
+        if isinstance(value, (int, float)):
+            voltage = int(value)
+        else:
+            match = re.match(r"(?P<voltage>\d+)", str(value))
+            if match is None:
+                return None
+            voltage = int(match.group("voltage"))
         voltage = round(((voltage - low) / (high - low)) * 100)
         return min(100, max(0, voltage))
 
@@ -457,6 +321,22 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
             r"(?P<days>\d+)d (?P<hours>\d+)h (?P<minutes>\d+)m",
             1,
         )
+
+    def screen_off_start_time(self):
+        """Get screen display off interval start."""
+        return self._fan.screen_off_start_time
+
+    def screen_off_end_time(self):
+        """Get screen display off interval end."""
+        return self._fan.screen_off_end_time
+
+    def silent_mode_start_time(self):
+        """Get silent mode start time."""
+        return self._fan.silent_mode_start_time
+
+    def silent_mode_end_time(self):
+        """Get silent mode end time."""
+        return self._fan.silent_mode_end_time
 
     def analogv(self):
         """Get analog Voltage value."""

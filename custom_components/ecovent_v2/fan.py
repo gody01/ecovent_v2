@@ -26,18 +26,7 @@ _LOGGER = logging.getLogger(__name__)
 DEFAULT_ON_PERCENTAGE = 5
 SPEED_RANGE = (1, 3)  # off is not included
 
-FULL_SUPPORT = (
-    FanEntityFeature.SET_SPEED
-    | FanEntityFeature.PRESET_MODE
-    | FanEntityFeature.OSCILLATE
-    | FanEntityFeature.DIRECTION
-    | FanEntityFeature.TURN_OFF
-    | FanEntityFeature.TURN_ON
-)
-
-
-PRESET_MODES = ["off", "low", "medium", "high", "manual"]
-DIRECTIONS = ["ventilation", "air_supply", "heat_recovery"]
+DIRECTIONS = ["forward", "reverse"]
 
 
 async def async_setup_entry(
@@ -76,7 +65,19 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         self._attr_icon = "mdi:fan"
         self._attr_translation_key = "vent"
         self._attr_extra_state_attributes = {"ipv4_address": self._fan.current_wifi_ip}
-        self._attr_supported_features = FULL_SUPPORT
+        self._attr_supported_features = FanEntityFeature(0)
+        if self._fan.fan_preset_modes:
+            self._attr_supported_features |= FanEntityFeature.PRESET_MODE
+        if self._fan.supports_parameter("state"):
+            self._attr_supported_features |= (
+                FanEntityFeature.TURN_OFF | FanEntityFeature.TURN_ON
+            )
+        if self._fan.supports_percentage_control:
+            self._attr_supported_features |= FanEntityFeature.SET_SPEED
+        if self._fan.supports_oscillation:
+            self._attr_supported_features |= FanEntityFeature.OSCILLATE
+        if self._fan.supports_direction:
+            self._attr_supported_features |= FanEntityFeature.DIRECTION
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._fan.id)},
             name=self._fan.name,
@@ -117,16 +118,18 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
     @property
     def preset_modes(self) -> list[str]:
         """Return a list of available preset modes."""
-        return PRESET_MODES
+        return self._fan.fan_preset_modes
 
     @property
     def directions(self) -> list[str]:
         """Return a list of available preset modes."""
+        if not self._fan.supports_direction:
+            return []
         return DIRECTIONS
 
     @property
     def preset_mode(self) -> str:
-        """Return the current preset mode, e.g., auto, smart, interval, favorite."""
+        """Return the current preset mode."""
         if self._fan.state == "off":
             return "off"
         return self._fan.speed
@@ -161,8 +164,10 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         return True
 
     @property
-    def current_direction(self) -> str:
+    def current_direction(self) -> str | None:
         """Fan direction."""
+        if not self._fan.supports_direction:
+            return None
         if self._fan.airflow == "air_supply":
             return "reverse"
         return "forward"
@@ -170,6 +175,8 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
     @property
     def oscillating(self) -> bool:
         """Oscillating."""
+        if not self._fan.supports_oscillation:
+            return False
         return self._fan.airflow == "heat_recovery"
 
     @property
@@ -194,6 +201,14 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         **kwargs: Any,
     ) -> None:
         """Turn on the entity."""
+        speed = kwargs.get("speed")
+        if (
+            preset_mode is None
+            and isinstance(speed, str)
+            and speed in self._fan.fan_preset_modes
+        ):
+            preset_mode = speed
+
         if preset_mode is not None:
             await self.hass.async_add_executor_job(self.set_preset_mode, preset_mode)
         if percentage is not None:
@@ -218,6 +233,11 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             self._set_param_if_changed("state", "off")
             return
 
+        if self._fan.uses_operating_mode_presets:
+            self._set_param_if_changed("state", "on")
+            self._fan.set_operating_mode_preset(preset_mode)
+            return
+
         if preset_mode in self.preset_modes:
             state_changed = self._set_param_if_changed("state", "on")
             speed_changed = self._set_param_if_changed("speed", preset_mode)
@@ -238,6 +258,10 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             return
 
         self._set_param_if_changed("state", "on")
+        if self._fan.uses_operating_mode_presets:
+            self._fan.set_speed_setpoint_percent(percentage)
+            return
+
         self._set_param_if_changed("speed", "manual")
         self._set_manual_percentage_if_changed(percentage)
 
@@ -283,8 +307,10 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         await self.hass.async_add_executor_job(
             self._fan.set_param, "filter_timer_reset", ""
         )
+        await self.coordinator.async_refresh()
 
     # Reset alarms
     async def async_reset_alarms(self, fan_target) -> None:
         """Reset Fan's Alarms."""
         await self.hass.async_add_executor_job(self._fan.set_param, "reset_alarms", "")
+        await self.coordinator.async_refresh()

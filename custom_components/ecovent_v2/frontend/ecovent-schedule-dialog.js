@@ -230,12 +230,12 @@ class EcoventScheduleDialog extends HTMLElement {
       merged[0].start === "00:00" &&
       (merged[0].end === "00:00" || merged[0].end === "24:00")
     ) {
-      return `All day ${merged[0].speed}`;
+      return `${merged[0].speed} all day`;
     }
 
     return merged
-      .map((item) => `${this._compactPeriodSummary(`${item.start}-${item.end} ${item.speed}`)}`)
-      .join("  •  ");
+      .map((item) => `${item.start}-${item.end} ${item.speed}`)
+      .join(", ");
   }
 
   _compactDaySummary(day) {
@@ -346,7 +346,7 @@ class EcoventScheduleDialog extends HTMLElement {
   }
 
   _periodCard(periodData, speedOptions) {
-    const summary = periodData.summary ?? "Unavailable";
+    const bounds = this._periodBounds(periodData);
     const period = periodData.period;
 
     return `
@@ -358,7 +358,7 @@ class EcoventScheduleDialog extends HTMLElement {
           </div>
           <div class="period-main">
             <div class="period-head">
-              <div class="period-summary">${summary}</div>
+              <div class="period-summary">${bounds.start}-${bounds.end}</div>
             </div>
             <label class="field field-time">
               <span class="field-label">Until</span>
@@ -647,9 +647,9 @@ class EcoventScheduleDialog extends HTMLElement {
 
         .week-row {
           display: grid;
-          grid-template-columns: 34px minmax(0, 1fr);
+          grid-template-columns: 72px minmax(0, 1fr);
           gap: 10px;
-          align-items: start;
+          align-items: center;
           width: 100%;
           border: none;
           border-radius: 10px;
@@ -673,6 +673,9 @@ class EcoventScheduleDialog extends HTMLElement {
 
         .week-value {
           min-width: 0;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         .periods {
@@ -711,7 +714,7 @@ class EcoventScheduleDialog extends HTMLElement {
 
         .period-main {
           display: grid;
-          grid-template-columns: minmax(132px, 156px) 176px minmax(220px, 1fr);
+          grid-template-columns: 92px 192px minmax(240px, 1fr);
           gap: 12px;
           align-items: center;
           min-width: 0;
@@ -746,7 +749,7 @@ class EcoventScheduleDialog extends HTMLElement {
         }
 
         .field-time {
-          width: 176px;
+          width: 192px;
         }
 
         .control.static {

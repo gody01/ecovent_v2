@@ -961,7 +961,14 @@ class EcoventScheduleDialog extends HTMLElement {
       .getElementById("close")
       ?.addEventListener("click", () => this.closeDialog());
     this.shadowRoot.getElementById("reset")?.addEventListener("click", () => {
+      const currentSelectedDay = this._draft?.selected_day;
       this._draft = this._buildDraft();
+      if (
+        currentSelectedDay &&
+        this._draft?.days?.some((day) => day.day === currentSelectedDay)
+      ) {
+        this._draft.selected_day = currentSelectedDay;
+      }
       this._dirty = false;
       this._render();
     });

@@ -57,7 +57,7 @@ class EcoventScheduleDialog extends HTMLElement {
   }
 
   _copyTargetLabel(day) {
-    return day ? day.toLowerCase() : "this day";
+    return day ?? "This day";
   }
 
   _timeLocale() {
@@ -529,10 +529,10 @@ class EcoventScheduleDialog extends HTMLElement {
           height: 40px;
           border: none;
           border-radius: 20px;
-          background: transparent;
+          background: var(--secondary-background-color);
           color: var(--primary-text-color);
           cursor: pointer;
-          font-size: 28px;
+          font-size: 24px;
           line-height: 1;
         }
 
@@ -561,43 +561,13 @@ class EcoventScheduleDialog extends HTMLElement {
           font-size: 17px;
         }
 
-        .toggle {
-          position: relative;
-          width: 52px;
-          height: 32px;
-        }
-
-        .toggle input {
-          position: absolute;
-          inset: 0;
-          opacity: 0;
-        }
-
-        .slider {
-          position: absolute;
-          inset: 0;
-          border-radius: 999px;
-          background: var(--disabled-color);
-        }
-
-        .slider::before {
-          content: "";
-          position: absolute;
-          top: 4px;
-          left: 4px;
-          width: 24px;
-          height: 24px;
-          border-radius: 50%;
-          background: white;
-          transition: transform 0.2s ease;
-        }
-
-        .toggle input:checked + .slider {
-          background: var(--primary-color);
-        }
-
-        .toggle input:checked + .slider::before {
-          transform: translateX(20px);
+        .schedule-toggle {
+          --switch-checked-button-color: var(--primary-color);
+          --switch-checked-track-color: color-mix(
+            in srgb,
+            var(--primary-color) 32%,
+            transparent
+          );
         }
 
         .copy-row {
@@ -628,6 +598,11 @@ class EcoventScheduleDialog extends HTMLElement {
 
         .group-chip:hover {
           border-color: var(--primary-color);
+        }
+
+        .group-chip:disabled {
+          opacity: 0.6;
+          cursor: default;
         }
 
         .week-summary {
@@ -796,7 +771,7 @@ class EcoventScheduleDialog extends HTMLElement {
           --control-select-menu-height: 44px;
           --control-select-menu-border-radius: 10px;
           --control-select-menu-background-color: var(--primary-color);
-          --control-select-menu-background-opacity: 0.18;
+          --control-select-menu-background-opacity: 0.1;
           --control-select-menu-focus-color: var(--primary-color);
         }
 
@@ -911,21 +886,18 @@ class EcoventScheduleDialog extends HTMLElement {
                 <div class="meta-label">Weekly schedule</div>
                 <div class="meta-value">${draft.weekly_schedule_enabled ? "Enabled" : "Disabled"}</div>
               </div>
-              <label class="toggle">
-                <input
-                  id="weekly-toggle"
-                  type="checkbox"
-                  ${draft.weekly_schedule_enabled ? "checked" : ""}
-                  ${this._busy ? "disabled" : ""}
-                />
-                <span class="slider"></span>
-              </label>
+              <ha-switch
+                class="schedule-toggle"
+                aria-label="Weekly schedule"
+                id="weekly-toggle"
+                ${this._busy ? "disabled" : ""}
+              ></ha-switch>
             </div>
             <div class="copy-row">
               <span class="copy-label">Copy ${this._copyTargetLabel(draft.selected_day)} to</span>
-              <button class="group-chip" data-apply="weekdays" ${this._busy ? "disabled" : ""}>weekdays</button>
-              <button class="group-chip" data-apply="weekend" ${this._busy ? "disabled" : ""}>weekend</button>
-              <button class="group-chip" data-apply="all" ${this._busy ? "disabled" : ""}>all days</button>
+              <button class="group-chip" data-apply="weekdays" ${this._busy ? "disabled" : ""}>Weekdays</button>
+              <button class="group-chip" data-apply="weekend" ${this._busy ? "disabled" : ""}>Weekend</button>
+              <button class="group-chip" data-apply="all" ${this._busy ? "disabled" : ""}>All days</button>
             </div>
           </div>
           <div class="day-strip">
@@ -970,11 +942,13 @@ class EcoventScheduleDialog extends HTMLElement {
     });
     this.shadowRoot.getElementById("save")?.addEventListener("click", () => this._save());
 
-    this.shadowRoot
-      .getElementById("weekly-toggle")
-      ?.addEventListener("change", (event) => {
+    const weeklyToggle = this.shadowRoot.getElementById("weekly-toggle");
+    if (weeklyToggle) {
+      weeklyToggle.checked = draft.weekly_schedule_enabled;
+      weeklyToggle.addEventListener("change", (event) => {
         this._setWeeklyEnabled(event.target.checked);
       });
+    }
 
     this.shadowRoot.querySelectorAll("[data-end-input]").forEach((element) => {
       const period = Number(element.dataset.endInput);

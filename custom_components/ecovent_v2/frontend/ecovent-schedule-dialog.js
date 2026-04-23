@@ -231,6 +231,57 @@ class EcoventScheduleDialog extends HTMLElement {
     return this._mergedDaySummary(day);
   }
 
+  _groupedWeekRows(days) {
+    const groups = [];
+
+    for (const day of days || []) {
+      const summary = this._compactDaySummary(day);
+      const previous = groups[groups.length - 1];
+
+      if (previous && previous.summary === summary) {
+        previous.days.push(day.day);
+      } else {
+        groups.push({ days: [day.day], summary });
+      }
+    }
+
+    return groups;
+  }
+
+  _groupedDayLabel(days) {
+    if (!days.length) {
+      return "";
+    }
+    if (days.length === 7) {
+      return "All days";
+    }
+    if (days.join("|") === "Monday|Tuesday|Wednesday|Thursday|Friday") {
+      return "Weekdays";
+    }
+    if (days.join("|") === "Saturday|Sunday") {
+      return "Weekend";
+    }
+    if (days.length === 1) {
+      return this._dayShort(days[0]);
+    }
+    return `${this._dayShort(days[0])}-${this._dayShort(days[days.length - 1])}`;
+  }
+
+  _weekGroupRow(group) {
+    const active = group.days.includes(this._draft?.selected_day);
+    const targetDay = active ? this._draft?.selected_day : group.days[0];
+    return `
+      <button
+        class="week-row ${active ? "active" : ""}"
+        data-day="${targetDay}"
+        ${this._busy ? "disabled" : ""}
+      >
+        <div class="week-day">${this._groupedDayLabel(group.days)}</div>
+        <div class="week-value">${group.summary}</div>
+      </button>
+    `;
+  }
+
   async _callService(service, serviceData) {
     if (!this._hass || this._busy) {
       return;
@@ -291,20 +342,22 @@ class EcoventScheduleDialog extends HTMLElement {
             ${
               periodData.editable_end
                 ? `
-                  <ha-time-input
+                  <ha-selector
                     class="time-input"
                     data-end-input="${period}"
-                  ></ha-time-input>
+                  ></ha-selector>
                 `
                 : `<div class="control static">24:00</div>`
             }
           </label>
           <label class="field">
             <span class="field-label">Speed</span>
-            <ha-control-select
+            <ha-control-select-menu
               class="speed-control"
               data-speed-select="${period}"
-            ></ha-control-select>
+              hide-label
+              show-arrow
+            ></ha-control-select-menu>
           </label>
         </div>
       </section>
@@ -331,6 +384,7 @@ class EcoventScheduleDialog extends HTMLElement {
     const currentDay = this._currentDay();
     const periods = Array.isArray(currentDay?.periods) ? currentDay.periods : [];
     const title = stateObj.attributes.friendly_name ?? "Schedule";
+    const groupedWeekRows = this._groupedWeekRows(draft.days);
     this.shadowRoot.innerHTML = `
       <style>
         :host {
@@ -362,7 +416,7 @@ class EcoventScheduleDialog extends HTMLElement {
           left: max(24px, env(safe-area-inset-left));
           right: max(24px, env(safe-area-inset-right));
           width: min(760px, calc(100vw - 48px));
-          max-height: min(860px, calc(100dvh - 32px));
+          max-height: min(820px, calc(100dvh - 24px));
           margin: auto;
           display: grid;
           grid-template-rows: auto minmax(0, 1fr) auto;
@@ -421,7 +475,7 @@ class EcoventScheduleDialog extends HTMLElement {
 
         .content {
           overflow: auto;
-          padding: 0 20px 14px;
+          padding: 0 20px 12px;
         }
 
         .top-card {
@@ -429,7 +483,7 @@ class EcoventScheduleDialog extends HTMLElement {
           border-radius: 12px;
           background: var(--secondary-background-color);
           padding: 12px 14px;
-          margin-bottom: 10px;
+          margin-bottom: 8px;
         }
 
         .toggle-row {
@@ -518,7 +572,7 @@ class EcoventScheduleDialog extends HTMLElement {
           border-radius: 12px;
           background: var(--ha-card-background, var(--card-background-color));
           padding: 6px;
-          margin-bottom: 10px;
+          margin-bottom: 8px;
         }
 
         .week-summary-title {
@@ -562,7 +616,7 @@ class EcoventScheduleDialog extends HTMLElement {
 
         .periods {
           display: grid;
-          gap: 8px;
+          gap: 6px;
         }
 
         .period-card {
@@ -637,23 +691,19 @@ class EcoventScheduleDialog extends HTMLElement {
           width: 100%;
         }
 
-        .time-input,
-        .speed-control {
-          --control-select-color: var(--primary-color);
-          --control-select-background: var(--primary-color);
-          --control-select-background-opacity: 0.18;
-          --control-select-thickness: 44px;
-          --control-select-padding: 2px;
-          --control-select-border-radius: 10px;
-        }
-
-        .speed-control {
-          --control-select-thickness: 44px;
-        }
-
-        ha-time-input {
+        .time-input {
           display: block;
           width: 100%;
+        }
+
+        .speed-control {
+          display: block;
+          width: 100%;
+          --control-select-menu-height: 44px;
+          --control-select-menu-border-radius: 10px;
+          --control-select-menu-background-color: var(--primary-color);
+          --control-select-menu-background-opacity: 0.18;
+          --control-select-menu-focus-color: var(--primary-color);
         }
 
         .footer {
@@ -777,7 +827,7 @@ class EcoventScheduleDialog extends HTMLElement {
           <div class="week-summary">
             <div class="week-summary-title">Week overview</div>
             <div class="week-summary-grid">
-              ${draft.days.map((day) => this._summaryRow(day)).join("")}
+              ${groupedWeekRows.map((group) => this._weekGroupRow(group)).join("")}
             </div>
           </div>
           <div class="periods">
@@ -822,8 +872,16 @@ class EcoventScheduleDialog extends HTMLElement {
     this.shadowRoot.querySelectorAll("[data-end-input]").forEach((element) => {
       const period = Number(element.dataset.endInput);
       const periodData = periods.find((item) => item.period === period);
-      element.locale = this._timeLocale();
-      element.value = `${this._normalizeTimeValue(periodData?.end)}:00`;
+      element.hass = {
+        ...this._hass,
+        locale: this._timeLocale(),
+      };
+      element.selector = {
+        time: {
+          no_second: true,
+        },
+      };
+      element.value = this._normalizeTimeValue(periodData?.end);
       element.disabled = this._busy;
     });
 
@@ -833,11 +891,10 @@ class EcoventScheduleDialog extends HTMLElement {
       element.options = speedOptions.map((option) => ({
         value: option.value,
         label: option.label,
-        path: this._speedOptionPath(option.value),
+        iconPath: this._speedOptionPath(option.value),
       }));
       element.value = periodData?.speed ?? speedOptions[0]?.value;
       element.disabled = this._busy;
-      element.label = "Speed";
     });
 
     this.shadowRoot.querySelectorAll("[data-day]").forEach((button) => {

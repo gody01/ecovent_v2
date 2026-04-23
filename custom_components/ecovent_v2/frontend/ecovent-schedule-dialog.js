@@ -139,6 +139,7 @@ class EcoventScheduleDialog extends HTMLElement {
     }
 
     Object.assign(period, patch);
+    this._refreshDaySummaries(day);
     this._dirty = true;
     this._render();
   }
@@ -195,6 +196,19 @@ class EcoventScheduleDialog extends HTMLElement {
       end: fallbackEnd,
       speed: period.speed ?? "Unknown",
     };
+  }
+
+  _refreshDaySummaries(day) {
+    let start = "00:00";
+
+    for (const period of day.periods || []) {
+      const end = period.editable_end ? this._normalizeTimeValue(period.end) : "00:00";
+      const speed = period.speed ?? "Unknown";
+      period.summary = `${start}-${end} ${speed}`;
+      if (period.editable_end) {
+        start = end;
+      }
+    }
   }
 
   _mergedDaySummary(day) {
@@ -372,6 +386,45 @@ class EcoventScheduleDialog extends HTMLElement {
         </div>
       </section>
     `;
+  }
+
+  _wireTimeInputs() {
+    this.shadowRoot.querySelectorAll("[data-end-input]").forEach((element) => {
+      const period = Number(element.dataset.endInput);
+
+      const attach = () => {
+        const selectorTime =
+          element.shadowRoot?.querySelector("ha-selector-time");
+        const timeInput = selectorTime?.shadowRoot?.querySelector("ha-time-input");
+
+        if (!timeInput) {
+          requestAnimationFrame(attach);
+          return;
+        }
+
+        if (timeInput.dataset.ecoventBound === "true") {
+          return;
+        }
+
+        timeInput.dataset.ecoventBound = "true";
+
+        const handleChange = (event) => {
+          const value = event.detail?.value ?? timeInput.value;
+          if (!value) {
+            return;
+          }
+
+          this._updatePeriod(period, {
+            end: this._normalizeTimeValue(value),
+          });
+        };
+
+        timeInput.addEventListener("value-changed", handleChange);
+        timeInput.addEventListener("change", handleChange);
+      };
+
+      requestAnimationFrame(attach);
+    });
   }
 
   _render() {
@@ -972,23 +1025,9 @@ class EcoventScheduleDialog extends HTMLElement {
       });
     });
 
-    this.shadowRoot.querySelectorAll("[data-end-input]").forEach((input) => {
-      input.addEventListener("value-changed", (event) => {
-        const value = event.detail.value;
-        input.value = value;
-        if (!value) {
-          return;
-        }
-        const normalized = this._normalizeTimeValue(value);
-        this._updatePeriod(Number(input.dataset.endInput), {
-          end: normalized,
-        });
-      });
-    });
-
     this.shadowRoot.querySelectorAll("[data-speed-select]").forEach((input) => {
-      input.addEventListener("value-changed", (event) => {
-        const value = event.detail.value;
+      input.addEventListener("wa-select", (event) => {
+        const value = event.detail?.item?.value;
         if (!value) {
           return;
         }
@@ -998,6 +1037,8 @@ class EcoventScheduleDialog extends HTMLElement {
         });
       });
     });
+
+    this._wireTimeInputs();
   }
 }
 

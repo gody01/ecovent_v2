@@ -15,7 +15,7 @@ DEVICE_PROFILES = {
         preset_modes=("off", "low", "medium", "high", "manual"),
         boost_statuses_name="boost_statuses",
         humidity_sensor_states_name="states",
-        schedule_speed_modes=("low", "medium", "high"),
+        schedule_speed_modes=("standby", "low", "medium", "high"),
         capabilities=frozenset(
             {
                 "analog_voltage",
@@ -61,7 +61,7 @@ DEVICE_PROFILES = {
         preset_modes=("off", "low", "medium", "high", "speed_4", "speed_5", "manual"),
         boost_statuses_name="statuses",
         humidity_sensor_states_name="states",
-        schedule_speed_modes=("low", "medium", "high", "speed_4", "speed_5"),
+        schedule_speed_modes=("standby", "low", "medium", "high", "speed_4", "speed_5"),
         capabilities=frozenset(
             {
                 "airflow",

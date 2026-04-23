@@ -257,15 +257,15 @@ class EcoventScheduleDialog extends HTMLElement {
 
         .dialog {
           position: absolute;
-          inset: max(24px, env(safe-area-inset-top))
-            max(24px, env(safe-area-inset-right))
-            max(24px, env(safe-area-inset-bottom))
-            max(24px, env(safe-area-inset-left));
-          max-width: 760px;
+          top: max(24px, env(safe-area-inset-top));
+          left: max(24px, env(safe-area-inset-left));
+          right: max(24px, env(safe-area-inset-right));
+          width: min(760px, calc(100vw - 48px));
           max-height: calc(100dvh - 48px);
           margin: auto;
           display: grid;
           grid-template-rows: auto auto auto auto;
+          align-content: start;
           background: var(--card-background-color, var(--ha-card-background));
           color: var(--primary-text-color);
           border-radius: 24px;
@@ -317,28 +317,21 @@ class EcoventScheduleDialog extends HTMLElement {
         .meta {
           display: flex;
           align-items: center;
-          justify-content: space-between;
-          gap: 12px;
+          justify-content: flex-start;
+          gap: 14px;
           padding: 0 20px 16px;
         }
 
-        .meta-card {
+        .schedule-toggle-card {
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 14px;
+          flex: 1 1 auto;
           border: 1px solid var(--divider-color);
           border-radius: 12px;
           padding: 14px 16px;
           background: var(--secondary-background-color);
-        }
-
-        .meta-card.primary {
-          flex: 1 1 auto;
-        }
-
-        .meta-card.secondary {
-          flex: 0 0 auto;
         }
 
         .meta-value {
@@ -389,7 +382,7 @@ class EcoventScheduleDialog extends HTMLElement {
           display: flex;
           flex-wrap: wrap;
           gap: 8px;
-          padding: 0 20px 12px;
+          padding: 0 20px 8px;
         }
 
         .day {
@@ -531,13 +524,19 @@ class EcoventScheduleDialog extends HTMLElement {
         }
 
         .group-chip {
-          height: 34px;
-          border-radius: 10px;
+          min-height: 36px;
+          border-radius: 18px;
           border: 1px solid var(--divider-color);
           background: var(--secondary-background-color);
-          color: var(--primary-text-color);
-          padding: 0 12px;
+          color: var(--secondary-text-color);
+          padding: 0 14px;
           cursor: pointer;
+          white-space: nowrap;
+        }
+
+        .group-chip:hover {
+          color: var(--primary-text-color);
+          border-color: var(--primary-color);
         }
 
         .footer {
@@ -580,8 +579,9 @@ class EcoventScheduleDialog extends HTMLElement {
 
         @media (max-width: 800px) {
           .dialog {
-            inset: env(safe-area-inset-top) env(safe-area-inset-right)
-              env(safe-area-inset-bottom) env(safe-area-inset-left);
+            top: env(safe-area-inset-top);
+            left: env(safe-area-inset-left);
+            right: env(safe-area-inset-right);
             width: 100%;
             height: 100dvh;
             max-width: none;
@@ -605,8 +605,7 @@ class EcoventScheduleDialog extends HTMLElement {
           }
 
           .meta {
-            flex-direction: column;
-            align-items: stretch;
+            padding-bottom: 12px;
           }
 
           .field-row {
@@ -644,7 +643,7 @@ class EcoventScheduleDialog extends HTMLElement {
           <button class="icon-button" id="close" aria-label="Close">×</button>
         </div>
         <div class="meta">
-          <div class="meta-card primary">
+          <div class="schedule-toggle-card">
             <div>
               <div class="meta-label">Weekly schedule</div>
               <div class="meta-value">${draft.weekly_schedule_enabled ? "Enabled" : "Disabled"}</div>
@@ -658,12 +657,6 @@ class EcoventScheduleDialog extends HTMLElement {
               />
               <span class="slider"></span>
             </label>
-          </div>
-          <div class="meta-card secondary">
-            <div>
-              <div class="meta-label">Apply current day to</div>
-              <div class="meta-value">Multiple days</div>
-            </div>
           </div>
         </div>
         <div class="days">
@@ -682,9 +675,9 @@ class EcoventScheduleDialog extends HTMLElement {
             .join("")}
         </div>
         <div class="group-actions">
-          <button class="group-chip" data-apply="weekdays" ${this._busy ? "disabled" : ""}>Weekdays</button>
-          <button class="group-chip" data-apply="weekend" ${this._busy ? "disabled" : ""}>Weekend</button>
-          <button class="group-chip" data-apply="all" ${this._busy ? "disabled" : ""}>All days</button>
+          <button class="group-chip" data-apply="weekdays" ${this._busy ? "disabled" : ""}>Copy to weekdays</button>
+          <button class="group-chip" data-apply="weekend" ${this._busy ? "disabled" : ""}>Copy to weekend</button>
+          <button class="group-chip" data-apply="all" ${this._busy ? "disabled" : ""}>Copy to all days</button>
         </div>
         <div class="content">
           <div class="periods">

@@ -279,6 +279,19 @@ class EcoventScheduleDialog extends HTMLElement {
     `;
   }
 
+  _dayChip(day) {
+    const active = day === this._draft?.selected_day;
+    return `
+      <button
+        class="day-chip ${active ? "active" : ""}"
+        data-day="${day}"
+        ${this._busy ? "disabled" : ""}
+      >
+        ${this._dayShort(day)}
+      </button>
+    `;
+  }
+
   async _callService(service, serviceData) {
     if (!this._hass || this._busy) {
       return;
@@ -337,10 +350,10 @@ class EcoventScheduleDialog extends HTMLElement {
                 ${
                   periodData.editable_end
                     ? `
-                      <ha-selector
+                      <ha-time-input
                         class="time-input"
                         data-end-input="${period}"
-                      ></ha-selector>
+                      ></ha-time-input>
                     `
                     : `<div class="control static">24:00</div>`
                 }
@@ -570,6 +583,29 @@ class EcoventScheduleDialog extends HTMLElement {
           background: var(--ha-card-background, var(--card-background-color));
           padding: 6px;
           margin-bottom: 6px;
+        }
+
+        .day-strip {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-bottom: 8px;
+        }
+
+        .day-chip {
+          min-width: 44px;
+          min-height: 34px;
+          border-radius: 17px;
+          border: 1px solid var(--divider-color);
+          background: var(--ha-card-background, var(--card-background-color));
+          color: var(--primary-text-color);
+          padding: 0 12px;
+          cursor: pointer;
+        }
+
+        .day-chip.active {
+          border-color: var(--primary-color);
+          background: color-mix(in srgb, var(--primary-color) 16%, transparent);
         }
 
         .week-summary-title {
@@ -823,6 +859,9 @@ class EcoventScheduleDialog extends HTMLElement {
               <button class="group-chip" data-apply="all" ${this._busy ? "disabled" : ""}>all days</button>
             </div>
           </div>
+          <div class="day-strip">
+            ${draft.days.map((day) => this._dayChip(day.day)).join("")}
+          </div>
           <div class="week-summary">
             <div class="week-summary-title">Week overview</div>
             <div class="week-summary-grid">
@@ -871,17 +910,11 @@ class EcoventScheduleDialog extends HTMLElement {
     this.shadowRoot.querySelectorAll("[data-end-input]").forEach((element) => {
       const period = Number(element.dataset.endInput);
       const periodData = periods.find((item) => item.period === period);
-      element.hass = {
-        ...this._hass,
-        locale: this._timeLocale(),
-      };
-      element.selector = {
-        time: {
-          no_second: true,
-        },
-      };
+      element.locale = this._timeLocale();
       element.value = this._normalizeTimeValue(periodData?.end);
       element.disabled = this._busy;
+      element.placeholderLabels = true;
+      element.clearable = false;
     });
 
     this.shadowRoot.querySelectorAll("[data-speed-select]").forEach((element) => {

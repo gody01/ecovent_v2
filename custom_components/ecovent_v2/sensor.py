@@ -417,7 +417,7 @@ class WeeklyScheduleSummarySensor(CoordinatorEntity, SensorEntity):
             "weekly_schedule_enabled": self._fan.weekly_schedule_state == "on",
             "selected_day": self.coordinator.schedule_day_option,
             "day_options": list(SCHEDULE_DAY_OPTIONS),
-            "speed_options": list(SCHEDULE_SPEED_OPTIONS),
+            "speed_options": self._fan.available_schedule_speed_options(),
             "days": self.coordinator.weekly_schedule_payload(),
         }
         return attrs

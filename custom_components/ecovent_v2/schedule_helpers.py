@@ -21,6 +21,9 @@ SCHEDULE_DAY_TO_INDEX = {label: index for index, label in SCHEDULE_DAY_LABELS.it
 
 SCHEDULE_SPEED_LABELS = {
     "standby": "Standby",
+    "speed_1": "Speed 1",
+    "speed_2": "Speed 2",
+    "speed_3": "Speed 3",
     "low": "Low",
     "medium": "Medium",
     "high": "High",

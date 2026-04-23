@@ -3,6 +3,11 @@
 import logging
 import time
 
+try:
+    from .schedule_helpers import SCHEDULE_SPEED_TO_OPTION
+except ImportError:
+    from schedule_helpers import SCHEDULE_SPEED_TO_OPTION
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -91,6 +96,33 @@ class FanCapabilitiesMixin:
         if param[1] is None:
             return None
         return list(param[1].values())
+
+    def available_schedule_speed_options(self):
+        """Return schedule speed options that make sense for the active device."""
+        options = []
+        for preset in self.fan_preset_modes:
+            if preset in {"off", "manual"}:
+                continue
+            if preset == "speed_4" and not self.supports_entity(
+                required_params=("supply_speed_4",)
+            ):
+                continue
+            if preset == "speed_5" and not self.supports_entity(
+                required_params=("supply_speed_5",)
+            ):
+                continue
+
+            option = SCHEDULE_SPEED_TO_OPTION.get(preset)
+            if option is not None and option not in options:
+                options.append(option)
+
+        if not options:
+            options = [
+                option
+                for option in ("Standby", "Low", "Medium", "High")
+                if option in SCHEDULE_SPEED_TO_OPTION
+            ]
+        return options
 
     def detect_runtime_capabilities(self):
         """Probe optional writable capabilities that cannot be trusted by model id."""

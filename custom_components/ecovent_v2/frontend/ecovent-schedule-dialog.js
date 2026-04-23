@@ -162,10 +162,26 @@ class EcoventScheduleDialog extends HTMLElement {
   }
 
   _savePayload() {
+    const days = (this._draft?.days ?? []).map((day) => ({
+      day: day.day,
+      periods: (day.periods ?? []).map((period) => {
+        const payload = {
+          period: period.period,
+          speed: period.speed,
+        };
+
+        if (period.editable_end) {
+          payload.end = this._normalizeTimeValue(period.end);
+        }
+
+        return payload;
+      }),
+    }));
+
     return {
       selected_day: this._draft?.selected_day,
       weekly_schedule_enabled: this._draft?.weekly_schedule_enabled,
-      days: this._draft?.days,
+      days,
     };
   }
 
@@ -920,13 +936,19 @@ class EcoventScheduleDialog extends HTMLElement {
         </div>
         <div class="footer">
           <div class="footer-note">
-            ${this._dirty ? "Unsaved changes" : "Changes are saved"}
+            ${
+              this._busy
+                ? "Saving changes..."
+                : this._dirty
+                  ? "Unsaved changes"
+                  : "Changes are saved"
+            }
           </div>
           <div class="actions">
             <button class="action" id="reset" ${this._busy ? "disabled" : ""}>Reset</button>
             <button class="action primary" id="save" ${
               this._busy || !this._dirty ? "disabled" : ""
-            }>Save</button>
+            }>${this._busy ? "Saving..." : "Save"}</button>
           </div>
         </div>
       </div>

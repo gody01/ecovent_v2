@@ -1,7 +1,13 @@
 """EcoVent Fan mixin extracted from the vendored protocol client."""
 
+from datetime import datetime
 import logging
 import socket
+
+try:
+    from .schedule_helpers import WeeklyScheduleRecord
+except ImportError:
+    from schedule_helpers import WeeklyScheduleRecord
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -288,3 +294,51 @@ class FanProtocolMixin:
             #  _LOGGER.debug(f"Getting parameter {param} with index {idx}")
             return self.do_func(self.func["read"], hex(idx).replace("0x", "").zfill(4))
         return False
+
+    def read_weekly_schedule_record(self, day, period):
+        """Read one weekly schedule period via the special 0x0077 request."""
+        if not self.supports_parameter("weekly_schedule_setup"):
+            return None
+
+        if day < 1 or day > 7 or period < 1 or period > 4:
+            raise ValueError(f"Invalid weekly schedule slot: day={day}, period={period}")
+
+        self._weekly_schedule_setup_record = None
+        request_value = bytes([day, period]).hex()
+        if not self.do_func(self.func["read"], "0077", request_value):
+            return None
+        return self._weekly_schedule_setup_record
+
+    def read_weekly_schedule_day(self, day):
+        """Read all four schedule periods for a day."""
+        records = {}
+        for period in range(1, 5):
+            record = self.read_weekly_schedule_record(day, period)
+            if record is not None:
+                records[period] = record
+        return records
+
+    def write_weekly_schedule_record(self, record):
+        """Write one weekly schedule period via 0x0077."""
+        if not isinstance(record, WeeklyScheduleRecord):
+            raise TypeError("record must be a WeeklyScheduleRecord")
+        return self.do_func(self.func["write_return"], "0077", record.to_hex_payload())
+
+    def set_rtc_datetime(self, value: datetime):
+        """Write the device RTC using local calendar/time rows."""
+        if not (
+            self.supports_parameter("rtc_time") and self.supports_parameter("rtc_date")
+        ):
+            return False
+
+        time_hex = bytes([value.second, value.minute, value.hour]).hex()
+        date_hex = bytes(
+            [value.day, value.isoweekday(), value.month, value.year % 100]
+        ).hex()
+        self.set_params(
+            {
+                "rtc_time": time_hex,
+                "rtc_date": date_hex,
+            }
+        )
+        return True

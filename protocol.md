@@ -110,6 +110,11 @@ The TwinFresh PDF marks the preset fan speed parameters `0x003A` through
 for TwinFresh Style Wi-Fi, TwinFresh Style Wi-Fi Frost, TwinFresh Style Wi-Fi
 mini, and TwinFresh Expert RW1-50 V.3.
 
+The integration now also exposes the documented Vento/TwinFresh weekly
+schedule rows `0x0072` (`weekly_schedule_state`) and `0x0077`
+(`weekly_schedule_setup`) plus the RTC rows `0x006F` (`rtc_time`) and
+`0x0070` (`rtc_date`) for device-clock visibility and synchronization.
+
 ### Breezy / Freshpoint Eco notes
 
 The 2025 Breezy Eco and Freshpoint manuals are relabels of the same protocol
@@ -140,6 +145,8 @@ Implemented Breezy/Freshpoint-specific parameters:
 | 0x0022 | `exhaust_out_temperature` | R | Current exhaust air temperature at the outlet | sensor |
 | 0x0027 | `co2` | R | Current indoor CO2 level | sensor |
 | 0x0068 | `heater_state` | R/W/RW | Heater control | switch |
+| 0x0072 | `weekly_schedule_state` | R/W/RW | Weekly schedule enabled | switch |
+| 0x0077 | `weekly_schedule_setup` | R/W/RW | Weekly schedule day editor | HA schedule editor (`Schedule day`, per-period speed/end entities) |
 | 0x007F | `alarm_list` | R | List of current alarms/warnings | diagnostic sensor |
 | 0x0081 | `heater_status` | R | Heater status | diagnostic sensor |
 | 0x0084 | `air_quality_status` | R | Air quality status: RH, CO2, reserved, reserved, VOC | diagnostic sensor |

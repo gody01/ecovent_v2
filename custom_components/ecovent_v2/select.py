@@ -16,6 +16,10 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import EcoVentCoordinator
 from .ecoventv2 import Fan
+from .schedule_helpers import (
+    SCHEDULE_DAY_OPTIONS,
+    SCHEDULE_SPEED_OPTIONS,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -149,16 +153,23 @@ async def async_setup_entry(
 ) -> None:
     """Set up writable enum select entities."""
     coordinator: EcoVentCoordinator = hass.data[DOMAIN][config.entry_id]
-    async_add_entities(
-        [
-            VentoSelect(hass, config, spec)
-            for spec in SELECT_SPECS
-            if coordinator._fan.supports_entity(
-                required_params=(spec.method,),
-                required_capabilities=spec.required_capabilities,
-            )
-        ]
-    )
+    entities = [
+        VentoSelect(hass, config, spec)
+        for spec in SELECT_SPECS
+        if coordinator._fan.supports_entity(
+            required_params=(spec.method,),
+            required_capabilities=spec.required_capabilities,
+        )
+    ]
+
+    if coordinator._fan.supports_parameter("weekly_schedule_setup"):
+        entities.append(WeeklyScheduleDaySelect(hass, config))
+        entities.extend(
+            WeeklyScheduleSpeedSelect(hass, config, period)
+            for period in range(1, 5)
+        )
+
+    async_add_entities(entities)
 
 
 class VentoSelect(CoordinatorEntity, SelectEntity):
@@ -202,3 +213,77 @@ class VentoSelect(CoordinatorEntity, SelectEntity):
 
         await self.hass.async_add_executor_job(self._fan.set_param, self._method, option)
         await self.coordinator.async_refresh()
+
+
+class WeeklyScheduleDaySelect(CoordinatorEntity, SelectEntity):
+    """Choose which weekday is shown in the schedule editor."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+
+    def __init__(self, hass: HomeAssistant, config: ConfigEntry) -> None:
+        """Initialize the schedule day select."""
+        coordinator: EcoVentCoordinator = hass.data[DOMAIN][config.entry_id]
+        super().__init__(coordinator)
+        self._fan: Fan = coordinator._fan
+        self._attr_name = "Schedule day"
+        self._attr_unique_id = self._fan.id + "_schedule_day"
+        self._attr_icon = "mdi:calendar-week"
+        self._attr_entity_category = EntityCategory.CONFIG
+        self._attr_options = list(SCHEDULE_DAY_OPTIONS)
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, self._fan.id)},
+            name=self._fan.name,
+        )
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the selected day."""
+        return self.coordinator.schedule_day_option
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str]:
+        """Show a compact summary of the selected day's periods."""
+        return self.coordinator.schedule_summaries()
+
+    async def async_select_option(self, option: str) -> None:
+        """Switch the schedule editor to another day."""
+        if option not in self.options:
+            raise ValueError(f"Invalid schedule day: {option}")
+        await self.coordinator.async_select_schedule_day(option)
+
+
+class WeeklyScheduleSpeedSelect(CoordinatorEntity, SelectEntity):
+    """Edit one schedule period speed."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+
+    def __init__(
+        self, hass: HomeAssistant, config: ConfigEntry, period: int
+    ) -> None:
+        """Initialize one schedule speed selector."""
+        coordinator: EcoVentCoordinator = hass.data[DOMAIN][config.entry_id]
+        super().__init__(coordinator)
+        self._fan: Fan = coordinator._fan
+        self._period = period
+        self._attr_name = f"Schedule period {period} speed"
+        self._attr_unique_id = self._fan.id + f"_schedule_period_{period}_speed"
+        self._attr_icon = f"mdi:numeric-{period}-circle-outline"
+        self._attr_entity_category = EntityCategory.CONFIG
+        self._attr_options = list(SCHEDULE_SPEED_OPTIONS)
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, self._fan.id)},
+            name=self._fan.name,
+        )
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the current speed option for the selected day/period."""
+        return self.coordinator.schedule_period_speed_option(self._period)
+
+    async def async_select_option(self, option: str) -> None:
+        """Write a new speed for the selected day/period."""
+        if option not in self.options:
+            raise ValueError(f"Invalid schedule speed: {option}")
+        await self.coordinator.async_set_schedule_period_speed(self._period, option)

@@ -193,8 +193,10 @@ class Fan(
     _boost_time = None
     _rtc_time = None
     _rtc_date = None
+    _rtc_weekday = None
     _weekly_schedule_state = None
     _weekly_schedule_setup = None
+    _weekly_schedule_setup_record = None
     _device_search = None
     _device_password = None
     _machine_hours = None

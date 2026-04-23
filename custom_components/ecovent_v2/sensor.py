@@ -226,6 +226,14 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         """Get timer status."""
         return self._fan.timer_status
 
+    def rtc_time(self):
+        """Get the device clock time."""
+        return self._fan.rtc_time
+
+    def rtc_date(self):
+        """Get the device clock date."""
+        return self._fan.rtc_date
+
     def alarm_status(self):
         """Get alarm status."""
         return self._fan.alarm_status

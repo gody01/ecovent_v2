@@ -1,5 +1,10 @@
 """EcoVent Fan mixin extracted from the vendored protocol client."""
 
+try:
+    from .schedule_helpers import WeeklyScheduleRecord
+except ImportError:
+    from schedule_helpers import WeeklyScheduleRecord
+
 class FanSpeedPropertiesMixin:
     def _preset_speed_percent(self, input):
         val = int(input, 16)
@@ -235,8 +240,16 @@ class FanSpeedPropertiesMixin:
 
     @rtc_time.setter
     def rtc_time(self, input):
+        raw = bytes.fromhex(input)
+        if self.profile_key == "extract_fan":
+            total_seconds = int.from_bytes(raw, byteorder="little", signed=False)
+            hours, remainder = divmod(total_seconds, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            self._rtc_time = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+            return
+
         val = int(input, 16).to_bytes(3, "big")
-        self._rtc_time = str(val[2]) + "h " + str(val[1]) + "m " + str(val[0]) + "s "
+        self._rtc_time = f"{val[2]:02d}:{val[1]:02d}:{val[0]:02d}"
 
     @property
     def silent_mode_start_time(self):
@@ -267,15 +280,8 @@ class FanSpeedPropertiesMixin:
     @rtc_date.setter
     def rtc_date(self, input):
         val = int(input, 16).to_bytes(4, "big")
-        self._rtc_date = (
-            str(val[1])
-            + " 20"
-            + str(val[3])
-            + "-"
-            + str(val[2]).zfill(2)
-            + "-"
-            + str(val[0]).zfill(2)
-        )
+        self._rtc_weekday = val[1]
+        self._rtc_date = f"20{val[3]:02d}-{val[2]:02d}-{val[0]:02d}"
 
     @property
     def weekly_schedule_state(self):
@@ -295,14 +301,17 @@ class FanSpeedPropertiesMixin:
     @weekly_schedule_setup.setter
     def weekly_schedule_setup(self, input):
         val = int(input, 16).to_bytes(6, "big")
+        speed = self._map_value(self.speeds, val[2], "weekly_schedule_speed")
+        record = WeeklyScheduleRecord(
+            day=val[0],
+            period=val[1],
+            speed=speed,
+            end_hour=val[5],
+            end_minute=val[4],
+            reserved=val[3],
+        )
+        self._weekly_schedule_setup_record = record
         self._weekly_schedule_setup = (
-            self.days_of_week[val[0]]
-            + "/"
-            + str(val[1])
-            + ": to "
-            + str(val[5])
-            + "h "
-            + str(val[4])
-            + "m "
-            + self.speeds[val[2]]
+            f"{record.day_label}/{record.period}: "
+            f"to {record.end_hour:02d}:{record.end_minute:02d} {record.speed_option}"
         )

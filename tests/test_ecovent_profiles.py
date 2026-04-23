@@ -1,5 +1,6 @@
 """Regression tests for EcoVent profile response parsing."""
 
+from datetime import datetime
 import unittest
 
 from ecovent_test_helpers import Fan, packet_with_payload
@@ -161,6 +162,137 @@ class ProfileParseTest(unittest.TestCase):
         self.assertEqual(fan.screen_display_state, "off_interval")
         self.assertEqual(fan.screen_off_start_time, "22:30")
         self.assertEqual(fan.screen_off_end_time, "07:00")
+
+    def test_breezy_freshpoint_profile_exposes_weekly_schedule_state(self):
+        fan = Fan("192.0.2.1")
+        self.assertTrue(
+            fan.parse_response(packet_with_payload([0xFE, 0x02, 0xB9, 0x11, 0x00]))
+        )
+
+        self.assertEqual(fan.profile_key, "breezy")
+        self.assertTrue(fan.supports_parameter("weekly_schedule_state"))
+        self.assertEqual(fan.get_params_index("weekly_schedule_state"), 0x0072)
+
+    def test_breezy_freshpoint_profile_can_write_weekly_schedule_state(self):
+        fan = Fan("192.0.2.1")
+        self.assertTrue(
+            fan.parse_response(packet_with_payload([0xFE, 0x02, 0xB9, 0x11, 0x00]))
+        )
+
+        calls = []
+
+        def fake_do_func(func, param, value="", retries=10):
+            calls.append((func, param, value, retries))
+            return True
+
+        fan.do_func = fake_do_func
+
+        self.assertTrue(fan.set_param("weekly_schedule_state", "on"))
+        self.assertEqual(
+            calls,
+            [(fan.func["write_return"], "0072", "01", 10)],
+        )
+
+    def test_breezy_freshpoint_profile_reads_weekly_schedule_setup(self):
+        fan = Fan("192.0.2.1")
+        self.assertTrue(
+            fan.parse_response(
+                packet_with_payload(
+                    [
+                        0xFE,
+                        0x02,
+                        0xB9,
+                        0x11,
+                        0x00,
+                        0xFE,
+                        0x06,
+                        0x77,
+                        0x01,
+                        0x01,
+                        0x01,
+                        0x00,
+                        0x00,
+                        0x06,
+                    ]
+                )
+            )
+        )
+
+        self.assertEqual(fan.profile_key, "breezy")
+        self.assertTrue(fan.supports_parameter("weekly_schedule_setup"))
+        self.assertEqual(
+            fan.weekly_schedule_setup,
+            "Monday/1: to 06:00 Low",
+        )
+        self.assertEqual(fan._weekly_schedule_setup_record.period, 1)
+        self.assertEqual(fan._weekly_schedule_setup_record.end_hour, 6)
+        self.assertEqual(fan._weekly_schedule_setup_record.speed, "low")
+
+    def test_breezy_freshpoint_profile_can_write_weekly_schedule_setup(self):
+        fan = Fan("192.0.2.1")
+        self.assertTrue(
+            fan.parse_response(packet_with_payload([0xFE, 0x02, 0xB9, 0x11, 0x00]))
+        )
+
+        calls = []
+
+        def fake_do_func(func, param, value="", retries=10):
+            calls.append((func, param, value, retries))
+            return True
+
+        fan.do_func = fake_do_func
+
+        record = fan.read_weekly_schedule_record(1, 1)
+        self.assertIsNone(record)
+        self.assertEqual(calls[-1], (fan.func["read"], "0077", "0101", 10))
+
+        calls.clear()
+        from schedule_helpers import WeeklyScheduleRecord
+
+        self.assertTrue(
+            fan.write_weekly_schedule_record(
+                WeeklyScheduleRecord(
+                    day=1,
+                    period=2,
+                    speed="medium",
+                    end_hour=9,
+                    end_minute=30,
+                )
+            )
+        )
+        self.assertEqual(calls, [(fan.func["write_return"], "0077", "010202001e09", 10)])
+
+    def test_vento_profile_supports_schedule_editor_and_rtc(self):
+        fan = Fan("192.0.2.1")
+        self.assertTrue(
+            fan.parse_response(packet_with_payload([0xFE, 0x02, 0xB9, 0x03, 0x00]))
+        )
+
+        self.assertEqual(fan.profile_key, "vento")
+        self.assertTrue(fan.supports_parameter("weekly_schedule_state"))
+        self.assertTrue(fan.supports_parameter("weekly_schedule_setup"))
+        self.assertTrue(fan.supports_parameter("rtc_time"))
+        self.assertTrue(fan.supports_parameter("rtc_date"))
+
+    def test_vento_profile_can_write_rtc_datetime(self):
+        fan = Fan("192.0.2.1")
+        self.assertTrue(
+            fan.parse_response(packet_with_payload([0xFE, 0x02, 0xB9, 0x03, 0x00]))
+        )
+
+        calls = []
+
+        def fake_do_func(func, param, value="", retries=10):
+            calls.append((func, param, value, retries))
+            return True
+
+        fan.do_func = fake_do_func
+
+        self.assertTrue(fan.set_rtc_datetime(datetime(2026, 4, 23, 19, 45, 30)))
+        self.assertEqual(
+            calls,
+            [(fan.func["write_return"], "006f1e2d1300701704041a", "", 10)],
+        )
 
     def test_vento_profile_keeps_byte_scaled_speed_values(self):
         fan = Fan("192.0.2.1")

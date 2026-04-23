@@ -130,8 +130,8 @@ params = {
     0x0063: ["filter_timer_setpoint", None],
     0x0064: ["filter_timer_countdown", None],
     0x0066: ["boost_time", None],
-    #   0x006F: ["rtc_time", None],  according stats not used in integration
-    #   0x0070: ["rtc_date", None],  according stats not used in integration
+    0x006F: ["rtc_time", None],
+    0x0070: ["rtc_date", None],
     0x007C: ["device_search", None],  # this is the fan serial number
     #   0x007D: ["device_password", None],  according stats not used in integration
     0x007E: ["machine_hours", None],
@@ -145,7 +145,7 @@ params = {
     0x00B8: ["analogV_treshold", None],
     0x00B9: ["unit_type", unit_types],
     0x0072: ["weekly_schedule_state", states],
-    #   0x0077: ["weekly_schedule_setup", None], according stats not used in integration
+    0x0077: ["weekly_schedule_setup", None],
     #        0x0087: [ 'factory_reset', None ],
     #        0x00a0: [ 'wifi_apply_and_quit', None ],
     #        0x00a2: [ 'wifi_discard_and_quit', None ],
@@ -241,6 +241,8 @@ breezy_params = {
     0x0063: ["filter_timer_setpoint", None],
     0x0064: ["filter_timer_countdown", None],
     0x0068: ["heater_state", states],
+    0x0072: ["weekly_schedule_state", states],
+    0x0077: ["weekly_schedule_setup", None],
     0x007C: ["device_search", None],
     0x007E: ["machine_hours", None],
     0x007F: ["alarm_list", None],

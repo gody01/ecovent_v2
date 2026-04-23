@@ -350,10 +350,10 @@ class EcoventScheduleDialog extends HTMLElement {
                 ${
                   periodData.editable_end
                     ? `
-                      <ha-time-input
+                      <ha-selector
                         class="time-input"
                         data-end-input="${period}"
-                      ></ha-time-input>
+                      ></ha-selector>
                     `
                     : `<div class="control static">24:00</div>`
                 }
@@ -435,7 +435,7 @@ class EcoventScheduleDialog extends HTMLElement {
           border-radius: 28px;
           border: 1px solid var(--divider-color);
           box-shadow: var(--dialog-box-shadow, 0 18px 48px rgba(0, 0, 0, 0.35));
-          overflow: hidden;
+          overflow: visible;
         }
 
         .header {
@@ -484,7 +484,7 @@ class EcoventScheduleDialog extends HTMLElement {
         }
 
         .content {
-          overflow: auto;
+          overflow: visible;
           padding: 0 20px 10px;
         }
 
@@ -650,6 +650,7 @@ class EcoventScheduleDialog extends HTMLElement {
         .periods {
           display: grid;
           gap: 4px;
+          overflow: visible;
         }
 
         .period-card {
@@ -657,6 +658,7 @@ class EcoventScheduleDialog extends HTMLElement {
           border-radius: 12px;
           padding: 10px 12px;
           background: var(--ha-card-background, var(--card-background-color));
+          overflow: visible;
         }
 
         .period-layout {
@@ -789,6 +791,11 @@ class EcoventScheduleDialog extends HTMLElement {
             max-width: none;
             max-height: none;
             border-radius: 0;
+            overflow: hidden;
+          }
+
+          .content {
+            overflow: auto;
           }
 
           .header,
@@ -910,11 +917,17 @@ class EcoventScheduleDialog extends HTMLElement {
     this.shadowRoot.querySelectorAll("[data-end-input]").forEach((element) => {
       const period = Number(element.dataset.endInput);
       const periodData = periods.find((item) => item.period === period);
-      element.locale = this._timeLocale();
+      element.hass = {
+        ...this._hass,
+        locale: this._timeLocale(),
+      };
+      element.selector = {
+        time: {
+          no_second: true,
+        },
+      };
       element.value = this._normalizeTimeValue(periodData?.end);
       element.disabled = this._busy;
-      element.placeholderLabels = true;
-      element.clearable = false;
     });
 
     this.shadowRoot.querySelectorAll("[data-speed-select]").forEach((element) => {

@@ -82,6 +82,9 @@ External relabels and OEM names tracked as evidence or candidates:
 * Direction
   - "forward" means 'ventilation' airflow
   - "reverse" means 'air_supply' airflow
+* Weekly schedule support on devices exposing `0x0072` / `0x0077`
+  - native HA entities for `Weekly schedule`, `Schedule day`, period speeds, and end times
+  - built-in `Ventilation` sidebar panel with a compact schedule editor for supported devices
 
 # Changelog
 version 0.0.5:

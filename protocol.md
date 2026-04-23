@@ -146,7 +146,7 @@ Implemented Breezy/Freshpoint-specific parameters:
 | 0x0027 | `co2` | R | Current indoor CO2 level | sensor |
 | 0x0068 | `heater_state` | R/W/RW | Heater control | switch |
 | 0x0072 | `weekly_schedule_state` | R/W/RW | Weekly schedule enabled | switch |
-| 0x0077 | `weekly_schedule_setup` | R/W/RW | Weekly schedule day editor | HA schedule editor (`Schedule day`, per-period speed/end entities) |
+| 0x0077 | `weekly_schedule_setup` | R/W/RW | Weekly schedule day editor | HA schedule editor (`Schedule day`, per-period speed/end entities) and the built-in `Ventilation` panel |
 | 0x007F | `alarm_list` | R | List of current alarms/warnings | diagnostic sensor |
 | 0x0081 | `heater_status` | R | Heater status | diagnostic sensor |
 | 0x0084 | `air_quality_status` | R | Air quality status: RH, CO2, reserved, reserved, VOC | diagnostic sensor |

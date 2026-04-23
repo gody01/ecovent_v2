@@ -20,6 +20,7 @@ from homeassistant.util import slugify
 
 from .const import DOMAIN, UPDATE_INTERVAL
 from .coordinator import EcoVentCoordinator
+from .frontend import async_register_frontend
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,7 +31,6 @@ _PLATFORMS: list[Platform] = [
     Platform.NUMBER,
     Platform.SELECT,
     Platform.TIME,
-    Platform.BUTTON,
     Platform.FAN,
 ]
 
@@ -205,6 +205,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
+    if coordinator._fan.supports_parameter("weekly_schedule_setup"):
+        await async_register_frontend(hass)
     _async_migrate_entity_registry(hass, coordinator)
     await _async_migrate_statistics_metadata_on_start(hass, coordinator)
     await hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)

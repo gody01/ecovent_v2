@@ -1,4 +1,12 @@
 const DOMAIN = "ecovent_v2";
+const MDI_FAN_SPEED_1 =
+  "M13 19C13 17.59 13.5 16.3 14.3 15.28C14.17 14.97 14.03 14.65 13.86 14.34C14.26 14 14.57 13.59 14.77 13.11C15.26 13.21 15.78 13.39 16.25 13.67C17.07 13.25 18 13 19 13C20.05 13 21.03 13.27 21.89 13.74C21.95 13.37 22 12.96 22 12.5C22 8.92 18.03 8.13 14.33 10.13C14 9.73 13.59 9.42 13.11 9.22C13.3 8.29 13.74 7.24 14.73 6.75C17.09 5.57 17 2 12.5 2C8.93 2 8.14 5.96 10.13 9.65C9.72 9.97 9.4 10.39 9.21 10.87C8.28 10.68 7.23 10.25 6.73 9.26C5.56 6.89 2 7 2 11.5C2 15.07 5.95 15.85 9.64 13.87C9.96 14.27 10.39 14.59 10.88 14.79C10.68 15.71 10.24 16.75 9.26 17.24C6.9 18.42 7 22 11.5 22C12.31 22 13 21.78 13.5 21.41C13.19 20.67 13 19.86 13 19M12 13C11.43 13 11 12.55 11 12S11.43 11 12 11C12.54 11 13 11.45 13 12S12.54 13 12 13M17 15V17H18V23H20V15H17Z";
+const MDI_FAN_SPEED_2 =
+  "M13 19C13 17.59 13.5 16.3 14.3 15.28C14.17 14.97 14.03 14.65 13.86 14.34C14.26 14 14.57 13.59 14.77 13.11C15.26 13.21 15.78 13.39 16.25 13.67C17.07 13.25 18 13 19 13C20.05 13 21.03 13.27 21.89 13.74C21.95 13.37 22 12.96 22 12.5C22 8.92 18.03 8.13 14.33 10.13C14 9.73 13.59 9.42 13.11 9.22C13.3 8.29 13.74 7.24 14.73 6.75C17.09 5.57 17 2 12.5 2C8.93 2 8.14 5.96 10.13 9.65C9.72 9.97 9.4 10.39 9.21 10.87C8.28 10.68 7.23 10.25 6.73 9.26C5.56 6.89 2 7 2 11.5C2 15.07 5.95 15.85 9.64 13.87C9.96 14.27 10.39 14.59 10.88 14.79C10.68 15.71 10.24 16.75 9.26 17.24C6.9 18.42 7 22 11.5 22C12.31 22 13 21.78 13.5 21.41C13.19 20.67 13 19.86 13 19M12 13C11.43 13 11 12.55 11 12S11.43 11 12 11C12.54 11 13 11.45 13 12S12.54 13 12 13M16 15V17H19V18H18C16.9 18 16 18.9 16 20V23H21V21H18V20H19C20.11 20 21 19.11 21 18V17C21 15.9 20.11 15 19 15H16Z";
+const MDI_FAN_SPEED_3 =
+  "M13 19C13 17.59 13.5 16.3 14.3 15.28C14.17 14.97 14.03 14.65 13.86 14.34C14.26 14 14.57 13.59 14.77 13.11C15.26 13.21 15.78 13.39 16.25 13.67C17.07 13.25 18 13 19 13C20.05 13 21.03 13.27 21.89 13.74C21.95 13.37 22 12.96 22 12.5C22 8.92 18.03 8.13 14.33 10.13C14 9.73 13.59 9.42 13.11 9.22C13.3 8.29 13.74 7.24 14.73 6.75C17.09 5.57 17 2 12.5 2C8.93 2 8.14 5.96 10.13 9.65C9.72 9.97 9.4 10.39 9.21 10.87C8.28 10.68 7.23 10.25 6.73 9.26C5.56 6.89 2 7 2 11.5C2 15.07 5.95 15.85 9.64 13.87C9.96 14.27 10.39 14.59 10.88 14.79C10.68 15.71 10.24 16.75 9.26 17.24C6.9 18.42 7 22 11.5 22C12.31 22 13 21.78 13.5 21.41C13.19 20.67 13 19.86 13 19M12 13C11.43 13 11 12.55 11 12S11.43 11 12 11C12.54 11 13 11.45 13 12S12.54 13 12 13M21 21V20.5C21 19.67 20.33 19 19.5 19C20.33 19 21 18.33 21 17.5V17C21 15.89 20.1 15 19 15H16V17H19V18H17V20H19V21H16V23H19C20.11 23 21 22.11 21 21";
+const MDI_POWER_SLEEP =
+  "M18.73,18C15.4,21.69 9.71,22 6,18.64C2.33,15.31 2.04,9.62 5.37,5.93C6.9,4.25 9,3.2 11.27,3C7.96,6.7 8.27,12.39 12,15.71C13.63,17.19 15.78,18 18,18C18.25,18 18.5,18 18.73,18Z";
 
 class EcoventScheduleDialog extends HTMLElement {
   constructor() {
@@ -52,12 +60,34 @@ class EcoventScheduleDialog extends HTMLElement {
     return day ? day.toLowerCase() : "this day";
   }
 
-  _hourOptions() {
-    return Array.from({ length: 24 }, (_, hour) => `${hour}`.padStart(2, "0"));
+  _timeLocale() {
+    return {
+      ...this._hass.locale,
+      time_format: "24",
+    };
   }
 
-  _minuteOptions() {
-    return Array.from({ length: 60 }, (_, minute) => `${minute}`.padStart(2, "0"));
+  _normalizeTimeValue(value) {
+    if (!value) {
+      return "00:00";
+    }
+    return value.slice(0, 5);
+  }
+
+  _speedOptionPath(value) {
+    if (value === "Standby") {
+      return MDI_POWER_SLEEP;
+    }
+    if (value === "Low") {
+      return MDI_FAN_SPEED_1;
+    }
+    if (value === "Medium") {
+      return MDI_FAN_SPEED_2;
+    }
+    if (value === "High") {
+      return MDI_FAN_SPEED_3;
+    }
+    return MDI_FAN_SPEED_1;
   }
 
   _buildDraft() {
@@ -244,9 +274,6 @@ class EcoventScheduleDialog extends HTMLElement {
     const summary = periodData.summary ?? "Unavailable";
     const endValue = periodData.end ?? "";
     const period = periodData.period;
-    const [hourValue, minuteValue] = endValue ? endValue.split(":") : ["00", "00"];
-    const hourOptions = this._hourOptions();
-    const minuteOptions = this._minuteOptions();
 
     return `
       <section class="period-card">
@@ -264,27 +291,20 @@ class EcoventScheduleDialog extends HTMLElement {
             ${
               periodData.editable_end
                 ? `
-                  <div class="time-control">
-                    <ha-selector
-                      class="selector-control time-part"
-                      data-end-hour="${period}"
-                    ></ha-selector>
-                    <span class="time-separator">:</span>
-                    <ha-selector
-                      class="selector-control time-part"
-                      data-end-minute="${period}"
-                    ></ha-selector>
-                  </div>
+                  <ha-time-input
+                    class="time-input"
+                    data-end-input="${period}"
+                  ></ha-time-input>
                 `
                 : `<div class="control static">24:00</div>`
             }
           </label>
           <label class="field">
             <span class="field-label">Speed</span>
-            <ha-selector
-              class="selector-control"
+            <ha-control-select
+              class="speed-control"
               data-speed-select="${period}"
-            ></ha-selector>
+            ></ha-control-select>
           </label>
         </div>
       </section>
@@ -311,9 +331,6 @@ class EcoventScheduleDialog extends HTMLElement {
     const currentDay = this._currentDay();
     const periods = Array.isArray(currentDay?.periods) ? currentDay.periods : [];
     const title = stateObj.attributes.friendly_name ?? "Schedule";
-    const hourOptions = this._hourOptions();
-    const minuteOptions = this._minuteOptions();
-
     this.shadowRoot.innerHTML = `
       <style>
         :host {
@@ -345,7 +362,7 @@ class EcoventScheduleDialog extends HTMLElement {
           left: max(24px, env(safe-area-inset-left));
           right: max(24px, env(safe-area-inset-right));
           width: min(760px, calc(100vw - 48px));
-          max-height: min(920px, calc(100dvh - 48px));
+          max-height: min(860px, calc(100dvh - 32px));
           margin: auto;
           display: grid;
           grid-template-rows: auto minmax(0, 1fr) auto;
@@ -362,7 +379,7 @@ class EcoventScheduleDialog extends HTMLElement {
           grid-template-columns: 40px minmax(0, 1fr);
           gap: 14px;
           align-items: center;
-          padding: 18px 20px 10px;
+          padding: 16px 20px 8px;
         }
 
         .title-block {
@@ -404,15 +421,15 @@ class EcoventScheduleDialog extends HTMLElement {
 
         .content {
           overflow: auto;
-          padding: 0 20px 18px;
+          padding: 0 20px 14px;
         }
 
         .top-card {
           border: 1px solid var(--divider-color);
           border-radius: 12px;
           background: var(--secondary-background-color);
-          padding: 14px 16px;
-          margin-bottom: 14px;
+          padding: 12px 14px;
+          margin-bottom: 10px;
         }
 
         .toggle-row {
@@ -471,7 +488,7 @@ class EcoventScheduleDialog extends HTMLElement {
           flex-wrap: wrap;
           gap: 8px;
           align-items: center;
-          margin-top: 12px;
+          margin-top: 10px;
         }
 
         .copy-label {
@@ -500,17 +517,17 @@ class EcoventScheduleDialog extends HTMLElement {
           border: 1px solid var(--divider-color);
           border-radius: 12px;
           background: var(--ha-card-background, var(--card-background-color));
-          padding: 8px;
-          margin-bottom: 14px;
+          padding: 6px;
+          margin-bottom: 10px;
         }
 
         .week-summary-title {
-          margin: 2px 4px 8px;
+          margin: 2px 6px 6px;
         }
 
         .week-summary-grid {
           display: grid;
-          gap: 4px;
+          gap: 2px;
         }
 
         .week-row {
@@ -522,7 +539,7 @@ class EcoventScheduleDialog extends HTMLElement {
           border: none;
           border-radius: 10px;
           background: transparent;
-          padding: 8px;
+          padding: 6px 8px;
           text-align: left;
           cursor: pointer;
           font-size: 12px;
@@ -545,29 +562,29 @@ class EcoventScheduleDialog extends HTMLElement {
 
         .periods {
           display: grid;
-          gap: 10px;
+          gap: 8px;
         }
 
         .period-card {
           border: 1px solid var(--divider-color);
           border-radius: 12px;
-          padding: 16px;
+          padding: 12px;
           background: var(--ha-card-background, var(--card-background-color));
         }
 
         .period-heading {
           display: grid;
           grid-template-columns: 28px 28px minmax(0, 1fr);
-          gap: 12px;
+          gap: 10px;
           align-items: start;
         }
 
         .period-title {
-          font-size: 18px;
+          font-size: 16px;
         }
 
         .period-summary {
-          margin-top: 6px;
+          margin-top: 4px;
           color: var(--secondary-text-color);
           line-height: 1.35;
         }
@@ -593,31 +610,15 @@ class EcoventScheduleDialog extends HTMLElement {
 
         .editor-row {
           display: grid;
-          grid-template-columns: minmax(0, 1.1fr) minmax(220px, 0.9fr);
-          gap: 12px;
-          margin-top: 14px;
+          grid-template-columns: minmax(150px, 0.8fr) minmax(0, 1.2fr);
+          gap: 10px;
+          margin-top: 10px;
           margin-left: 40px;
         }
 
         .field {
           display: grid;
           gap: 8px;
-        }
-
-        .time-control {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-          gap: 6px;
-          align-items: center;
-        }
-
-        .time-part {
-          text-align: center;
-        }
-
-        .time-separator {
-          color: var(--secondary-text-color);
-          font-weight: 600;
         }
 
         .control.static {
@@ -631,14 +632,28 @@ class EcoventScheduleDialog extends HTMLElement {
           padding: 10px 12px;
         }
 
-        .selector-control {
+        .time-input {
           display: block;
           width: 100%;
         }
 
-        .selector-control[disabled] {
-          pointer-events: none;
-          opacity: 0.7;
+        .time-input,
+        .speed-control {
+          --control-select-color: var(--primary-color);
+          --control-select-background: var(--primary-color);
+          --control-select-background-opacity: 0.18;
+          --control-select-thickness: 44px;
+          --control-select-padding: 2px;
+          --control-select-border-radius: 10px;
+        }
+
+        .speed-control {
+          --control-select-thickness: 44px;
+        }
+
+        ha-time-input {
+          display: block;
+          width: 100%;
         }
 
         .footer {
@@ -646,7 +661,7 @@ class EcoventScheduleDialog extends HTMLElement {
           align-items: center;
           justify-content: space-between;
           gap: 12px;
-          padding: 16px 20px max(16px, env(safe-area-inset-bottom));
+          padding: 12px 20px max(12px, env(safe-area-inset-bottom));
           border-top: 1px solid var(--divider-color);
           background: var(--card-background-color, var(--ha-card-background));
         }
@@ -703,12 +718,12 @@ class EcoventScheduleDialog extends HTMLElement {
           }
 
           .period-card {
-            padding: 14px;
+            padding: 10px;
           }
 
           .editor-row {
             grid-template-columns: 1fr;
-            margin-left: 40px;
+            margin-left: 34px;
           }
 
           .footer {
@@ -804,49 +819,25 @@ class EcoventScheduleDialog extends HTMLElement {
         this._setWeeklyEnabled(event.target.checked);
       });
 
-    const selectSelector = (options) => ({
-      select: {
-        mode: "dropdown",
-        options,
-      },
-    });
-
-    this.shadowRoot.querySelectorAll("[data-end-hour]").forEach((element) => {
-      const period = Number(element.dataset.endHour);
+    this.shadowRoot.querySelectorAll("[data-end-input]").forEach((element) => {
+      const period = Number(element.dataset.endInput);
       const periodData = periods.find((item) => item.period === period);
-      const value = periodData?.end?.split(":")?.[0] ?? "00";
-      element.hass = this._hass;
-      element.selector = selectSelector(
-        hourOptions.map((option) => ({ value: option, label: option }))
-      );
-      element.value = value;
-      element.disabled = this._busy;
-    });
-
-    this.shadowRoot.querySelectorAll("[data-end-minute]").forEach((element) => {
-      const period = Number(element.dataset.endMinute);
-      const periodData = periods.find((item) => item.period === period);
-      const value = periodData?.end?.split(":")?.[1] ?? "00";
-      element.hass = this._hass;
-      element.selector = selectSelector(
-        minuteOptions.map((option) => ({ value: option, label: option }))
-      );
-      element.value = value;
+      element.locale = this._timeLocale();
+      element.value = `${this._normalizeTimeValue(periodData?.end)}:00`;
       element.disabled = this._busy;
     });
 
     this.shadowRoot.querySelectorAll("[data-speed-select]").forEach((element) => {
       const period = Number(element.dataset.speedSelect);
       const periodData = periods.find((item) => item.period === period);
-      element.hass = this._hass;
-      element.selector = selectSelector(
-        speedOptions.map((option) => ({
-          value: option.value,
-          label: option.label,
-        }))
-      );
+      element.options = speedOptions.map((option) => ({
+        value: option.value,
+        label: option.label,
+        path: this._speedOptionPath(option.value),
+      }));
       element.value = periodData?.speed ?? speedOptions[0]?.value;
       element.disabled = this._busy;
+      element.label = "Speed";
     });
 
     this.shadowRoot.querySelectorAll("[data-day]").forEach((button) => {
@@ -879,36 +870,29 @@ class EcoventScheduleDialog extends HTMLElement {
       });
     });
 
-    const syncPeriodTime = (period) => {
-      const hour = this.shadowRoot.querySelector(`[data-end-hour="${period}"]`)?.value;
-      const minute = this.shadowRoot.querySelector(`[data-end-minute="${period}"]`)?.value;
-      if (hour == null || minute == null) {
-        return;
-      }
-      this._updatePeriod(Number(period), {
-        end: `${hour}:${minute}`,
-      });
-    };
-
-    this.shadowRoot.querySelectorAll("[data-end-hour]").forEach((input) => {
+    this.shadowRoot.querySelectorAll("[data-end-input]").forEach((input) => {
       input.addEventListener("value-changed", (event) => {
-        input.value = event.detail.value;
-        syncPeriodTime(input.dataset.endHour);
-      });
-    });
-
-    this.shadowRoot.querySelectorAll("[data-end-minute]").forEach((input) => {
-      input.addEventListener("value-changed", (event) => {
-        input.value = event.detail.value;
-        syncPeriodTime(input.dataset.endMinute);
+        const value = event.detail.value;
+        input.value = value;
+        if (!value) {
+          return;
+        }
+        const normalized = this._normalizeTimeValue(value);
+        this._updatePeriod(Number(input.dataset.endInput), {
+          end: normalized,
+        });
       });
     });
 
     this.shadowRoot.querySelectorAll("[data-speed-select]").forEach((input) => {
       input.addEventListener("value-changed", (event) => {
-        input.value = event.detail.value;
+        const value = event.detail.value;
+        if (!value) {
+          return;
+        }
+        input.value = value;
         this._updatePeriod(Number(input.dataset.speedSelect), {
-          speed: event.detail.value,
+          speed: value,
         });
       });
     });

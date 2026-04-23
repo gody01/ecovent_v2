@@ -61,10 +61,7 @@ class EcoventScheduleDialog extends HTMLElement {
   }
 
   _timeLocale() {
-    return {
-      ...this._hass.locale,
-      time_format: "24",
-    };
+    return this._hass.locale;
   }
 
   _normalizeTimeValue(value) {
@@ -323,42 +320,42 @@ class EcoventScheduleDialog extends HTMLElement {
 
   _periodCard(periodData, speedOptions) {
     const summary = periodData.summary ?? "Unavailable";
-    const endValue = periodData.end ?? "";
     const period = periodData.period;
 
     return `
       <section class="period-card">
-        <div class="period-heading">
-          <div class="period-track"></div>
-          <div class="period-marker">${period}</div>
-          <div>
-            <div class="period-title">Period ${period}</div>
-            <div class="period-summary">${summary}</div>
+        <div class="period-layout">
+          <div class="period-side">
+            <div class="period-track"></div>
+            <div class="period-marker">${period}</div>
           </div>
-        </div>
-        <div class="editor-row">
-          <label class="field">
-            <span class="field-label">Until</span>
-            ${
-              periodData.editable_end
-                ? `
-                  <ha-selector
-                    class="time-input"
-                    data-end-input="${period}"
-                  ></ha-selector>
-                `
-                : `<div class="control static">24:00</div>`
-            }
-          </label>
-          <label class="field">
-            <span class="field-label">Speed</span>
-            <ha-control-select-menu
-              class="speed-control"
-              data-speed-select="${period}"
-              hide-label
-              show-arrow
-            ></ha-control-select-menu>
-          </label>
+          <div class="period-main">
+            <div class="period-summary">${summary}</div>
+            <div class="editor-row">
+              <label class="field">
+                <span class="field-label">Until</span>
+                ${
+                  periodData.editable_end
+                    ? `
+                      <ha-selector
+                        class="time-input"
+                        data-end-input="${period}"
+                      ></ha-selector>
+                    `
+                    : `<div class="control static">24:00</div>`
+                }
+              </label>
+              <label class="field">
+                <span class="field-label">Speed</span>
+                <ha-control-select-menu
+                  class="speed-control"
+                  data-speed-select="${period}"
+                  hide-label
+                  show-arrow
+                ></ha-control-select-menu>
+              </label>
+            </div>
+          </div>
         </div>
       </section>
     `;
@@ -412,11 +409,11 @@ class EcoventScheduleDialog extends HTMLElement {
 
         .dialog {
           position: absolute;
-          top: max(24px, env(safe-area-inset-top));
+          top: max(12px, env(safe-area-inset-top));
           left: max(24px, env(safe-area-inset-left));
           right: max(24px, env(safe-area-inset-right));
           width: min(760px, calc(100vw - 48px));
-          max-height: min(820px, calc(100dvh - 24px));
+          max-height: min(920px, calc(100dvh - 12px));
           margin: auto;
           display: grid;
           grid-template-rows: auto minmax(0, 1fr) auto;
@@ -475,7 +472,7 @@ class EcoventScheduleDialog extends HTMLElement {
 
         .content {
           overflow: auto;
-          padding: 0 20px 12px;
+          padding: 0 20px 10px;
         }
 
         .top-card {
@@ -572,7 +569,7 @@ class EcoventScheduleDialog extends HTMLElement {
           border-radius: 12px;
           background: var(--ha-card-background, var(--card-background-color));
           padding: 6px;
-          margin-bottom: 8px;
+          margin-bottom: 6px;
         }
 
         .week-summary-title {
@@ -616,31 +613,40 @@ class EcoventScheduleDialog extends HTMLElement {
 
         .periods {
           display: grid;
-          gap: 6px;
+          gap: 4px;
         }
 
         .period-card {
           border: 1px solid var(--divider-color);
           border-radius: 12px;
-          padding: 12px;
+          padding: 10px 12px;
           background: var(--ha-card-background, var(--card-background-color));
         }
 
-        .period-heading {
+        .period-layout {
           display: grid;
-          grid-template-columns: 28px 28px minmax(0, 1fr);
-          gap: 10px;
+          grid-template-columns: 28px minmax(0, 1fr);
+          gap: 12px;
           align-items: start;
         }
 
-        .period-title {
-          font-size: 16px;
+        .period-side {
+          display: grid;
+          justify-items: center;
+          gap: 4px;
         }
 
         .period-summary {
-          margin-top: 4px;
+          min-height: 18px;
           color: var(--secondary-text-color);
+          font-size: 13px;
           line-height: 1.35;
+        }
+
+        .period-main {
+          display: grid;
+          gap: 8px;
+          min-width: 0;
         }
 
         .period-marker {
@@ -656,23 +662,21 @@ class EcoventScheduleDialog extends HTMLElement {
 
         .period-track {
           width: 2px;
-          height: 100%;
-          justify-self: center;
+          height: 42px;
           background: var(--divider-color);
           border-radius: 999px;
         }
 
         .editor-row {
           display: grid;
-          grid-template-columns: minmax(150px, 0.8fr) minmax(0, 1.2fr);
+          grid-template-columns: 128px minmax(0, 1fr);
           gap: 10px;
-          margin-top: 10px;
-          margin-left: 40px;
+          align-items: end;
         }
 
         .field {
           display: grid;
-          gap: 8px;
+          gap: 4px;
         }
 
         .control.static {
@@ -684,11 +688,6 @@ class EcoventScheduleDialog extends HTMLElement {
           background: var(--secondary-background-color);
           color: var(--primary-text-color);
           padding: 10px 12px;
-        }
-
-        .time-input {
-          display: block;
-          width: 100%;
         }
 
         .time-input {
@@ -711,7 +710,7 @@ class EcoventScheduleDialog extends HTMLElement {
           align-items: center;
           justify-content: space-between;
           gap: 12px;
-          padding: 12px 20px max(12px, env(safe-area-inset-bottom));
+          padding: 10px 20px max(10px, env(safe-area-inset-bottom));
           border-top: 1px solid var(--divider-color);
           background: var(--card-background-color, var(--ha-card-background));
         }
@@ -773,7 +772,7 @@ class EcoventScheduleDialog extends HTMLElement {
 
           .editor-row {
             grid-template-columns: 1fr;
-            margin-left: 34px;
+            gap: 8px;
           }
 
           .footer {

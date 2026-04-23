@@ -38,6 +38,17 @@ SCHEDULE_OPTION_TO_SPEED = {
 SCHEDULE_SPEED_TO_OPTION = {
     speed: label for label, speed in SCHEDULE_OPTION_TO_SPEED.items()
 }
+SCHEDULE_SPEED_ICONS = {
+    "standby": "mdi:power-sleep",
+    "speed_1": "mdi:fan-speed-1",
+    "low": "mdi:fan-speed-1",
+    "speed_2": "mdi:fan-speed-2",
+    "medium": "mdi:fan-speed-2",
+    "speed_3": "mdi:fan-speed-3",
+    "high": "mdi:fan-speed-3",
+    "speed_4": "mdi:fan-plus",
+    "speed_5": "mdi:fan-plus",
+}
 SCHEDULE_SPEED_TO_VALUE = {
     "standby": 0,
     "low": 1,

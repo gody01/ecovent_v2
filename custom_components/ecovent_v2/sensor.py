@@ -418,6 +418,7 @@ class WeeklyScheduleSummarySensor(CoordinatorEntity, SensorEntity):
             "selected_day": self.coordinator.schedule_day_option,
             "day_options": list(SCHEDULE_DAY_OPTIONS),
             "speed_options": self._fan.available_schedule_speed_options(),
+            "speed_option_meta": self._fan.available_schedule_speed_option_meta(),
             "days": self.coordinator.weekly_schedule_payload(),
         }
         return attrs

@@ -182,24 +182,26 @@ class EcoventScheduleDialog extends HTMLElement {
                 : `<div class="control static">24:00</div>`
             }
           </label>
-          <label class="field">
+          <div class="field">
             <span class="field-label">Speed</span>
-            <select
-              class="control"
-              data-speed-period="${period}"
-              ${this._busy ? "disabled" : ""}
-            >
+            <div class="speed-picker">
               ${speedOptions
                 .map(
                   (option) => `
-                    <option value="${option}" ${
-                      option === periodData.speed ? "selected" : ""
-                    }>${option}</option>
+                    <button
+                      class="speed-chip ${option.value === periodData.speed ? "active" : ""}"
+                      data-speed-period="${period}"
+                      data-speed-value="${option.value}"
+                      ${this._busy ? "disabled" : ""}
+                    >
+                      <ha-icon icon="${option.icon}"></ha-icon>
+                      <span>${option.label}</span>
+                    </button>
                   `
                 )
                 .join("")}
-            </select>
-          </label>
+            </div>
+          </div>
         </div>
       </section>
     `;
@@ -220,7 +222,9 @@ class EcoventScheduleDialog extends HTMLElement {
     }
 
     const dayOptions = Array.isArray(attrs.day_options) ? attrs.day_options : [];
-    const speedOptions = Array.isArray(attrs.speed_options) ? attrs.speed_options : [];
+    const speedOptions = Array.isArray(attrs.speed_option_meta)
+      ? attrs.speed_option_meta
+      : [];
     const currentDay = this._currentDay();
     const periods = Array.isArray(currentDay?.periods) ? currentDay.periods : [];
     const title = stateObj.attributes.friendly_name ?? "Schedule";
@@ -466,6 +470,39 @@ class EcoventScheduleDialog extends HTMLElement {
           margin-left: 40px;
         }
 
+        .speed-picker {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+
+        .speed-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          min-height: 40px;
+          border-radius: 10px;
+          border: 1px solid var(--divider-color);
+          background: var(--secondary-background-color);
+          color: var(--primary-text-color);
+          padding: 0 12px;
+          cursor: pointer;
+        }
+
+        .speed-chip ha-icon {
+          --mdc-icon-size: 18px;
+          color: var(--secondary-text-color);
+        }
+
+        .speed-chip.active {
+          border-color: var(--primary-color);
+          background: color-mix(in srgb, var(--primary-color) 18%, transparent);
+        }
+
+        .speed-chip.active ha-icon {
+          color: var(--primary-color);
+        }
+
         .field {
           display: grid;
           gap: 8px;
@@ -575,6 +612,11 @@ class EcoventScheduleDialog extends HTMLElement {
           .field-row {
             grid-template-columns: 1fr;
             margin-left: 40px;
+          }
+
+          .speed-picker {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
           }
 
           .footer {
@@ -702,10 +744,10 @@ class EcoventScheduleDialog extends HTMLElement {
       });
     });
 
-    this.shadowRoot.querySelectorAll("[data-speed-period]").forEach((select) => {
-      select.addEventListener("change", () => {
-        this._updatePeriod(Number(select.dataset.speedPeriod), {
-          speed: select.value,
+    this.shadowRoot.querySelectorAll("[data-speed-period]").forEach((button) => {
+      button.addEventListener("click", () => {
+        this._updatePeriod(Number(button.dataset.speedPeriod), {
+          speed: button.dataset.speedValue,
         });
       });
     });

@@ -4,9 +4,9 @@ import logging
 import time
 
 try:
-    from .schedule_helpers import SCHEDULE_SPEED_TO_OPTION
+    from .schedule_helpers import SCHEDULE_SPEED_ICONS, SCHEDULE_SPEED_TO_OPTION
 except ImportError:
-    from schedule_helpers import SCHEDULE_SPEED_TO_OPTION
+    from schedule_helpers import SCHEDULE_SPEED_ICONS, SCHEDULE_SPEED_TO_OPTION
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -108,6 +108,30 @@ class FanCapabilitiesMixin:
             if mode in SCHEDULE_SPEED_TO_OPTION
         ]
         return options or ["Standby", "Low", "Medium", "High"]
+
+    def available_schedule_speed_option_meta(self):
+        """Return schedule speed options with icons for the custom editor."""
+        speed_modes = self.device_profile.schedule_speed_modes or tuple(
+            preset for preset in self.fan_preset_modes if preset not in {"off", "manual"}
+        )
+        items = []
+        for mode in speed_modes:
+            option = SCHEDULE_SPEED_TO_OPTION.get(mode)
+            if option is None:
+                continue
+            items.append(
+                {
+                    "value": option,
+                    "label": option,
+                    "icon": SCHEDULE_SPEED_ICONS.get(mode, "mdi:fan"),
+                }
+            )
+        return items or [
+            {"value": "Standby", "label": "Standby", "icon": "mdi:power-sleep"},
+            {"value": "Low", "label": "Low", "icon": "mdi:fan-speed-1"},
+            {"value": "Medium", "label": "Medium", "icon": "mdi:fan-speed-2"},
+            {"value": "High", "label": "High", "icon": "mdi:fan-speed-3"},
+        ]
 
     def detect_runtime_capabilities(self):
         """Probe optional writable capabilities that cannot be trusted by model id."""

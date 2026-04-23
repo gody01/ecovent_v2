@@ -92,3 +92,14 @@ class WeeklyScheduleRecord:
             f"{start_hour:02d}:{start_minute:02d}-"
             f"{self.end_hour:02d}:{self.end_minute:02d} {self.speed_option}"
         )
+
+    def as_dict(self) -> dict[str, object]:
+        """Serialize one schedule row for Home Assistant attributes."""
+        data: dict[str, object] = {
+            "period": self.period,
+            "speed": self.speed_option,
+            "editable_end": self.period < 4,
+        }
+        if self.period < 4:
+            data["end"] = f"{self.end_hour:02d}:{self.end_minute:02d}"
+        return data

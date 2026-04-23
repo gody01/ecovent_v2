@@ -10,7 +10,6 @@ from .schedule_helpers import (
     SCHEDULE_DAY_OPTIONS,
     SCHEDULE_DAY_TO_INDEX,
     SCHEDULE_OPTION_TO_SPEED,
-    SCHEDULE_SPEED_TO_OPTION,
     WeeklyScheduleRecord,
 )
 
@@ -54,7 +53,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         self.fan_initialized = False  # flag to indicate if the fan has been initialized
         self.updateCounter = 0
         self._schedule_day = 1
-        self._schedule_records: dict[int, WeeklyScheduleRecord] = {}
+        self._weekly_schedule: dict[int, dict[int, WeeklyScheduleRecord]] = {}
         self._last_clock_sync = None
         _LOGGER.debug(
             "EcoVentCoordinator initialized with update rate: %d", update_seconds
@@ -95,9 +94,9 @@ class EcoVentCoordinator(DataUpdateCoordinator):
             await self.hass.async_add_executor_job(self._fan.quick_update)
 
         if self._fan.supports_parameter("weekly_schedule_setup") and (
-            not self._schedule_records or self.updateCounter % 10 == 0
+            not self._weekly_schedule or self.updateCounter % 10 == 0
         ):
-            await self.hass.async_add_executor_job(self._load_schedule_day)
+            await self.hass.async_add_executor_job(self._load_schedule_week)
 
         if self._fan.supports_parameter("rtc_time") and self._fan.supports_parameter(
             "rtc_date"
@@ -107,11 +106,13 @@ class EcoVentCoordinator(DataUpdateCoordinator):
     async def _async_post_init_setup(self) -> None:
         """Load slow one-off state after device discovery."""
         if self._fan.supports_parameter("weekly_schedule_setup"):
-            await self.hass.async_add_executor_job(self._load_schedule_day)
+            await self.hass.async_add_executor_job(self._load_schedule_week)
 
-    def _load_schedule_day(self) -> None:
-        """Read and cache the current schedule day from the device."""
-        self._schedule_records = self._fan.read_weekly_schedule_day(self._schedule_day)
+    def _load_schedule_week(self) -> None:
+        """Read and cache the full weekly schedule from the device."""
+        self._weekly_schedule = {
+            day: self._fan.read_weekly_schedule_day(day) for day in range(1, 8)
+        }
 
     async def _async_maybe_sync_clock(self) -> None:
         """Keep documented RTC-capable devices close to HA local time."""
@@ -129,7 +130,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
 
     @property
     def schedule_day_option(self) -> str:
-        """Return the UI label of the selected schedule day."""
+        """Return the default day label shown when the editor opens."""
         return SCHEDULE_DAY_LABELS[self._schedule_day]
 
     @property
@@ -137,101 +138,119 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         """Return the allowed schedule day selector options."""
         return list(SCHEDULE_DAY_OPTIONS)
 
-    def schedule_record(self, period: int) -> WeeklyScheduleRecord | None:
-        """Return the cached record for a period."""
-        return self._schedule_records.get(period)
+    def schedule_day_records(self, day: int) -> dict[int, WeeklyScheduleRecord]:
+        """Return cached schedule records for one day."""
+        return self._weekly_schedule.get(day, {})
 
-    def schedule_period_speed_option(self, period: int) -> str | None:
-        """Return the current UI speed label for a period."""
-        record = self.schedule_record(period)
-        if record is None:
-            return None
-        return SCHEDULE_SPEED_TO_OPTION.get(record.speed, record.speed)
+    def schedule_record(self, day: int, period: int) -> WeeklyScheduleRecord | None:
+        """Return the cached record for one day/period."""
+        return self.schedule_day_records(day).get(period)
 
-    def schedule_period_end_time(self, period: int) -> time | None:
-        """Return the end time for an editable schedule period."""
-        record = self.schedule_record(period)
-        if record is None:
-            return None
-        return record.end_time
-
-    def schedule_summaries(self) -> dict[str, str]:
-        """Return compact summaries for the selected schedule day."""
+    def schedule_day_payload(self, day: int) -> dict[str, object]:
+        """Return one day's schedule as a frontend-friendly payload."""
         start_hour = 0
         start_minute = 0
-        summaries = {}
+        periods: list[dict[str, object]] = []
         for period in range(1, 5):
-            record = self.schedule_record(period)
+            record = self.schedule_record(day, period)
             if record is None:
                 continue
-            summaries[f"period_{period}"] = record.summary(start_hour, start_minute)
+            period_data = record.as_dict()
+            period_data["summary"] = record.summary(start_hour, start_minute)
+            periods.append(period_data)
             start_hour = record.end_hour
             start_minute = record.end_minute
-        return summaries
+        return {"day": SCHEDULE_DAY_LABELS[day], "periods": periods}
 
-    async def async_select_schedule_day(self, option: str) -> None:
-        """Switch the schedule editor to another weekday."""
-        self._schedule_day = SCHEDULE_DAY_TO_INDEX[option]
-        await self.hass.async_add_executor_job(self._load_schedule_day)
-        self.async_update_listeners()
+    def weekly_schedule_payload(self) -> list[dict[str, object]]:
+        """Return the full weekly schedule for Home Assistant attributes."""
+        return [self.schedule_day_payload(day) for day in range(1, 8)]
 
-    async def async_set_schedule_period_speed(self, period: int, option: str) -> None:
-        """Write a schedule period speed and refresh the current day cache."""
-        current = self.schedule_record(period)
-        if current is None:
-            return
+    def _build_schedule_record(
+        self, day: int, period_data: dict[str, object], current: WeeklyScheduleRecord | None
+    ) -> WeeklyScheduleRecord:
+        """Build one validated schedule record from a service payload."""
+        period = int(period_data["period"])
+        if period not in range(1, 5):
+            raise ValueError(f"Invalid schedule period: {period}")
 
-        updated = WeeklyScheduleRecord(
-            day=current.day,
-            period=current.period,
-            speed=SCHEDULE_OPTION_TO_SPEED[option],
-            end_hour=current.end_hour,
-            end_minute=current.end_minute,
-            reserved=current.reserved,
+        existing = current or self.schedule_record(day, period)
+        if existing is None:
+            raise ValueError(f"Schedule record not available for day={day}, period={period}")
+
+        speed_option = str(period_data.get("speed") or existing.speed_option)
+        end_value = period_data.get("end")
+        end_time_value = existing.end_time
+        if end_value is not None:
+            hour_str, minute_str = str(end_value).split(":", 1)
+            end_time_value = time(int(hour_str), int(minute_str))
+
+        return WeeklyScheduleRecord(
+            day=day,
+            period=period,
+            speed=SCHEDULE_OPTION_TO_SPEED[speed_option],
+            end_hour=end_time_value.hour,
+            end_minute=end_time_value.minute,
+            reserved=existing.reserved,
         )
-        await self.hass.async_add_executor_job(
-            self._fan.write_weekly_schedule_record,
-            updated,
-        )
-        await self.hass.async_add_executor_job(self._load_schedule_day)
-        self.async_update_listeners()
 
-    async def async_set_schedule_period_end(self, period: int, value: time) -> None:
-        """Write a schedule period end time and refresh the current day cache."""
-        current = self.schedule_record(period)
-        if current is None:
-            return
+    @staticmethod
+    def _validate_schedule_day(records: list[WeeklyScheduleRecord]) -> None:
+        """Validate that one day remains chronological and ends at midnight."""
+        expected_periods = [1, 2, 3, 4]
+        periods = [record.period for record in records]
+        if periods != expected_periods:
+            raise ValueError("Schedule payload must include periods 1 through 4 in order")
 
-        new_minutes = value.hour * 60 + value.minute
-        previous_record = self.schedule_record(period - 1) if period > 1 else None
-        next_record = self.schedule_record(period + 1)
+        previous_end = 0
+        for record in records:
+            current_end = record.end_hour * 60 + record.end_minute
+            if record.period < 4 and current_end <= previous_end:
+                raise ValueError(
+                    "Schedule period end times must stay in chronological order"
+                )
+            previous_end = current_end
 
-        lower_bound = 0
-        if previous_record is not None:
-            lower_bound = previous_record.end_hour * 60 + previous_record.end_minute
+    async def async_write_schedule(
+        self,
+        *,
+        selected_day: str | None = None,
+        weekly_schedule_enabled: bool | None = None,
+        days: list[dict[str, object]] | None = None,
+    ) -> None:
+        """Apply one schedule payload from the custom dialog."""
+        if selected_day is not None:
+            self._schedule_day = SCHEDULE_DAY_TO_INDEX[selected_day]
 
-        upper_bound = 24 * 60
-        if next_record is not None:
-            upper_bound = next_record.end_hour * 60 + next_record.end_minute
+        if weekly_schedule_enabled is not None:
+            target = "on" if weekly_schedule_enabled else "off"
+            if self._fan.weekly_schedule_state != target:
+                await self.hass.async_add_executor_job(
+                    self._fan.set_param,
+                    "weekly_schedule_state",
+                    target,
+                )
 
-        if new_minutes <= lower_bound or new_minutes >= upper_bound:
-            raise ValueError(
-                "Schedule period end times must stay in chronological order"
-            )
+        if days:
+            for day_payload in days:
+                day_label = str(day_payload["day"])
+                day = SCHEDULE_DAY_TO_INDEX[day_label]
+                current_records = self.schedule_day_records(day)
+                updated_records: list[WeeklyScheduleRecord] = []
+                for period_data in day_payload.get("periods", []):
+                    updated_record = self._build_schedule_record(
+                        day, period_data, current_records.get(int(period_data["period"]))
+                    )
+                    updated_records.append(updated_record)
 
-        updated = WeeklyScheduleRecord(
-            day=current.day,
-            period=current.period,
-            speed=current.speed,
-            end_hour=value.hour,
-            end_minute=value.minute,
-            reserved=current.reserved,
-        )
-        await self.hass.async_add_executor_job(
-            self._fan.write_weekly_schedule_record,
-            updated,
-        )
-        await self.hass.async_add_executor_job(self._load_schedule_day)
+                self._validate_schedule_day(updated_records)
+                for record in updated_records:
+                    await self.hass.async_add_executor_job(
+                        self._fan.write_weekly_schedule_record,
+                        record,
+                    )
+
+        await self.hass.async_add_executor_job(self._load_schedule_week)
         self.async_update_listeners()
 
     async def async_sync_device_clock(self) -> None:

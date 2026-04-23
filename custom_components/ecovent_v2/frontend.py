@@ -1,50 +1,34 @@
-"""Frontend registration for the EcoVent schedule panel."""
+"""Frontend registration for the EcoVent schedule dialog."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from homeassistant.components.frontend import async_register_built_in_panel
+from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
 
 _FRONTEND_URL_BASE = f"/api/{DOMAIN}/frontend"
-_PANEL_URL_PATH = "ecovent-v2"
-_PANEL_MODULE_NAME = "ecovent-schedule-panel"
-_PANEL_JS = "ecovent-schedule-panel.js"
+_DIALOG_JS = "ecovent-schedule-dialog.js"
+_REGISTERED_KEY = f"{DOMAIN}_frontend_registered"
 
 
 async def async_register_frontend(hass: HomeAssistant) -> None:
-    """Expose and register the schedule panel once."""
-    if DOMAIN in hass.data.get("frontend_panels", {}):
+    """Expose and register the schedule dialog frontend once."""
+    if hass.data.get(_REGISTERED_KEY):
         return
 
     frontend_dir = Path(__file__).parent / "frontend"
     await hass.http.async_register_static_paths(
         [
             StaticPathConfig(
-                f"{_FRONTEND_URL_BASE}/{_PANEL_JS}",
-                str(frontend_dir / _PANEL_JS),
+                f"{_FRONTEND_URL_BASE}/{_DIALOG_JS}",
+                str(frontend_dir / _DIALOG_JS),
                 cache_headers=False,
             )
         ]
     )
-
-    async_register_built_in_panel(
-        hass,
-        component_name="custom",
-        sidebar_title="Ventilation",
-        sidebar_icon="mdi:fan",
-        frontend_url_path=_PANEL_URL_PATH,
-        config={
-            "_panel_custom": {
-                "name": _PANEL_MODULE_NAME,
-                "embed_iframe": True,
-                "trust_external": False,
-                "js_url": f"{_FRONTEND_URL_BASE}/{_PANEL_JS}",
-            }
-        },
-        require_admin=False,
-    )
+    add_extra_js_url(hass, f"{_FRONTEND_URL_BASE}/{_DIALOG_JS}")
+    hass.data[_REGISTERED_KEY] = True

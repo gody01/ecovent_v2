@@ -9,3 +9,29 @@ reset_alarms:
     entity:
       integration: ecovent_v2
       domain: fan
+
+write_schedule:
+  target:
+    entity:
+      integration: ecovent_v2
+      domain: sensor
+  fields:
+    selected_day:
+      selector:
+        select:
+          options:
+            - Monday
+            - Tuesday
+            - Wednesday
+            - Thursday
+            - Friday
+            - Saturday
+            - Sunday
+
+    weekly_schedule_enabled:
+      selector:
+        boolean:
+
+    days:
+      selector:
+        object:

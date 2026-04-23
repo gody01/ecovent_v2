@@ -59,6 +59,7 @@ class DeviceProfile:
     preset_modes: tuple[str, ...]
     boost_statuses_name: str
     humidity_sensor_states_name: str
+    schedule_speed_modes: tuple[str, ...] = ()
     capabilities: frozenset[str] = frozenset()
     supports_direction: bool = False
     supports_oscillation: bool = False

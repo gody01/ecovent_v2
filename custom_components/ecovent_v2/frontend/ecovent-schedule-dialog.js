@@ -151,10 +151,54 @@ class EcoventScheduleDialog extends HTMLElement {
       .trim();
   }
 
-  _compactDaySummary(day) {
-    return (day.periods || [])
-      .map((period) => this._compactPeriodSummary(period.summary))
+  _periodBounds(period) {
+    const summary = period.summary ?? "";
+    const match = summary.match(/^(\d{2}:\d{2})-(\d{2}:\d{2})\s+(.+)$/);
+    if (match) {
+      return {
+        start: match[1],
+        end: match[2],
+        speed: match[3],
+      };
+    }
+
+    const fallbackEnd = period.editable_end ? period.end ?? "00:00" : "00:00";
+    return {
+      start: "00:00",
+      end: fallbackEnd,
+      speed: period.speed ?? "Unknown",
+    };
+  }
+
+  _mergedDaySummary(day) {
+    const merged = [];
+
+    for (const period of day.periods || []) {
+      const current = this._periodBounds(period);
+      const previous = merged[merged.length - 1];
+
+      if (previous && previous.speed === current.speed && previous.end === current.start) {
+        previous.end = current.end;
+      } else {
+        merged.push({ ...current });
+      }
+    }
+
+    if (
+      merged.length === 1 &&
+      merged[0].start === "00:00" &&
+      (merged[0].end === "00:00" || merged[0].end === "24:00")
+    ) {
+      return `All day ${merged[0].speed}`;
+    }
+
+    return merged
+      .map((item) => `${this._compactPeriodSummary(`${item.start}-${item.end} ${item.speed}`)}`)
       .join("  •  ");
+  }
+
+  _compactDaySummary(day) {
+    return this._mergedDaySummary(day);
   }
 
   async _callService(service, serviceData) {
@@ -221,43 +265,15 @@ class EcoventScheduleDialog extends HTMLElement {
               periodData.editable_end
                 ? `
                   <div class="time-control">
-                    <div class="select-wrap">
-                      <select
-                        class="control time-part"
-                        data-end-hour="${period}"
-                        ${this._busy ? "disabled" : ""}
-                      >
-                        ${hourOptions
-                          .map(
-                            (option) => `
-                              <option value="${option}" ${
-                                option === hourValue ? "selected" : ""
-                              }>${option}</option>
-                            `
-                          )
-                          .join("")}
-                      </select>
-                      <ha-icon icon="mdi:chevron-down" class="select-arrow"></ha-icon>
-                    </div>
+                    <ha-selector
+                      class="selector-control time-part"
+                      data-end-hour="${period}"
+                    ></ha-selector>
                     <span class="time-separator">:</span>
-                    <div class="select-wrap">
-                      <select
-                        class="control time-part"
-                        data-end-minute="${period}"
-                        ${this._busy ? "disabled" : ""}
-                      >
-                        ${minuteOptions
-                          .map(
-                            (option) => `
-                              <option value="${option}" ${
-                                option === minuteValue ? "selected" : ""
-                              }>${option}</option>
-                            `
-                          )
-                          .join("")}
-                      </select>
-                      <ha-icon icon="mdi:chevron-down" class="select-arrow"></ha-icon>
-                    </div>
+                    <ha-selector
+                      class="selector-control time-part"
+                      data-end-minute="${period}"
+                    ></ha-selector>
                   </div>
                 `
                 : `<div class="control static">24:00</div>`
@@ -265,24 +281,10 @@ class EcoventScheduleDialog extends HTMLElement {
           </label>
           <label class="field">
             <span class="field-label">Speed</span>
-            <div class="select-wrap">
-              <select
-                class="control"
-                data-speed-select="${period}"
-                ${this._busy ? "disabled" : ""}
-              >
-                ${speedOptions
-                  .map(
-                    (option) => `
-                      <option value="${option.value}" ${
-                        option.value === periodData.speed ? "selected" : ""
-                      }>${option.label}</option>
-                    `
-                  )
-                  .join("")}
-              </select>
-              <ha-icon icon="mdi:chevron-down" class="select-arrow"></ha-icon>
-            </div>
+            <ha-selector
+              class="selector-control"
+              data-speed-select="${period}"
+            ></ha-selector>
           </label>
         </div>
       </section>
@@ -309,6 +311,8 @@ class EcoventScheduleDialog extends HTMLElement {
     const currentDay = this._currentDay();
     const periods = Array.isArray(currentDay?.periods) ? currentDay.periods : [];
     const title = stateObj.attributes.friendly_name ?? "Schedule";
+    const hourOptions = this._hourOptions();
+    const minuteOptions = this._minuteOptions();
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -616,10 +620,10 @@ class EcoventScheduleDialog extends HTMLElement {
           font-weight: 600;
         }
 
-        .control {
-          width: 100%;
+        .control.static {
+          display: flex;
+          align-items: center;
           min-height: 44px;
-          appearance: none;
           border: 1px solid var(--divider-color);
           border-radius: 10px;
           background: var(--secondary-background-color);
@@ -627,23 +631,14 @@ class EcoventScheduleDialog extends HTMLElement {
           padding: 10px 12px;
         }
 
-        .control.static {
-          display: flex;
-          align-items: center;
+        .selector-control {
+          display: block;
+          width: 100%;
         }
 
-        .select-wrap {
-          position: relative;
-        }
-
-        .select-arrow {
-          position: absolute;
-          right: 12px;
-          top: 50%;
-          transform: translateY(-50%);
-          color: var(--secondary-text-color);
+        .selector-control[disabled] {
           pointer-events: none;
-          --mdc-icon-size: 18px;
+          opacity: 0.7;
         }
 
         .footer {
@@ -809,6 +804,51 @@ class EcoventScheduleDialog extends HTMLElement {
         this._setWeeklyEnabled(event.target.checked);
       });
 
+    const selectSelector = (options) => ({
+      select: {
+        mode: "dropdown",
+        options,
+      },
+    });
+
+    this.shadowRoot.querySelectorAll("[data-end-hour]").forEach((element) => {
+      const period = Number(element.dataset.endHour);
+      const periodData = periods.find((item) => item.period === period);
+      const value = periodData?.end?.split(":")?.[0] ?? "00";
+      element.hass = this._hass;
+      element.selector = selectSelector(
+        hourOptions.map((option) => ({ value: option, label: option }))
+      );
+      element.value = value;
+      element.disabled = this._busy;
+    });
+
+    this.shadowRoot.querySelectorAll("[data-end-minute]").forEach((element) => {
+      const period = Number(element.dataset.endMinute);
+      const periodData = periods.find((item) => item.period === period);
+      const value = periodData?.end?.split(":")?.[1] ?? "00";
+      element.hass = this._hass;
+      element.selector = selectSelector(
+        minuteOptions.map((option) => ({ value: option, label: option }))
+      );
+      element.value = value;
+      element.disabled = this._busy;
+    });
+
+    this.shadowRoot.querySelectorAll("[data-speed-select]").forEach((element) => {
+      const period = Number(element.dataset.speedSelect);
+      const periodData = periods.find((item) => item.period === period);
+      element.hass = this._hass;
+      element.selector = selectSelector(
+        speedOptions.map((option) => ({
+          value: option.value,
+          label: option.label,
+        }))
+      );
+      element.value = periodData?.speed ?? speedOptions[0]?.value;
+      element.disabled = this._busy;
+    });
+
     this.shadowRoot.querySelectorAll("[data-day]").forEach((button) => {
       button.addEventListener("click", () => this._setSelectedDay(button.dataset.day));
     });
@@ -851,17 +891,24 @@ class EcoventScheduleDialog extends HTMLElement {
     };
 
     this.shadowRoot.querySelectorAll("[data-end-hour]").forEach((input) => {
-      input.addEventListener("change", () => syncPeriodTime(input.dataset.endHour));
+      input.addEventListener("value-changed", (event) => {
+        input.value = event.detail.value;
+        syncPeriodTime(input.dataset.endHour);
+      });
     });
 
     this.shadowRoot.querySelectorAll("[data-end-minute]").forEach((input) => {
-      input.addEventListener("change", () => syncPeriodTime(input.dataset.endMinute));
+      input.addEventListener("value-changed", (event) => {
+        input.value = event.detail.value;
+        syncPeriodTime(input.dataset.endMinute);
+      });
     });
 
     this.shadowRoot.querySelectorAll("[data-speed-select]").forEach((input) => {
-      input.addEventListener("change", () => {
+      input.addEventListener("value-changed", (event) => {
+        input.value = event.detail.value;
         this._updatePeriod(Number(input.dataset.speedSelect), {
-          speed: input.value,
+          speed: event.detail.value,
         });
       });
     });

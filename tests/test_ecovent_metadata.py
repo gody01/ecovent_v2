@@ -223,6 +223,11 @@ class ParseResponseTest(unittest.TestCase):
             with self.subTest(param_id=param_id, field=field):
                 self.assertIn(f"| 0x{param_id:04X} | `{field}` |", reference)
 
+    def test_vento_0306_is_schedule_speed_not_beeper(self):
+        self.assertEqual(Fan.params[0x0306][0], "schedule_speed")
+        self.assertEqual(Fan.params[0x0306][1][3], "high")
+        self.assertNotIn("beeper_status", Fan.device_profiles["vento"].capabilities)
+
     def test_protocol_reference_documents_breezy_feature_param_map(self):
         reference = PROTOCOL_REFERENCE_PATH.read_text()
         feature_param_ids = (

@@ -65,17 +65,18 @@ def _async_migrate_entity_registry(
             registry.async_remove(entity_id)
             _LOGGER.info("Removed legacy EcoVent V2 binary sensor %s", entity_id)
 
-    beeper_select_entity_id = registry.async_get_entity_id(
-        Platform.SELECT, DOMAIN, fan.id + "_beeper"
-    )
-    if (
-        beeper_select_entity_id is not None
-        and not fan.supports_capability("beeper_control")
-    ):
-        registry.async_remove(beeper_select_entity_id)
-        _LOGGER.info(
-            "Removed writable EcoVent V2 beeper select %s", beeper_select_entity_id
-        )
+    if not fan.supports_parameter("beeper"):
+        for platform in (Platform.SENSOR, Platform.SELECT):
+            beeper_entity_id = registry.async_get_entity_id(
+                platform, DOMAIN, fan.id + "_beeper"
+            )
+            if beeper_entity_id is None:
+                continue
+
+            registry.async_remove(beeper_entity_id)
+            _LOGGER.info(
+                "Removed stale EcoVent V2 beeper entity %s", beeper_entity_id
+            )
 
     entity_id_migrations = {
         (Platform.SENSOR, fan.id + "_speed1"): f"sensor.{device_slug}_fan_1_speed",
@@ -224,8 +225,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
-    if coordinator._fan.supports_parameter("weekly_schedule_setup"):
-        await async_register_frontend(hass)
+    await async_register_frontend(hass)
     _async_migrate_entity_registry(hass, coordinator)
     await _async_migrate_statistics_metadata_on_start(hass, coordinator)
     await hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)

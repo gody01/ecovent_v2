@@ -2,12 +2,10 @@
 
 try:
     from .protocol_metadata import (
-        ARC_SMART_MANUAL_URL,
         BREEZY_ECO_MANUAL_URL,
         FRESHBOX_100_WIFI_MANUAL_URL,
         FRESHPOINT_MANUAL_URL,
         MICRA_100_WIFI_MANUAL_URL,
-        O2_SUPREME_MANUAL_URL,
         SMART_WIFI_MANUAL_URL,
         TWINFRESH_STYLE_MANUAL_URL,
         TWINFRESH_STYLE_MINI_MANUAL_URL,
@@ -17,12 +15,10 @@ try:
     )
 except ImportError:
     from protocol_metadata import (
-        ARC_SMART_MANUAL_URL,
         BREEZY_ECO_MANUAL_URL,
         FRESHBOX_100_WIFI_MANUAL_URL,
         FRESHPOINT_MANUAL_URL,
         MICRA_100_WIFI_MANUAL_URL,
-        O2_SUPREME_MANUAL_URL,
         SMART_WIFI_MANUAL_URL,
         TWINFRESH_STYLE_MANUAL_URL,
         TWINFRESH_STYLE_MINI_MANUAL_URL,

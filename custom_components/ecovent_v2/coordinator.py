@@ -1,7 +1,7 @@
 """VentoUpdateCoordinator class."""
 
 # from __future__ import annotations
-from datetime import time, timedelta
+from datetime import timedelta
 import logging
 
 from .ecoventv2 import Fan
@@ -9,8 +9,8 @@ from .schedule_helpers import (
     SCHEDULE_DAY_LABELS,
     SCHEDULE_DAY_OPTIONS,
     SCHEDULE_DAY_TO_INDEX,
-    SCHEDULE_OPTION_TO_SPEED,
     WeeklyScheduleRecord,
+    changed_schedule_records,
 )
 
 from homeassistant.config_entries import ConfigEntry
@@ -166,51 +166,6 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         """Return the full weekly schedule for Home Assistant attributes."""
         return [self.schedule_day_payload(day) for day in range(1, 8)]
 
-    def _build_schedule_record(
-        self, day: int, period_data: dict[str, object], current: WeeklyScheduleRecord | None
-    ) -> WeeklyScheduleRecord:
-        """Build one validated schedule record from a service payload."""
-        period = int(period_data["period"])
-        if period not in range(1, 5):
-            raise ValueError(f"Invalid schedule period: {period}")
-
-        existing = current or self.schedule_record(day, period)
-        if existing is None:
-            raise ValueError(f"Schedule record not available for day={day}, period={period}")
-
-        speed_option = str(period_data.get("speed") or existing.speed_option)
-        end_value = period_data.get("end")
-        end_time_value = existing.end_time
-        if end_value is not None:
-            hour_str, minute_str = str(end_value).split(":", 1)
-            end_time_value = time(int(hour_str), int(minute_str))
-
-        return WeeklyScheduleRecord(
-            day=day,
-            period=period,
-            speed=SCHEDULE_OPTION_TO_SPEED[speed_option],
-            end_hour=end_time_value.hour,
-            end_minute=end_time_value.minute,
-            reserved=existing.reserved,
-        )
-
-    @staticmethod
-    def _validate_schedule_day(records: list[WeeklyScheduleRecord]) -> None:
-        """Validate that one day remains chronological and ends at midnight."""
-        expected_periods = [1, 2, 3, 4]
-        periods = [record.period for record in records]
-        if periods != expected_periods:
-            raise ValueError("Schedule payload must include periods 1 through 4 in order")
-
-        previous_end = 0
-        for record in records:
-            current_end = record.end_hour * 60 + record.end_minute
-            if record.period < 4 and current_end <= previous_end:
-                raise ValueError(
-                    "Schedule period end times must stay in chronological order"
-                )
-            previous_end = current_end
-
     async def async_write_schedule(
         self,
         *,
@@ -236,21 +191,24 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                 day_label = str(day_payload["day"])
                 day = SCHEDULE_DAY_TO_INDEX[day_label]
                 current_records = self.schedule_day_records(day)
-                updated_records: list[WeeklyScheduleRecord] = []
-                for period_data in day_payload.get("periods", []):
-                    updated_record = self._build_schedule_record(
-                        day, period_data, current_records.get(int(period_data["period"]))
-                    )
-                    updated_records.append(updated_record)
+                records_to_write = changed_schedule_records(
+                    day,
+                    current_records,
+                    day_payload.get("periods", []),
+                )
 
-                self._validate_schedule_day(updated_records)
-                for record in updated_records:
-                    await self.hass.async_add_executor_job(
+                for record in records_to_write:
+                    written = await self.hass.async_add_executor_job(
                         self._fan.write_weekly_schedule_record,
                         record,
                     )
+                    if not written:
+                        raise RuntimeError(
+                            "Failed to write schedule record "
+                            f"{day_label} period {record.period}"
+                        )
+                    self._weekly_schedule.setdefault(day, {})[record.period] = record
 
-        await self.hass.async_add_executor_job(self._load_schedule_week)
         self.async_update_listeners()
 
     async def async_sync_device_clock(self) -> None:

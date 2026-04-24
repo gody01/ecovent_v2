@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from hashlib import sha256
 from pathlib import Path
 
 from homeassistant.components.frontend import add_extra_js_url
@@ -13,6 +14,12 @@ from .const import DOMAIN
 _FRONTEND_URL_BASE = f"/api/{DOMAIN}/frontend"
 _DIALOG_JS = "ecovent-schedule-dialog.js"
 _REGISTERED_KEY = f"{DOMAIN}_frontend_registered"
+
+
+def _frontend_module_url(frontend_dir: Path) -> str:
+    """Return a content-versioned frontend module URL."""
+    digest = sha256((frontend_dir / _DIALOG_JS).read_bytes()).hexdigest()[:12]
+    return f"{_FRONTEND_URL_BASE}/{_DIALOG_JS}?v={digest}"
 
 
 async def async_register_frontend(hass: HomeAssistant) -> None:
@@ -30,5 +37,5 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
             )
         ]
     )
-    add_extra_js_url(hass, f"{_FRONTEND_URL_BASE}/{_DIALOG_JS}")
+    add_extra_js_url(hass, _frontend_module_url(frontend_dir))
     hass.data[_REGISTERED_KEY] = True

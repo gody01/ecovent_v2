@@ -1,0 +1,168 @@
+{
+    "config": {
+        "abort": {
+            "already_configured": "Вентилятор уже настроен."
+        },
+        "error": {
+            "cannot_connect": "Не удалось подключиться.",
+            "invalid_auth": "Неверные учётные данные.",
+            "unknown": "Неизвестная ошибка."
+        },
+        "step": {
+            "user": {
+                "data": {
+                    "ip_address": "IP-адрес",
+                    "password": "Пароль",
+                    "port": "Порт",
+                    "name": "Название"
+                }
+            }
+        }
+    },
+    "services": {
+        "filter_timer_reset": {
+            "name": "Сбросить фильтр",
+            "description": "Сбрасывает таймер фильтра."
+        },
+        "reset_alarms": {
+            "name": "Сбросить аварии",
+            "description": "Сбрасывает активные аварии."
+        }
+    },
+    "entity": {
+        "sensor": {
+            "airflow": {
+                "state": {
+                    "ventilation": "Вентиляция",
+                    "heat_recovery": "Рекуперация тепла",
+                    "air_supply": "Приток воздуха"
+                }
+            },
+            "beeper": {
+                "state": {
+                    "off": "Выключено",
+                    "on": "Включено",
+                    "silent": "Тихо"
+                }
+            },
+            "boost_status": {
+                "state": {
+                    "off": "Выключено",
+                    "on": "Включено",
+                    "delay": "Задержка"
+                }
+            },
+            "timer_mode": {
+                "state": {
+                    "off": "Выключено",
+                    "night": "Ночь",
+                    "party": "Вечеринка"
+                }
+            },
+            "alarm_status": {
+                "state": {
+                    "no": "Нет аварии",
+                    "alarm": "Авария",
+                    "warning": "Предупреждение"
+                }
+            }
+        },
+        "fan": {
+            "vent": {
+                "state_attributes": {
+                    "direction": {
+                        "name": "Поток воздуха",
+                        "state": {
+                            "forward": "Вентиляция",
+                            "reverse": "Приток воздуха"
+                        }
+                    },
+                    "oscillating": {
+                        "name": "Рекуперация тепла",
+                        "state": {
+                            "false": "Выключено",
+                            "true": "Включено"
+                        }
+                    },
+                    "preset_mode": {
+                        "name": "Режим",
+                        "state": {
+                            "off": "Выключено",
+                            "low": "Низкая",
+                            "medium": "Средняя",
+                            "high": "Высокая",
+                            "speed_1": "Скорость 1",
+                            "speed_2": "Скорость 2",
+                            "speed_3": "Скорость 3",
+                            "speed_4": "Скорость 4",
+                            "speed_5": "Скорость 5",
+                            "all_day": "Весь день",
+                            "humidity_trigger": "Авто по влажности",
+                            "humidity_manual": "Влажность вручную",
+                            "temperature_trigger": "Температура",
+                            "motion_trigger": "Движение",
+                            "external_switch_trigger": "Внешний вход",
+                            "interval_ventilation": "Интервальная вентиляция",
+                            "silent": "Тихий",
+                            "boost": "Форсаж",
+                            "manual": "Ручной"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "ui": {
+        "schedule": {
+            "title": "Недельное расписание",
+            "close": "Закрыть",
+            "enabled": "Включено",
+            "disabled": "Выключено",
+            "weekly_schedule": "Недельное расписание",
+            "disabled_helper": "Когда выключено, устройство игнорирует это расписание.",
+            "editing": "Редактирование",
+            "scope_day": "Этот день",
+            "scope_weekdays": "Будни",
+            "scope_weekend": "Выходные",
+            "scope_all": "Каждый день",
+            "editing_day": "Редактируется {day}",
+            "editing_weekdays": "Редактируются будни",
+            "editing_weekend": "Редактируются выходные",
+            "editing_all": "Редактируются все дни",
+            "helper_day": "Изменения применятся только к выбранному дню.",
+            "helper_weekdays": "Изменения применятся к Пн-Пт.",
+            "helper_weekend": "Изменения применятся к Сб-Вс.",
+            "helper_all": "Изменения применятся ко всем дням.",
+            "week_overview": "Обзор недели",
+            "starts": "С",
+            "until": "До",
+            "speed": "Скорость",
+            "end_of_day": "Конец дня",
+            "all_day": "{speed} весь день",
+            "until_then": "{speed} до {time}, затем {next_speed}",
+            "rest_of_day": "{speed} до конца дня",
+            "time_range": "{speed} {start}-{end}",
+            "unsaved_changes": "Есть несохранённые изменения",
+            "saving_changes": "Сохраняю изменения...",
+            "saving": "Сохраняю...",
+            "saved": "Сохранено",
+            "could_not_save": "Не удалось сохранить расписание.",
+            "discard_prompt": "Сбросить несохранённые изменения?",
+            "keep_editing": "Продолжить",
+            "discard": "Сбросить",
+            "discard_changes": "Сбросить изменения",
+            "save_schedule": "Сохранить расписание",
+            "invalid_order": "Периоды должны идти по порядку.",
+            "end_after": "Конец должен быть позже {time}.",
+            "speed_standby": "Ожидание",
+            "speed_low": "Низкая",
+            "speed_medium": "Средняя",
+            "speed_high": "Высокая",
+            "speed_speed_1": "Скорость 1",
+            "speed_speed_2": "Скорость 2",
+            "speed_speed_3": "Скорость 3",
+            "speed_speed_4": "Скорость 4",
+            "speed_speed_5": "Скорость 5"
+        }
+    }
+}

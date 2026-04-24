@@ -117,3 +117,75 @@ class WeeklyScheduleRecord:
         if self.period < 4:
             data["end"] = f"{self.end_hour:02d}:{self.end_minute:02d}"
         return data
+
+
+def build_schedule_record(
+    day: int,
+    period_data: dict[str, object],
+    current: WeeklyScheduleRecord | None,
+) -> WeeklyScheduleRecord:
+    """Build one validated schedule record from a partial service payload."""
+    period = int(period_data["period"])
+    if period not in range(1, 5):
+        raise ValueError(f"Invalid schedule period: {period}")
+
+    if current is None:
+        raise ValueError(f"Schedule record not available for day={day}, period={period}")
+
+    speed_option = str(period_data.get("speed") or current.speed_option)
+    end_value = period_data.get("end")
+    end_time_value = current.end_time
+    if end_value is not None:
+        hour_str, minute_str = str(end_value).split(":", 1)
+        end_time_value = time(int(hour_str), int(minute_str))
+
+    return WeeklyScheduleRecord(
+        day=day,
+        period=period,
+        speed=SCHEDULE_OPTION_TO_SPEED[speed_option],
+        end_hour=end_time_value.hour,
+        end_minute=end_time_value.minute,
+        reserved=current.reserved,
+    )
+
+
+def validate_schedule_day(records: list[WeeklyScheduleRecord]) -> None:
+    """Validate that one day remains chronological and ends at midnight."""
+    expected_periods = [1, 2, 3, 4]
+    periods = [record.period for record in records]
+    if periods != expected_periods:
+        raise ValueError("Schedule payload must include periods 1 through 4 in order")
+
+    previous_end = 0
+    for record in records:
+        current_end = record.end_hour * 60 + record.end_minute
+        if record.period < 4 and current_end <= previous_end:
+            raise ValueError("Schedule period end times must stay in chronological order")
+        previous_end = current_end
+
+
+def changed_schedule_records(
+    day: int,
+    current_records: dict[int, WeeklyScheduleRecord],
+    period_payloads: list[dict[str, object]],
+) -> list[WeeklyScheduleRecord]:
+    """Return only device records that differ after applying a partial day payload."""
+    updated_records = [current_records.get(period) for period in range(1, 5)]
+    if any(record is None for record in updated_records):
+        day_label = SCHEDULE_DAY_LABELS.get(day, f"Day {day}")
+        raise ValueError(f"Schedule records not available for {day_label}")
+
+    for period_data in period_payloads:
+        period = int(period_data["period"])
+        updated_records[period - 1] = build_schedule_record(
+            day,
+            period_data,
+            current_records.get(period),
+        )
+
+    validate_schedule_day(updated_records)
+    return [
+        record
+        for record in updated_records
+        if record != current_records.get(record.period)
+    ]

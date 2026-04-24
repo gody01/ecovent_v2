@@ -22,7 +22,7 @@ _LOGGER = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class SelectSpec:
-    """Writable enum description guarded by runtime capabilities."""
+    """Writable enum description guarded by documented profile support."""
 
     key: str
     name: str
@@ -40,7 +40,7 @@ SELECT_SPECS = (
         "Beeper",
         "beeper",
         "mdi:volume-high",
-        ("beeper_control",),
+        (),
         translation_key="beeper",
     ),
     SelectSpec(

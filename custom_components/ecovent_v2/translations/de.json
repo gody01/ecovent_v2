@@ -4,19 +4,165 @@
             "already_configured": "Der Lüfter ist bereits konfiguriert."
         },
         "error": {
-            "cannot_connect": "Es kann keine Verbindung zum Lüfter aufgebaut werden",
-            "invalid_auth": "Keine validen Authentifizierungsdaten.",
+            "cannot_connect": "Es kann keine Verbindung zum Lüfter aufgebaut werden.",
+            "invalid_auth": "Ungültige Zugangsdaten.",
             "unknown": "Unbekannter Fehler."
         },
         "step": {
             "user": {
                 "data": {
-                    "ip_address": "IP",
+                    "ip_address": "IP-Adresse",
                     "password": "Passwort",
                     "port": "Port",
                     "name": "Name"
                 }
             }
+        }
+    },
+    "services": {
+        "filter_timer_reset": {
+            "name": "Filter zurücksetzen",
+            "description": "Setzt den Filter-Timer zurück."
+        },
+        "reset_alarms": {
+            "name": "Alarme zurücksetzen",
+            "description": "Setzt aktive Alarme zurück."
+        }
+    },
+    "entity": {
+        "sensor": {
+            "airflow": {
+                "state": {
+                    "ventilation": "Lüftung",
+                    "heat_recovery": "Wärmerückgewinnung",
+                    "air_supply": "Zuluft"
+                }
+            },
+            "beeper": {
+                "state": {
+                    "off": "Aus",
+                    "on": "Ein",
+                    "silent": "Leise"
+                }
+            },
+            "boost_status": {
+                "state": {
+                    "off": "Aus",
+                    "on": "Ein",
+                    "delay": "Verzögerung"
+                }
+            },
+            "timer_mode": {
+                "state": {
+                    "off": "Aus",
+                    "night": "Nacht",
+                    "party": "Party"
+                }
+            },
+            "alarm_status": {
+                "state": {
+                    "no": "Kein Alarm",
+                    "alarm": "Alarm",
+                    "warning": "Warnung"
+                }
+            }
+        },
+        "fan": {
+            "vent": {
+                "state_attributes": {
+                    "direction": {
+                        "name": "Luftstrom",
+                        "state": {
+                            "forward": "Lüftung",
+                            "reverse": "Zuluft"
+                        }
+                    },
+                    "oscillating": {
+                        "name": "Wärmerückgewinnung",
+                        "state": {
+                            "false": "Aus",
+                            "true": "Ein"
+                        }
+                    },
+                    "preset_mode": {
+                        "name": "Modus",
+                        "state": {
+                            "off": "Aus",
+                            "low": "Niedrig",
+                            "medium": "Mittel",
+                            "high": "Hoch",
+                            "speed_1": "Geschwindigkeit 1",
+                            "speed_2": "Geschwindigkeit 2",
+                            "speed_3": "Geschwindigkeit 3",
+                            "speed_4": "Geschwindigkeit 4",
+                            "speed_5": "Geschwindigkeit 5",
+                            "all_day": "Ganztägig",
+                            "humidity_trigger": "Feuchteautomatik",
+                            "humidity_manual": "Feuchte manuell",
+                            "temperature_trigger": "Temperatur",
+                            "motion_trigger": "Bewegung",
+                            "external_switch_trigger": "Externer Eingang",
+                            "interval_ventilation": "Intervalllüftung",
+                            "silent": "Leise",
+                            "boost": "Boost",
+                            "manual": "Manuell"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "ui": {
+        "schedule": {
+            "title": "Wochenplan",
+            "close": "Schließen",
+            "enabled": "Aktiv",
+            "disabled": "Inaktiv",
+            "weekly_schedule": "Wochenplan",
+            "disabled_helper": "Wenn deaktiviert, ignoriert das Gerät diesen Wochenplan.",
+            "editing": "Bearbeiten",
+            "scope_day": "Dieser Tag",
+            "scope_weekdays": "Werktage",
+            "scope_weekend": "Wochenende",
+            "scope_all": "Jeden Tag",
+            "editing_day": "Bearbeite {day}",
+            "editing_weekdays": "Bearbeite Werktage",
+            "editing_weekend": "Bearbeite Wochenende",
+            "editing_all": "Bearbeite jeden Tag",
+            "helper_day": "Änderungen gelten nur für den ausgewählten Tag.",
+            "helper_weekdays": "Änderungen gelten für Mo-Fr.",
+            "helper_weekend": "Änderungen gelten für Sa-So.",
+            "helper_all": "Änderungen gelten für jeden Tag.",
+            "week_overview": "Wochenübersicht",
+            "starts": "Ab",
+            "until": "Bis",
+            "speed": "Stufe",
+            "end_of_day": "Ende des Tages",
+            "all_day": "{speed} den ganzen Tag",
+            "until_then": "{speed} bis {time}, dann {next_speed}",
+            "rest_of_day": "{speed} restlicher Tag",
+            "time_range": "{speed} {start}-{end}",
+            "unsaved_changes": "Ungespeicherte Änderungen",
+            "saving_changes": "Speichere Änderungen...",
+            "saving": "Speichere...",
+            "saved": "Gespeichert",
+            "could_not_save": "Plan konnte nicht gespeichert werden.",
+            "discard_prompt": "Ungespeicherte Änderungen verwerfen?",
+            "keep_editing": "Weiter bearbeiten",
+            "discard": "Verwerfen",
+            "discard_changes": "Änderungen verwerfen",
+            "save_schedule": "Plan speichern",
+            "invalid_order": "Zeiten müssen chronologisch sein.",
+            "end_after": "Endzeit muss nach {time} liegen.",
+            "speed_standby": "Standby",
+            "speed_low": "Niedrig",
+            "speed_medium": "Mittel",
+            "speed_high": "Hoch",
+            "speed_speed_1": "Stufe 1",
+            "speed_speed_2": "Stufe 2",
+            "speed_speed_3": "Stufe 3",
+            "speed_speed_4": "Stufe 4",
+            "speed_speed_5": "Stufe 5"
         }
     }
 }

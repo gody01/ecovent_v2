@@ -274,6 +274,17 @@ class ProfileParseTest(unittest.TestCase):
         self.assertTrue(fan.supports_parameter("rtc_time"))
         self.assertTrue(fan.supports_parameter("rtc_date"))
 
+    def test_vento_profile_reads_0306_as_pdf_schedule_speed(self):
+        fan = Fan("192.0.2.1")
+        self.assertTrue(
+            fan.parse_response(packet_with_payload([0xFE, 0x02, 0xB9, 0x03, 0x00]))
+        )
+
+        self.assertTrue(fan.parse_response(packet_with_payload([0xFF, 0x03, 0x06, 0x03])))
+        self.assertEqual(fan.schedule_speed, "high")
+        self.assertIsNone(fan.beeper)
+        self.assertFalse(fan.supports_parameter("beeper"))
+
     def test_vento_profile_can_write_rtc_datetime(self):
         fan = Fan("192.0.2.1")
         self.assertTrue(

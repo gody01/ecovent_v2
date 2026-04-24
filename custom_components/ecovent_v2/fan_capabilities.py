@@ -1,7 +1,6 @@
 """EcoVent Fan mixin extracted from the vendored protocol client."""
 
 import logging
-import time
 
 try:
     from .schedule_helpers import SCHEDULE_SPEED_ICONS, SCHEDULE_SPEED_TO_OPTION
@@ -55,10 +54,7 @@ class FanCapabilitiesMixin:
 
     def supports_capability(self, capability):
         """Return whether the active profile declares a named capability."""
-        return (
-            capability in self.device_profile.capabilities
-            or capability in self._runtime_capabilities
-        )
+        return capability in self.device_profile.capabilities
 
     def supports_parameter(self, parameter):
         """Return whether the active protocol profile knows a parameter."""
@@ -132,59 +128,6 @@ class FanCapabilitiesMixin:
             {"value": "Medium", "label": "Medium", "icon": "mdi:fan-speed-2"},
             {"value": "High", "label": "High", "icon": "mdi:fan-speed-3"},
         ]
-
-    def detect_runtime_capabilities(self):
-        """Probe optional writable capabilities that cannot be trusted by model id."""
-        self._runtime_capabilities.clear()
-        if self._detect_beeper_control():
-            self._runtime_capabilities.add("beeper_control")
-
-    def _detect_beeper_control(self):
-        """Return whether beeper can stay off after a command that may beep."""
-        original = self.beeper
-        options = self.parameter_options("beeper")
-        if original is None or not options or "off" not in options:
-            return False
-
-        restored = original == "off"
-        try:
-            if not self.set_param("beeper", "off"):
-                return False
-            if not self._trigger_beeper_probe_command():
-                return False
-            if not self._beeper_stays_off_after_probe():
-                return False
-
-            if original != "off":
-                if not self.set_param("beeper", original):
-                    return False
-                if not self.get_param("beeper"):
-                    return False
-                restored = self.beeper == original
-            return restored
-        finally:
-            if not restored and self.beeper != original:
-                self.set_param("beeper", original)
-                self.get_param("beeper")
-
-    def _beeper_stays_off_after_probe(self):
-        """Return whether repeated reads show the command did not re-enable beep."""
-        for attempt in range(self.beeper_probe_read_count):
-            if attempt:
-                time.sleep(self.beeper_probe_settle_seconds)
-            if not self.get_param("beeper"):
-                return False
-            if self.beeper != "off":
-                return False
-        return True
-
-    def _trigger_beeper_probe_command(self):
-        """Send a no-op command that exercises the device command beeper path."""
-        if self.supports_parameter("state") and self.state is not None:
-            return self.set_param("state", self.state)
-        if self.supports_parameter("speed") and self.speed is not None:
-            return self.set_param("speed", self.speed)
-        return False
 
     def _profile_enum(self, enum_name):
         """Return a profile-specific enum map by class attribute name."""

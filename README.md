@@ -83,8 +83,8 @@ External relabels and OEM names tracked as evidence or candidates:
   - "forward" means 'ventilation' airflow
   - "reverse" means 'air_supply' airflow
 * Weekly schedule support on devices exposing `0x0072` / `0x0077`
-  - native HA entities for `Weekly schedule`, `Schedule day`, period speeds, and end times
-  - built-in `Ventilation` sidebar panel with a compact schedule editor for supported devices
+  - one visible schedule entity for the weekly schedule
+  - open the schedule entity's more-info dialog to edit the weekly schedule
 
 # Changelog
 version 0.0.5:
@@ -132,8 +132,8 @@ All sensors are categorised and some are disabled by default.
 
 version 0.2.0:
 * Added services
-  - filter_timer_reset (Reset air filter timer)
-  - reset_alarms (Reset fan Vento alarms)
+  - filter_timer_reset (Reset filter timer)
+  - reset_alarms (Reset alarms)
 * Changed:
   - From binary sensor to switch:
     - humidity_sensor_state
@@ -269,6 +269,6 @@ Version 1.2.5
 * Switch to manual speed automatically when setting the fan percentage directly
 * Keep preset percentage synchronized from the device-reported low/medium/high
   supply/exhaust setpoints instead of hiding it outside manual mode
-* Document live TwinFresh V.2 beeper testing: writing `0x0306=00` or `0x0306=02`
-  did not disable command beeps reliably on the tested device, so the integration
-  does not expose a writable beeper control.
+* Correct the VENTO/TwinFresh Expert `0x0306` interpretation from beeper state to
+  the PDF-documented current schedule speed; writable beeper control remains
+  exposed only for profiles with a documented sound-emitter parameter.

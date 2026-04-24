@@ -305,7 +305,7 @@ SENSOR_SPECS = (
         device_class=SensorDeviceClass.ENUM,
         entity_category=EntityCategory.DIAGNOSTIC,
         icon="mdi:calendar-clock",
-        required_capabilities=("air_quality",),
+        required_params=("schedule_speed",),
     ),
     SensorSpec(
         "_frost_protection_status",

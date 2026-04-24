@@ -18,22 +18,143 @@ class EcoventScheduleDialog extends HTMLElement {
     this._entityId = "";
     this._hass = undefined;
     this._draft = undefined;
+    this._savedDraft = undefined;
+    this._confirmDiscard = false;
+    this._error = "";
+    this._savedMessage = "";
+    this._savedMessageTimer = undefined;
+    this._returnFocusTo = undefined;
+    this._dialogWithListeners = undefined;
+    this._boundDialogPointerDown = (event) => this._handleDialogPointerDown(event);
+    this._boundDialogHide = (event) => this._handleDialogHide(event);
+    this._boundDialogClosed = (event) => this._handleDialogClosed(event);
   }
 
   showDialog({ hass, entityId }) {
+    this._returnFocusTo = document.activeElement;
     this._hass = hass;
     this._entityId = entityId;
     this._draft = this._buildDraft();
+    this._savedDraft = this._clone(this._draft);
+    this._confirmDiscard = false;
+    this._error = "";
+    this._savedMessage = "";
     this._open = true;
     this._render();
+    requestAnimationFrame(() => {
+      this.shadowRoot?.querySelector("ha-dialog")?.focus?.();
+    });
   }
 
-  closeDialog() {
+  closeDialog({ force = false } = {}) {
+    if (!force && this._dirty) {
+      this._confirmDiscard = true;
+      this._render();
+      return;
+    }
+    if (this._savedMessageTimer) {
+      clearTimeout(this._savedMessageTimer);
+      this._savedMessageTimer = undefined;
+    }
     this._open = false;
     this._busy = false;
     this._dirty = false;
+    this._confirmDiscard = false;
+    this._error = "";
+    this._savedMessage = "";
     this._draft = undefined;
+    this._savedDraft = undefined;
+    this._detachDialogListeners();
     this._render();
+    this._returnFocusTo?.focus?.();
+    this._returnFocusTo = undefined;
+  }
+
+  _eventComesFromDialogScrim(event) {
+    const path = event.composedPath?.() ?? [];
+    const first = path[0];
+    if (
+      typeof HTMLDialogElement !== "undefined" &&
+      !(first instanceof HTMLDialogElement)
+    ) {
+      return false;
+    }
+    if (typeof HTMLDialogElement === "undefined" && first?.localName !== "dialog") {
+      return false;
+    }
+
+    const rect = first.getBoundingClientRect?.();
+    if (!rect) {
+      return false;
+    }
+    return (
+      event.clientX < rect.left ||
+      event.clientX > rect.right ||
+      event.clientY < rect.top ||
+      event.clientY > rect.bottom
+    );
+  }
+
+  _detachDialogListeners() {
+    if (!this._dialogWithListeners) {
+      return;
+    }
+    this._dialogWithListeners.removeEventListener(
+      "pointerdown",
+      this._boundDialogPointerDown,
+      true
+    );
+    this._dialogWithListeners.removeEventListener("wa-hide", this._boundDialogHide);
+    this._dialogWithListeners.removeEventListener("closed", this._boundDialogClosed);
+    this._dialogWithListeners = undefined;
+  }
+
+  _attachDialogListeners(dialog) {
+    if (this._dialogWithListeners === dialog) {
+      return;
+    }
+    this._detachDialogListeners();
+    dialog.addEventListener("pointerdown", this._boundDialogPointerDown, true);
+    dialog.addEventListener("wa-hide", this._boundDialogHide);
+    dialog.addEventListener("closed", this._boundDialogClosed);
+    this._dialogWithListeners = dialog;
+  }
+
+  _handleDialogPointerDown(event) {
+    if (!this._eventComesFromDialogScrim(event)) {
+      return;
+    }
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    this.closeDialog({ force: !this._dirty });
+  }
+
+  _handleDialogHide(event) {
+    const dialog = this._dialogWithListeners;
+    if (event.target !== dialog) {
+      return;
+    }
+    if (!this._dirty) {
+      this.closeDialog({ force: true });
+      return;
+    }
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    this.closeDialog();
+  }
+
+  _handleDialogClosed(event) {
+    const dialog = this._dialogWithListeners;
+    if (event.target !== dialog) {
+      return;
+    }
+    if (this._dirty) {
+      this.closeDialog();
+      return;
+    }
+    if (this._open) {
+      this.closeDialog({ force: true });
+    }
   }
 
   _entity(entityId) {
@@ -53,15 +174,43 @@ class EcoventScheduleDialog extends HTMLElement {
   }
 
   _dayShort(day) {
-    return day.slice(0, 3);
+    return new Intl.DateTimeFormat(this._localeTag(), { weekday: "short" }).format(
+      this._dayDate(day)
+    );
   }
 
-  _copyTargetLabel(day) {
-    return day ?? "This day";
+  _dayLabel(day) {
+    return new Intl.DateTimeFormat(this._localeTag(), { weekday: "long" }).format(
+      this._dayDate(day)
+    );
   }
 
-  _timeLocale() {
-    return this._hass.locale;
+  _dayDate(day) {
+    const index = [
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+      "Sunday",
+    ].indexOf(day);
+    return new Date(Date.UTC(2024, 0, 1 + Math.max(index, 0)));
+  }
+
+  _localeTag() {
+    return this._hass?.locale?.language || navigator.language || "en";
+  }
+
+  _t(key, fallback, replacements = {}) {
+    const translated = this._hass?.localize?.(
+      `component.${DOMAIN}.ui.schedule.${key}`
+    );
+    let value = translated || fallback;
+    for (const [name, replacement] of Object.entries(replacements)) {
+      value = value.replace(`{${name}}`, replacement);
+    }
+    return value;
   }
 
   _normalizeTimeValue(value) {
@@ -87,6 +236,17 @@ class EcoventScheduleDialog extends HTMLElement {
     return MDI_FAN_SPEED_1;
   }
 
+  _speedKey(label) {
+    return `speed_${String(label || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "_")}`;
+  }
+
+  _speedLabel(label) {
+    return this._t(this._speedKey(label), label || "Unknown");
+  }
+
   _buildDraft() {
     const attrs = this._attrs();
     const days = Array.isArray(attrs.days) ? this._clone(attrs.days) : [];
@@ -95,22 +255,78 @@ class EcoventScheduleDialog extends HTMLElement {
     return {
       weekly_schedule_enabled: attrs.weekly_schedule_enabled === true,
       selected_day: selectedDay,
+      edit_scope: "day",
       days,
     };
+  }
+
+  _scopeDays(scope, selectedDay) {
+    if (scope === "weekdays") {
+      return ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+    }
+    if (scope === "weekend") {
+      return ["Saturday", "Sunday"];
+    }
+    if (scope === "all") {
+      return [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday",
+      ];
+    }
+    return selectedDay ? [selectedDay] : [];
+  }
+
+  _currentScopeDays() {
+    if (!this._draft) {
+      return [];
+    }
+    return this._scopeDays(this._draft.edit_scope, this._draft.selected_day);
+  }
+
+  _effectiveSelectedDay() {
+    const scopeDays = this._currentScopeDays();
+    if (!scopeDays.length) {
+      return this._draft?.selected_day;
+    }
+    if (scopeDays.includes(this._draft?.selected_day)) {
+      return this._draft.selected_day;
+    }
+    return scopeDays[0];
   }
 
   _currentDay() {
     if (!this._draft) {
       return undefined;
     }
-    return this._draft.days.find((day) => day.day === this._draft.selected_day);
+    const selectedDay = this._effectiveSelectedDay();
+    return this._draft.days.find((day) => day.day === selectedDay);
   }
 
   _setSelectedDay(day) {
     if (!this._draft || this._busy) {
       return;
     }
+    this._draft.edit_scope = "day";
     this._draft.selected_day = day;
+    this._confirmDiscard = false;
+    this._render();
+  }
+
+  _setEditScope(scope) {
+    if (!this._draft || this._busy) {
+      return;
+    }
+    this._draft.edit_scope = scope;
+    const scopeDays = this._currentScopeDays();
+    if (scopeDays.length && !scopeDays.includes(this._draft.selected_day)) {
+      this._draft.selected_day = scopeDays[0];
+    }
+    this._confirmDiscard = false;
     this._render();
   }
 
@@ -119,7 +335,9 @@ class EcoventScheduleDialog extends HTMLElement {
       return;
     }
     this._draft.weekly_schedule_enabled = enabled;
-    this._dirty = true;
+    this._error = "";
+    this._savedMessage = "";
+    this._dirty = this._hasPersistedChanges();
     this._render();
   }
 
@@ -128,43 +346,107 @@ class EcoventScheduleDialog extends HTMLElement {
       return;
     }
 
-    const day = this._currentDay();
-    if (!day) {
+    let changed = false;
+
+    for (const dayName of this._currentScopeDays()) {
+      const day = this._draft.days.find((item) => item.day === dayName);
+      if (!day) {
+        continue;
+      }
+
+      const period = day.periods.find((item) => item.period === periodNumber);
+      if (!period) {
+        continue;
+      }
+
+      const hasDiff = Object.entries(patch).some(([key, value]) => period[key] !== value);
+      if (!hasDiff) {
+        continue;
+      }
+
+      Object.assign(period, patch);
+      this._refreshDaySummaries(day);
+      changed = true;
+    }
+
+    if (!changed) {
       return;
     }
 
-    const period = day.periods.find((item) => item.period === periodNumber);
-    if (!period) {
-      return;
-    }
-
-    Object.assign(period, patch);
-    this._refreshDaySummaries(day);
-    this._dirty = true;
+    this._error = "";
+    this._savedMessage = "";
+    this._dirty = this._hasPersistedChanges();
     this._render();
   }
 
-  _cloneCurrentDayPeriods() {
-    return this._clone(this._currentDay()?.periods ?? []);
+  _periodPayloadSignature(period) {
+    const signature = {
+      period: period?.period,
+      speed: period?.speed,
+    };
+    if (period?.editable_end) {
+      signature.end = this._normalizeTimeValue(period.end);
+    }
+    return signature;
   }
 
-  _applyCurrentDayTo(dayNames) {
-    if (!this._draft || this._busy) {
-      return;
+  _changedScheduleDays() {
+    if (!this._draft) {
+      return [];
     }
 
-    const sourcePeriods = this._cloneCurrentDayPeriods();
-    this._draft.days = this._draft.days.map((day) =>
-      dayNames.includes(day.day) ? { ...day, periods: this._clone(sourcePeriods) } : day
+    if (!this._savedDraft) {
+      return this._draft.days ?? [];
+    }
+
+    const savedDays = new Map(
+      (this._savedDraft.days ?? []).map((day) => [day.day, day])
     );
-    this._dirty = true;
-    this._render();
+
+    return (this._draft.days ?? [])
+      .map((day) => {
+        const savedPeriods = new Map(
+          (savedDays.get(day.day)?.periods ?? []).map((period) => [
+            period.period,
+            period,
+          ])
+        );
+        const periods = (day.periods ?? []).filter((period) => {
+          return (
+            JSON.stringify(this._periodPayloadSignature(period)) !==
+            JSON.stringify(
+              this._periodPayloadSignature(savedPeriods.get(period.period))
+            )
+          );
+        });
+        return {
+          day: day.day,
+          periods,
+        };
+      })
+      .filter((day) => day.periods.length > 0);
+  }
+
+  _hasPersistedChanges() {
+    if (!this._draft) {
+      return false;
+    }
+
+    if (!this._savedDraft) {
+      return true;
+    }
+
+    return (
+      this._draft.weekly_schedule_enabled !==
+        this._savedDraft.weekly_schedule_enabled ||
+      this._changedScheduleDays().length > 0
+    );
   }
 
   _savePayload() {
-    const days = (this._draft?.days ?? []).map((day) => ({
+    const days = this._changedScheduleDays().map((day) => ({
       day: day.day,
-      periods: (day.periods ?? []).map((period) => {
+      periods: day.periods.map((period) => {
         const payload = {
           period: period.period,
           speed: period.speed,
@@ -193,6 +475,98 @@ class EcoventScheduleDialog extends HTMLElement {
       .replace(/:00/g, "")
       .replace(/\s+/g, " ")
       .trim();
+  }
+
+  _minutes(value) {
+    const [hours, minutes] = this._normalizeTimeValue(value)
+      .split(":")
+      .map((part) => Number(part));
+    return hours * 60 + minutes;
+  }
+
+  _formatError(error) {
+    return error?.message || String(error || "Unknown error");
+  }
+
+  _setSavedMessage(message) {
+    if (this._savedMessageTimer) {
+      clearTimeout(this._savedMessageTimer);
+    }
+    this._savedMessage = message;
+    this._savedMessageTimer = setTimeout(() => {
+      this._savedMessage = "";
+      this._render();
+    }, 2400);
+  }
+
+  _validationErrors(day = this._currentDay()) {
+    const errors = new Map();
+    let previousEnd = 0;
+
+    for (const period of day?.periods || []) {
+      if (!period.editable_end) {
+        continue;
+      }
+
+      const end = this._minutes(period.end);
+      if (end <= previousEnd) {
+        errors.set(
+          period.period,
+          this._t("end_after", "End time must be after {time}.", {
+            time: this._formatDisplayMinutes(previousEnd),
+          })
+        );
+      }
+      previousEnd = end;
+    }
+
+    return errors;
+  }
+
+  _isDraftValid() {
+    if (!this._draft) {
+      return false;
+    }
+    return (this._draft.days || []).every(
+      (day) => this._validationErrors(day).size === 0
+    );
+  }
+
+  _currentValidationErrors() {
+    return this._validationErrors(this._currentDay());
+  }
+
+  _formatTime(minutes) {
+    const hour = Math.floor(minutes / 60);
+    const minute = minutes % 60;
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  }
+
+  _uses12HourTime() {
+    // Native time inputs follow the browser/OS time picker, not Home Assistant's
+    // frontend setting. Match the browser here so static period starts and
+    // editable time fields never mix 24-hour and AM/PM display in one row.
+    return (
+      new Intl.DateTimeFormat(undefined, { hour: "numeric" })
+        .resolvedOptions()
+        .hour12 === true
+    );
+  }
+
+  _formatDisplayMinutes(minutes) {
+    return this._formatDisplayTime(this._formatTime(minutes));
+  }
+
+  _formatDisplayTime(value) {
+    const normalized = this._normalizeTimeValue(value);
+    if (!this._uses12HourTime()) {
+      return normalized;
+    }
+    const [hour, minute] = normalized.split(":").map((part) => Number(part));
+    return new Intl.DateTimeFormat(this._localeTag(), {
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(new Date(2024, 0, 1, hour, minute));
   }
 
   _periodBounds(period) {
@@ -241,28 +615,45 @@ class EcoventScheduleDialog extends HTMLElement {
       }
     }
 
+    if (merged.length === 1 && merged[0].start === "00:00") {
+      return this._t("all_day", "{speed} all day", {
+        speed: this._speedLabel(merged[0].speed),
+      });
+    }
+
     if (
-      merged.length === 1 &&
+      merged.length === 2 &&
       merged[0].start === "00:00" &&
-      (merged[0].end === "00:00" || merged[0].end === "24:00")
+      merged[1].end === "00:00"
     ) {
-      return `${merged[0].speed} all day`;
+      return this._t("until_then", "{speed} until {time}, then {next_speed}", {
+        speed: this._speedLabel(merged[0].speed),
+        time: this._formatDisplayTime(merged[0].end),
+        next_speed: this._speedLabel(merged[1].speed),
+      });
     }
 
     return merged
-      .map((item) => `${item.start}-${item.end} ${item.speed}`)
+      .map((item) => {
+        if (item.end === "00:00") {
+          return this._t("rest_of_day", "{speed} rest of day", {
+            speed: this._speedLabel(item.speed),
+          });
+        }
+        return this._t("time_range", "{speed} {start}-{end}", {
+          speed: this._speedLabel(item.speed),
+          start: this._formatDisplayTime(item.start),
+          end: this._formatDisplayTime(item.end),
+        });
+      })
       .join(", ");
-  }
-
-  _compactDaySummary(day) {
-    return this._mergedDaySummary(day);
   }
 
   _groupedWeekRows(days) {
     const groups = [];
 
     for (const day of days || []) {
-      const summary = this._compactDaySummary(day);
+      const summary = this._mergedDaySummary(day);
       const previous = groups[groups.length - 1];
 
       if (previous && previous.summary === summary) {
@@ -280,13 +671,13 @@ class EcoventScheduleDialog extends HTMLElement {
       return "";
     }
     if (days.length === 7) {
-      return "All days";
+      return this._t("scope_all", "Every day");
     }
     if (days.join("|") === "Monday|Tuesday|Wednesday|Thursday|Friday") {
-      return "Weekdays";
+      return this._t("scope_weekdays", "Weekdays");
     }
     if (days.join("|") === "Saturday|Sunday") {
-      return "Weekend";
+      return this._t("scope_weekend", "Weekend");
     }
     if (days.length === 1) {
       return this._dayShort(days[0]);
@@ -294,13 +685,90 @@ class EcoventScheduleDialog extends HTMLElement {
     return `${this._dayShort(days[0])}-${this._dayShort(days[days.length - 1])}`;
   }
 
+  _scopeLabel(scope) {
+    if (scope === "weekdays") {
+      return this._t("scope_weekdays", "Weekdays").toLowerCase();
+    }
+    if (scope === "weekend") {
+      return this._t("scope_weekend", "Weekend").toLowerCase();
+    }
+    if (scope === "all") {
+      return this._t("scope_all", "Every day").toLowerCase();
+    }
+    return this._t("scope_day", "This day").toLowerCase();
+  }
+
+  _scopeControlLabel(scope) {
+    if (scope === "day") {
+      return this._t("scope_day", "This day");
+    }
+    if (scope === "weekdays") {
+      return this._t("scope_weekdays", "Weekdays");
+    }
+    if (scope === "weekend") {
+      return this._t("scope_weekend", "Weekend");
+    }
+    if (scope === "all") {
+      return this._t("scope_all", "Every day");
+    }
+    return this._scopeLabel(scope);
+  }
+
+  _scopeHelperText() {
+    const scope = this._draft?.edit_scope ?? "day";
+    if (scope === "weekdays") {
+      return this._t("helper_weekdays", "Changes will be applied to Mon-Fri.");
+    }
+    if (scope === "weekend") {
+      return this._t("helper_weekend", "Changes will be applied to Sat-Sun.");
+    }
+    if (scope === "all") {
+      return this._t("helper_all", "Changes will be applied to every day.");
+    }
+    return this._t(
+      "helper_day",
+      "Changes will be applied only to the selected day."
+    );
+  }
+
+  _editingSubhead() {
+    const scope = this._draft?.edit_scope ?? "day";
+    if (scope === "day") {
+      return this._t("editing_day", "Editing {day}", {
+        day: this._dayLabel(this._draft?.selected_day ?? "Monday"),
+      });
+    }
+    return this._t(`editing_${scope === "all" ? "all" : scope}`, `Editing ${this._scopeLabel(scope)}`);
+  }
+
+  _scopeKeyForDays(days) {
+    if (days.length === 7) {
+      return "all";
+    }
+    if (days.join("|") === "Monday|Tuesday|Wednesday|Thursday|Friday") {
+      return "weekdays";
+    }
+    if (days.join("|") === "Saturday|Sunday") {
+      return "weekend";
+    }
+    if (days.length === 1) {
+      return "day";
+    }
+    return null;
+  }
+
   _weekGroupRow(group) {
-    const active = group.days.includes(this._draft?.selected_day);
-    const targetDay = active ? this._draft?.selected_day : group.days[0];
+    const activeScope = this._currentScopeDays();
+    const active =
+      activeScope.length === group.days.length &&
+      activeScope.every((day, index) => day === group.days[index]);
+    const scopeKey = this._scopeKeyForDays(group.days);
+    const targetDay = group.days[0];
     return `
       <button
         class="week-row ${active ? "active" : ""}"
         data-day="${targetDay}"
+        ${scopeKey ? `data-edit-scope="${scopeKey}"` : ""}
         ${this._busy ? "disabled" : ""}
       >
         <div class="week-day">${this._groupedDayLabel(group.days)}</div>
@@ -323,124 +791,109 @@ class EcoventScheduleDialog extends HTMLElement {
   }
 
   async _callService(service, serviceData) {
-    if (!this._hass || this._busy) {
+    if (!this._hass) {
+      return;
+    }
+    await this._hass.callService(DOMAIN, service, {
+      entity_id: this._entityId,
+      ...serviceData,
+    });
+  }
+
+  async _save() {
+    if (!this._draft || !this._dirty || this._busy) {
+      return;
+    }
+    if (!this._isDraftValid()) {
+      this._error = this._t(
+        "invalid_order",
+        "Periods must be in chronological order."
+      );
+      this._render();
+      return;
+    }
+    const payload = this._savePayload();
+    const weeklyChanged =
+      this._savedDraft &&
+      this._draft.weekly_schedule_enabled !==
+        this._savedDraft.weekly_schedule_enabled;
+    if (!weeklyChanged && payload.days.length === 0) {
+      this._dirty = false;
+      this._render();
       return;
     }
     this._busy = true;
+    this._error = "";
+    this._savedMessage = "";
     this._render();
     try {
-      await this._hass.callService(DOMAIN, service, {
-        entity_id: this._entityId,
-        ...serviceData,
-      });
+      await this._callService("write_schedule", payload);
+      this._savedDraft = this._clone(this._draft);
       this._dirty = false;
+      this._confirmDiscard = false;
+      this._setSavedMessage(this._t("saved", "Saved"));
+    } catch (error) {
+      this._error = `${this._t(
+        "could_not_save",
+        "Could not save schedule."
+      )} ${this._formatError(error)}`;
+      this._dirty = true;
     } finally {
       this._busy = false;
       this._render();
     }
   }
 
-  async _save() {
-    if (!this._draft) {
-      return;
-    }
-    await this._callService("write_schedule", this._savePayload());
-  }
-
-  _summaryRow(day) {
-    const selected = day.day === this._draft?.selected_day;
-    return `
-      <button
-        class="week-row ${selected ? "active" : ""}"
-        data-day="${day.day}"
-        ${this._busy ? "disabled" : ""}
-      >
-        <div class="week-day">${this._dayShort(day.day)}</div>
-        <div class="week-value">${this._compactDaySummary(day)}</div>
-      </button>
-    `;
-  }
-
   _periodCard(periodData, speedOptions) {
     const bounds = this._periodBounds(periodData);
     const period = periodData.period;
+    const error = this._currentValidationErrors().get(period);
 
     return `
       <section class="period-card">
         <div class="period-layout">
           <div class="period-side">
-            <div class="period-track"></div>
             <div class="period-marker">${period}</div>
           </div>
           <div class="period-main">
-            <div class="period-head">
-              <div class="period-summary">${bounds.start}-${bounds.end}</div>
+            <div class="period-start">
+              <span class="field-label">${this._t("starts", "Starts")}</span>
+              <span class="start-time">${this._formatDisplayTime(bounds.start)}</span>
             </div>
             <label class="field field-time">
-              <span class="field-label">Until</span>
+              <span class="field-label">${this._t("until", "Until")}</span>
               ${
                 periodData.editable_end
                   ? `
-                    <ha-selector
+                    <input
+                      type="time"
                       class="time-input"
                       data-end-input="${period}"
-                    ></ha-selector>
+                      value="${this._normalizeTimeValue(periodData.end)}"
+                      ${this._busy ? "disabled" : ""}
+                    />
+                    ${error ? `<span class="field-error">${error}</span>` : ""}
                   `
-                  : `<div class="control static">24:00</div>`
+                  : `<div class="end-of-day">${this._t("end_of_day", "End of day")}</div>`
               }
             </label>
-            <label class="field">
-              <span class="field-label">Speed</span>
+            <label class="field speed-field">
+              <span class="field-label">${this._t("speed", "Speed")}</span>
               <ha-control-select-menu
                 class="speed-control"
                 data-speed-select="${period}"
-                hide-label
+                value="${periodData.speed ?? speedOptions[0]?.value ?? ""}"
+                label="${this._t("speed", "Speed")}"
                 show-arrow
               ></ha-control-select-menu>
+              <span class="speed-value" aria-hidden="true">
+                ${this._speedLabel(periodData.speed ?? speedOptions[0]?.value)}
+              </span>
             </label>
           </div>
         </div>
       </section>
     `;
-  }
-
-  _wireTimeInputs() {
-    this.shadowRoot.querySelectorAll("[data-end-input]").forEach((element) => {
-      const period = Number(element.dataset.endInput);
-
-      const attach = () => {
-        const selectorTime =
-          element.shadowRoot?.querySelector("ha-selector-time");
-        const timeInput = selectorTime?.shadowRoot?.querySelector("ha-time-input");
-
-        if (!timeInput) {
-          requestAnimationFrame(attach);
-          return;
-        }
-
-        if (timeInput.dataset.ecoventBound === "true") {
-          return;
-        }
-
-        timeInput.dataset.ecoventBound = "true";
-
-        const handleChange = (event) => {
-          const value = event.detail?.value ?? timeInput.value;
-          if (!value) {
-            return;
-          }
-
-          this._updatePeriod(period, {
-            end: this._normalizeTimeValue(value),
-          });
-        };
-
-        timeInput.addEventListener("value-changed", handleChange);
-        timeInput.addEventListener("change", handleChange);
-      };
-
-      requestAnimationFrame(attach);
-    });
   }
 
   _render() {
@@ -462,13 +915,14 @@ class EcoventScheduleDialog extends HTMLElement {
       : [];
     const currentDay = this._currentDay();
     const periods = Array.isArray(currentDay?.periods) ? currentDay.periods : [];
-    const title = stateObj.attributes.friendly_name ?? "Schedule";
+    const title = this._t("title", "Weekly schedule");
+    const subtitle = stateObj.attributes.friendly_name ?? "Schedule";
     const groupedWeekRows = this._groupedWeekRows(draft.days);
-    this.shadowRoot.innerHTML = `
+    const isValid = this._isDraftValid();
+    const rendered = `
       <style>
         :host {
-          position: fixed;
-          inset: 0;
+          display: contents;
           z-index: 10000;
         }
 
@@ -483,42 +937,6 @@ class EcoventScheduleDialog extends HTMLElement {
           font: inherit;
         }
 
-        .scrim {
-          position: absolute;
-          inset: 0;
-          background: rgba(0, 0, 0, 0.56);
-        }
-
-        .dialog {
-          position: absolute;
-          top: max(12px, env(safe-area-inset-top));
-          left: max(24px, env(safe-area-inset-left));
-          right: max(24px, env(safe-area-inset-right));
-          width: min(820px, calc(100vw - 48px));
-          max-height: min(860px, calc(100dvh - 20px));
-          margin: auto;
-          display: grid;
-          grid-template-rows: auto minmax(0, 1fr) auto;
-          background: var(--card-background-color, var(--ha-card-background));
-          color: var(--primary-text-color);
-          border-radius: 28px;
-          border: 1px solid var(--divider-color);
-          box-shadow: var(--dialog-box-shadow, 0 18px 48px rgba(0, 0, 0, 0.35));
-          overflow: visible;
-        }
-
-        .header {
-          display: grid;
-          grid-template-columns: 40px minmax(0, 1fr);
-          gap: 14px;
-          align-items: center;
-          padding: 16px 20px 8px;
-        }
-
-        .title-block {
-          min-width: 0;
-        }
-
         .eyebrow,
         .field-label,
         .meta-label,
@@ -527,41 +945,23 @@ class EcoventScheduleDialog extends HTMLElement {
           font-size: 12px;
         }
 
-        h2 {
-          margin: 0;
-          font-size: 18px;
-          font-weight: 600;
-          line-height: 1.2;
-        }
-
-        .subhead {
-          margin-top: 4px;
-          color: var(--secondary-text-color);
-          font-size: 15px;
-        }
-
-        .icon-button {
-          width: 40px;
-          height: 40px;
-          border: none;
-          border-radius: 20px;
-          background: var(--secondary-background-color);
-          color: var(--primary-text-color);
-          cursor: pointer;
-          font-size: 24px;
-          line-height: 1;
+        ha-dialog {
+          --ha-dialog-width-lg: 820px;
+          --ha-dialog-max-height: min(860px, calc(100dvh - 20px));
+          --ha-dialog-border-radius: 28px;
+          --dialog-content-padding: 0 20px 8px;
         }
 
         .content {
-          overflow: visible;
-          padding: 0 20px 10px;
+          display: grid;
+          gap: 0;
         }
 
         .top-card {
           border: 1px solid var(--divider-color);
           border-radius: 12px;
           background: var(--secondary-background-color);
-          padding: 10px 14px;
+          padding: 9px 14px;
           margin-bottom: 6px;
         }
 
@@ -586,15 +986,21 @@ class EcoventScheduleDialog extends HTMLElement {
           );
         }
 
-        .copy-row {
+        .scope-row {
           display: flex;
           flex-wrap: wrap;
           gap: 8px;
           align-items: center;
-          margin-top: 8px;
+          margin-top: 7px;
         }
 
-        .copy-label {
+        .scope-helper {
+          color: var(--secondary-text-color);
+          font-size: 12px;
+          margin-top: 6px;
+        }
+
+        .scope-label {
           color: var(--secondary-text-color);
           font-size: 13px;
           margin-right: 4px;
@@ -616,6 +1022,11 @@ class EcoventScheduleDialog extends HTMLElement {
           border-color: var(--primary-color);
         }
 
+        .group-chip.active {
+          border-color: var(--primary-color);
+          background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+        }
+
         .group-chip:disabled {
           opacity: 0.6;
           cursor: default;
@@ -625,15 +1036,15 @@ class EcoventScheduleDialog extends HTMLElement {
           border: 1px solid var(--divider-color);
           border-radius: 12px;
           background: var(--ha-card-background, var(--card-background-color));
-          padding: 6px;
-          margin-bottom: 4px;
+          padding: 5px;
+          margin-bottom: 5px;
         }
 
         .day-strip {
           display: flex;
           flex-wrap: wrap;
-          gap: 8px;
-          margin-bottom: 8px;
+          gap: 7px;
+          margin-bottom: 7px;
         }
 
         .day-chip {
@@ -689,9 +1100,9 @@ class EcoventScheduleDialog extends HTMLElement {
 
         .week-value {
           min-width: 0;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
+          white-space: normal;
+          overflow: visible;
+          text-overflow: clip;
         }
 
         .periods {
@@ -700,10 +1111,20 @@ class EcoventScheduleDialog extends HTMLElement {
           overflow: visible;
         }
 
+        .periods-header {
+          display: grid;
+          grid-template-columns: 28px 92px 192px minmax(240px, 1fr);
+          gap: 12px;
+          align-items: end;
+          padding: 0 12px 2px;
+          color: var(--secondary-text-color);
+          font-size: 12px;
+        }
+
         .period-card {
           border: 1px solid var(--divider-color);
           border-radius: 12px;
-          padding: 8px 12px;
+          padding: 6px 12px;
           background: var(--ha-card-background, var(--card-background-color));
           overflow: visible;
         }
@@ -716,16 +1137,11 @@ class EcoventScheduleDialog extends HTMLElement {
         }
 
         .period-side {
-          display: grid;
+          display: flex;
           justify-items: center;
-          gap: 2px;
-        }
-
-        .period-summary {
-          min-height: 0;
-          color: var(--secondary-text-color);
-          font-size: 13px;
-          line-height: 1.35;
+          align-items: center;
+          justify-content: center;
+          min-height: 44px;
         }
 
         .period-main {
@@ -736,8 +1152,16 @@ class EcoventScheduleDialog extends HTMLElement {
           min-width: 0;
         }
 
-        .period-head {
+        .period-start {
           min-width: 0;
+          display: grid;
+          gap: 3px;
+        }
+
+        .start-time {
+          color: var(--primary-text-color);
+          font-size: 14px;
+          line-height: 1.3;
         }
 
         .period-marker {
@@ -751,37 +1175,43 @@ class EcoventScheduleDialog extends HTMLElement {
           border: 1px solid color-mix(in srgb, var(--primary-color) 55%, transparent);
         }
 
-        .period-track {
-          width: 2px;
-          height: 36px;
-          background: var(--divider-color);
-          border-radius: 999px;
-        }
-
         .field {
           display: grid;
-          gap: 4px;
+          gap: 0;
           min-width: 0;
+        }
+
+        .field-label {
+          display: none;
         }
 
         .field-time {
           width: 192px;
         }
 
-        .control.static {
-          display: flex;
-          align-items: center;
+        .end-of-day {
+          color: var(--secondary-text-color);
+          line-height: 44px;
           min-height: 44px;
-          border: 1px solid var(--divider-color);
-          border-radius: 10px;
-          background: var(--secondary-background-color);
-          color: var(--primary-text-color);
-          padding: 10px 12px;
         }
 
         .time-input {
           display: block;
           width: 100%;
+          min-height: 44px;
+          border: 1px solid var(--divider-color);
+          border-radius: 10px;
+          background: var(--secondary-background-color);
+          color: var(--primary-text-color);
+          padding: 0 12px;
+          color-scheme: light dark;
+        }
+
+        .field-error {
+          color: var(--error-color);
+          font-size: 12px;
+          line-height: 1.3;
+          margin-top: 4px;
         }
 
         .speed-control {
@@ -789,19 +1219,60 @@ class EcoventScheduleDialog extends HTMLElement {
           width: 100%;
           --control-select-menu-height: 44px;
           --control-select-menu-border-radius: 10px;
-          --control-select-menu-background-color: var(--primary-color);
-          --control-select-menu-background-opacity: 0.1;
+          --control-select-menu-background-color: var(--secondary-background-color);
+          --control-select-menu-background-opacity: 1;
           --control-select-menu-focus-color: var(--primary-color);
         }
 
-        .footer {
+        .speed-field {
+          position: relative;
+        }
+
+        .speed-value {
+          position: absolute;
+          top: 50%;
+          left: 52px;
+          right: 38px;
+          transform: translateY(-50%);
+          color: var(--primary-text-color);
+          font-size: 14px;
+          line-height: 1.2;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          pointer-events: none;
+        }
+
+        .error-box,
+        .discard-box {
+          border-radius: 12px;
+          margin-bottom: 8px;
+          padding: 10px 12px;
+          font-size: 13px;
+          line-height: 1.35;
+        }
+
+        .error-box {
+          border: 1px solid color-mix(in srgb, var(--error-color) 60%, transparent);
+          color: var(--error-color);
+          background: color-mix(in srgb, var(--error-color) 10%, transparent);
+        }
+
+        .discard-box {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          align-items: center;
+          border: 1px solid var(--divider-color);
+          background: var(--secondary-background-color);
+        }
+
+        .footer-shell {
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 12px;
-          padding: 10px 20px max(10px, env(safe-area-inset-bottom));
-          border-top: 1px solid var(--divider-color);
-          background: var(--card-background-color, var(--ha-card-background));
+          width: 100%;
         }
 
         .footer-note {
@@ -809,59 +1280,40 @@ class EcoventScheduleDialog extends HTMLElement {
           font-size: 13px;
         }
 
-        .actions {
+        .actions,
+        ha-dialog-footer {
           display: flex;
           gap: 8px;
           flex-wrap: wrap;
         }
 
-        .action {
+        ha-button.action {
+          --ha-button-border-radius: 10px;
           min-width: 96px;
-          height: 40px;
-          border-radius: 10px;
-          border: 1px solid var(--divider-color);
-          background: var(--secondary-background-color);
-          color: var(--primary-text-color);
-          padding: 0 16px;
-          cursor: pointer;
-        }
-
-        .action.primary {
-          border-color: var(--primary-color);
-          background: var(--primary-color);
-          color: var(--text-primary-color, white);
         }
 
         @media (max-width: 800px) {
-          .dialog {
-            top: env(safe-area-inset-top);
-            left: env(safe-area-inset-left);
-            right: env(safe-area-inset-right);
-            width: 100%;
-            height: 100dvh;
-            max-width: none;
-            max-height: none;
-            border-radius: 0;
-            overflow: hidden;
-          }
-
-          .content {
-            overflow: auto;
-          }
-
-          .header,
-          .content,
-          .footer {
-            padding-left: 16px;
-            padding-right: 16px;
-          }
-
-          .header {
-            padding-top: max(16px, env(safe-area-inset-top));
+          ha-dialog {
+            --dialog-content-padding: 0 16px 8px;
           }
 
           .period-card {
             padding: 10px;
+          }
+
+          .periods-header {
+            display: none;
+          }
+
+          .week-row {
+            grid-template-columns: 72px minmax(0, 1fr);
+            align-items: start;
+          }
+
+          .week-value {
+            white-space: normal;
+            overflow: visible;
+            text-overflow: clip;
           }
 
           .period-main {
@@ -870,109 +1322,208 @@ class EcoventScheduleDialog extends HTMLElement {
             align-items: start;
           }
 
+          .period-start {
+            grid-template-columns: auto minmax(0, 1fr);
+            align-items: baseline;
+            gap: 8px;
+          }
+
+          .field {
+            gap: 4px;
+          }
+
+          .field-label {
+            display: block;
+          }
+
           .field-time {
             width: auto;
           }
 
-          .footer {
+          .discard-box {
             align-items: stretch;
             flex-direction: column;
           }
 
+          .footer-shell {
+            align-items: stretch;
+            flex-direction: column;
+          }
+
+          ha-dialog-footer,
           .actions {
             width: 100%;
           }
 
-          .action {
+          ha-button.action {
             flex: 1 1 auto;
           }
         }
       </style>
-      <div class="scrim" id="scrim"></div>
-      <div class="dialog" role="dialog" aria-modal="true" aria-label="${title}">
-        <div class="header">
-          <button class="icon-button" id="close" aria-label="Close">×</button>
-          <div class="title-block">
-            <div class="eyebrow">EcoVent</div>
-            <h2>${title}</h2>
-            <div class="subhead">${draft.selected_day}</div>
-          </div>
-        </div>
+      <ha-dialog
+        width="large"
+        prevent-scrim-close
+        header-title="${title}"
+        header-subtitle="${subtitle} · ${this._editingSubhead()}"
+      >
         <div class="content">
+          ${this._error ? `<div class="error-box">${this._error}</div>` : ""}
+          ${
+            this._confirmDiscard
+              ? `
+                <div class="discard-box">
+                  <div>${this._t("discard_prompt", "Discard unsaved changes?")}</div>
+                  <div class="actions">
+                    <ha-button appearance="plain" variant="neutral" class="action" id="keep-editing">${this._t("keep_editing", "Keep editing")}</ha-button>
+                    <ha-button appearance="plain" variant="danger" class="action" id="discard-close">${this._t("discard", "Discard")}</ha-button>
+                  </div>
+                </div>
+              `
+              : ""
+          }
           <div class="top-card">
             <div class="toggle-row">
               <div>
-                <div class="meta-label">Weekly schedule</div>
-                <div class="meta-value">${draft.weekly_schedule_enabled ? "Enabled" : "Disabled"}</div>
+                <div class="meta-label">${this._t("weekly_schedule", "Weekly schedule")}</div>
+                <div class="meta-value">${draft.weekly_schedule_enabled ? this._t("enabled", "Enabled") : this._t("disabled", "Disabled")}</div>
+                <div class="scope-helper">${this._t("disabled_helper", "When disabled, the device ignores this weekly schedule.")}</div>
               </div>
               <ha-switch
                 class="schedule-toggle"
-                aria-label="Weekly schedule"
+                aria-label="${this._t("weekly_schedule", "Weekly schedule")}"
                 id="weekly-toggle"
                 ${this._busy ? "disabled" : ""}
               ></ha-switch>
             </div>
-            <div class="copy-row">
-              <span class="copy-label">Copy ${this._copyTargetLabel(draft.selected_day)} to</span>
-              <button class="group-chip" data-apply="weekdays" ${this._busy ? "disabled" : ""}>Weekdays</button>
-              <button class="group-chip" data-apply="weekend" ${this._busy ? "disabled" : ""}>Weekend</button>
-              <button class="group-chip" data-apply="all" ${this._busy ? "disabled" : ""}>All days</button>
+            <div class="scope-row">
+              <span class="scope-label">${this._t("editing", "Editing")}</span>
+              ${["day", "weekdays", "weekend", "all"]
+                .map(
+                  (scope) => `
+                    <button
+                      class="group-chip ${draft.edit_scope === scope ? "active" : ""}"
+                      data-edit-scope="${scope}"
+                      ${this._busy ? "disabled" : ""}
+                    >${this._scopeControlLabel(scope)}</button>
+                  `
+                )
+                .join("")}
             </div>
+            <div class="scope-helper">${this._scopeHelperText()}</div>
           </div>
           <div class="day-strip">
             ${draft.days.map((day) => this._dayChip(day.day)).join("")}
           </div>
           <div class="week-summary">
-            <div class="week-summary-title">Week overview</div>
+            <div class="week-summary-title">${this._t("week_overview", "Week overview")}</div>
             <div class="week-summary-grid">
               ${groupedWeekRows.map((group) => this._weekGroupRow(group)).join("")}
             </div>
           </div>
           <div class="periods">
+            <div class="periods-header" aria-hidden="true">
+              <div></div>
+              <div>${this._t("starts", "Starts")}</div>
+              <div>${this._t("until", "Until")}</div>
+              <div>${this._t("speed", "Speed")}</div>
+            </div>
             ${periods
               .map((periodData) => this._periodCard(periodData, speedOptions))
               .join("")}
           </div>
         </div>
-        <div class="footer">
+        <div class="footer-shell" slot="footer">
           <div class="footer-note">
             ${
               this._busy
-                ? "Saving changes..."
+                ? this._t("saving_changes", "Saving changes...")
                 : this._dirty
-                  ? "Unsaved changes"
-                  : "Changes are saved"
+                  ? this._t("unsaved_changes", "Unsaved changes")
+                  : this._savedMessage
             }
           </div>
-          <div class="actions">
-            <button class="action" id="reset" ${this._busy ? "disabled" : ""}>Reset</button>
-            <button class="action primary" id="save" ${
-              this._busy || !this._dirty ? "disabled" : ""
-            }>${this._busy ? "Saving..." : "Save"}</button>
-          </div>
+          <ha-dialog-footer>
+            <ha-button
+              appearance="plain"
+              variant="neutral"
+              class="action"
+              id="discard"
+              slot="secondaryAction"
+              ${this._busy || !this._dirty ? "disabled" : ""}
+            >${this._t("discard_changes", "Discard changes")}</ha-button>
+            <ha-button
+              variant="brand"
+              class="action"
+              id="save"
+              slot="primaryAction"
+              ${this._busy || !this._dirty || !isValid ? "disabled" : ""}
+              ${this._busy ? "loading" : ""}
+            >${this._busy ? this._t("saving", "Saving...") : this._t("save_schedule", "Save schedule")}</ha-button>
+          </ha-dialog-footer>
         </div>
-      </div>
+      </ha-dialog>
     `;
 
-    this.shadowRoot
-      .getElementById("scrim")
-      ?.addEventListener("click", () => this.closeDialog());
-    this.shadowRoot
-      .getElementById("close")
-      ?.addEventListener("click", () => this.closeDialog());
-    this.shadowRoot.getElementById("reset")?.addEventListener("click", () => {
+    const existingDialog = this.shadowRoot.querySelector("ha-dialog");
+    if (existingDialog) {
+      const template = document.createElement("template");
+      template.innerHTML = rendered;
+      const nextDialog = template.content.querySelector("ha-dialog");
+      if (nextDialog) {
+        existingDialog.replaceChildren(...Array.from(nextDialog.childNodes));
+        for (const attr of Array.from(existingDialog.attributes)) {
+          existingDialog.removeAttribute(attr.name);
+        }
+        for (const attr of Array.from(nextDialog.attributes)) {
+          existingDialog.setAttribute(attr.name, attr.value);
+        }
+      }
+    } else {
+      this.shadowRoot.innerHTML = rendered;
+    }
+
+    const dialog = this.shadowRoot.querySelector("ha-dialog");
+    if (dialog) {
+      this._attachDialogListeners(dialog);
+      dialog.open = true;
+    }
+    this.shadowRoot.getElementById("keep-editing")?.addEventListener("click", () => {
+      this._confirmDiscard = false;
+      this._render();
+    });
+    this.shadowRoot.getElementById("discard-close")?.addEventListener("click", () => {
+      this.closeDialog({ force: true });
+    });
+    this.shadowRoot.getElementById("discard")?.addEventListener("click", () => {
       const currentSelectedDay = this._draft?.selected_day;
-      this._draft = this._buildDraft();
+      const currentEditScope = this._draft?.edit_scope;
+      this._draft = this._savedDraft ? this._clone(this._savedDraft) : this._buildDraft();
       if (
         currentSelectedDay &&
         this._draft?.days?.some((day) => day.day === currentSelectedDay)
       ) {
         this._draft.selected_day = currentSelectedDay;
       }
+      if (currentEditScope) {
+        this._draft.edit_scope = currentEditScope;
+      }
       this._dirty = false;
+      this._confirmDiscard = false;
+      this._error = "";
+      this._savedMessage = "";
       this._render();
     });
-    this.shadowRoot.getElementById("save")?.addEventListener("click", () => this._save());
+    this.shadowRoot.getElementById("save")?.addEventListener("click", () => {
+      this._save().catch((error) => {
+        this._error = `${this._t(
+          "could_not_save",
+          "Could not save schedule."
+        )} ${this._formatError(error)}`;
+        this._dirty = true;
+        this._busy = false;
+        this._render();
+      });
+    });
 
     const weeklyToggle = this.shadowRoot.getElementById("weekly-toggle");
     if (weeklyToggle) {
@@ -982,62 +1533,42 @@ class EcoventScheduleDialog extends HTMLElement {
       });
     }
 
-    this.shadowRoot.querySelectorAll("[data-end-input]").forEach((element) => {
-      const period = Number(element.dataset.endInput);
-      const periodData = periods.find((item) => item.period === period);
-      element.hass = {
-        ...this._hass,
-        locale: this._timeLocale(),
-      };
-      element.selector = {
-        time: {
-          no_second: true,
-        },
-      };
-      element.value = this._normalizeTimeValue(periodData?.end);
-      element.disabled = this._busy;
-    });
-
     this.shadowRoot.querySelectorAll("[data-speed-select]").forEach((element) => {
       const period = Number(element.dataset.speedSelect);
       const periodData = periods.find((item) => item.period === period);
       element.options = speedOptions.map((option) => ({
         value: option.value,
-        label: option.label,
+        label: this._speedLabel(option.label),
         iconPath: this._speedOptionPath(option.value),
       }));
       element.value = periodData?.speed ?? speedOptions[0]?.value;
       element.disabled = this._busy;
     });
 
-    this.shadowRoot.querySelectorAll("[data-day]").forEach((button) => {
+    this.shadowRoot.querySelectorAll(".day-chip[data-day]").forEach((button) => {
       button.addEventListener("click", () => this._setSelectedDay(button.dataset.day));
     });
 
-    this.shadowRoot.querySelectorAll("[data-apply]").forEach((button) => {
+    this.shadowRoot.querySelectorAll("[data-edit-scope]").forEach((button) => {
       button.addEventListener("click", () => {
-        if (button.dataset.apply === "weekdays") {
-          this._applyCurrentDayTo([
-            "Monday",
-            "Tuesday",
-            "Wednesday",
-            "Thursday",
-            "Friday",
-          ]);
-        } else if (button.dataset.apply === "weekend") {
-          this._applyCurrentDayTo(["Saturday", "Sunday"]);
-        } else if (button.dataset.apply === "all") {
-          this._applyCurrentDayTo([
-            "Monday",
-            "Tuesday",
-            "Wednesday",
-            "Thursday",
-            "Friday",
-            "Saturday",
-            "Sunday",
-          ]);
+        const scope = button.dataset.editScope;
+        if (scope === "day" && button.dataset.day) {
+          this._setSelectedDay(button.dataset.day);
+          return;
+        }
+        this._setEditScope(scope);
+        if (button.dataset.day) {
+          this._draft.selected_day = button.dataset.day;
+          this._render();
         }
       });
+    });
+
+    this.shadowRoot.querySelectorAll(".week-row[data-day]").forEach((button) => {
+      if (button.dataset.editScope) {
+        return;
+      }
+      button.addEventListener("click", () => this._setSelectedDay(button.dataset.day));
     });
 
     this.shadowRoot.querySelectorAll("[data-speed-select]").forEach((input) => {
@@ -1053,7 +1584,19 @@ class EcoventScheduleDialog extends HTMLElement {
       });
     });
 
-    this._wireTimeInputs();
+    this.shadowRoot.querySelectorAll("[data-end-input]").forEach((input) => {
+      const handleTimeInput = (event) => {
+        const value = event.currentTarget?.value;
+        if (!value) {
+          return;
+        }
+        this._updatePeriod(Number(input.dataset.endInput), {
+          end: this._normalizeTimeValue(value),
+        });
+      };
+      input.addEventListener("input", handleTimeInput);
+      input.addEventListener("change", handleTimeInput);
+    });
   }
 }
 

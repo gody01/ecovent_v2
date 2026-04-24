@@ -70,8 +70,6 @@ arc_airflows_medium = {
 }
 arc_airflows_high = {3: "60_m3h", 4: "90_m3h", 5: "115_m3h"}
 
-# Observed on a TwinFresh V.2 as a volatile command/status flag, not a stable
-# beeper preference. Writing 0 or 2 did not disable command beeps reliably.
 bstatuses = {0: "off", 1: "on", 2: "silent"}
 sound_emitter_states = {0: "off", 1: "on", 2: "toggle"}
 
@@ -162,7 +160,7 @@ params = {
     0x0303: ["party_mode_timer", None],
     0x0304: ["humidity_status", statuses],
     0x0305: ["analogV_status", statuses],
-    0x0306: ["beeper", bstatuses],
+    0x0306: ["schedule_speed", speeds],
 }
 
 # Extract-fan profile. Keep this ordered by parameter number so

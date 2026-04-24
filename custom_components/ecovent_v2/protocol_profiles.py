@@ -21,7 +21,6 @@ DEVICE_PROFILES = {
                 "analog_voltage",
                 "airflow",
                 "battery_voltage",
-                "beeper_status",
                 "binary_diagnostics",
                 "boost_delay_status",
                 "filter_maintenance",

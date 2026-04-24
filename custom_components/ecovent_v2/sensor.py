@@ -10,6 +10,7 @@ import voluptuous as vol
 from .ecoventv2 import Fan
 
 from homeassistant.components.sensor import (
+    SensorDeviceClass,
     SensorEntity,
 )
 from homeassistant.config_entries import ConfigEntry
@@ -22,6 +23,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import EcoVentCoordinator
 from .schedule_helpers import SCHEDULE_DAY_OPTIONS, SCHEDULE_SPEED_OPTIONS
+from .sensor_helpers import enum_options_with_value
 from .sensor_specs import SENSOR_SPECS
 
 _LOGGER = logging.getLogger(__name__)
@@ -164,7 +166,10 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         self._attr_entity_registry_enabled_default = enable_by_default
         self._method = getattr(self, method)
         self._attr_icon = icon
-        self._attr_options = options or self._fan.parameter_options(method)
+        if method == "schedule_speed":
+            self._attr_options = list(self._fan.device_profile.schedule_speed_modes)
+        else:
+            self._attr_options = options or self._fan.parameter_options(method)
         self._attr_translation_key = translation_key
         if suggested_display_precision is not None:
             self._attr_suggested_display_precision = suggested_display_precision
@@ -177,7 +182,19 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
     def native_value(self):
         """Get native value property from method."""
         self._attr_native_value = self._method()
+        if self._attr_device_class == SensorDeviceClass.ENUM:
+            self._attr_options = enum_options_with_value(
+                self._attr_options,
+                self._attr_native_value,
+            )
         return self._attr_native_value
+
+    @property
+    def options(self):
+        """Return enum options, including any currently reported unknown value."""
+        if self._attr_device_class != SensorDeviceClass.ENUM:
+            return self._attr_options
+        return enum_options_with_value(self._attr_options, self._method())
 
     def get_native_value(self):
         """Get native value method."""

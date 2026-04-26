@@ -272,3 +272,10 @@ Version 1.2.5
 * Correct the VENTO/TwinFresh Expert `0x0306` interpretation from beeper state to
   the PDF-documented current schedule speed; writable beeper control remains
   exposed only for profiles with a documented sound-emitter parameter.
+
+Version 1.2.6
+Merged PR #42 fix(ecovent_v2): harden protocol and issue fixes
+
+Version 1.2.7
+Merged PR #45 fix(ecovent): streamline schedule editor writes and protocol mapping
+

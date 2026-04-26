@@ -1,7 +1,6 @@
 """Regression tests for EcoVent packet building and writes."""
 
 import unittest
-from unittest.mock import patch
 
 from ecovent_test_helpers import Fan
 

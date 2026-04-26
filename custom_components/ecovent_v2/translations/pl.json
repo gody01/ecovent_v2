@@ -1,12 +1,12 @@
 {
     "config": {
         "abort": {
-            "already_configured": "Urządzenie jest już skonfigurowane"
+            "already_configured": "Urządzenie jest już skonfigurowane."
         },
         "error": {
-            "cannot_connect": "Nie udało się połączyć",
-            "invalid_auth": "Nieprawidłowe dane logowania",
-            "unknown": "Niespodziewany błąd"
+            "cannot_connect": "Nie udało się połączyć.",
+            "invalid_auth": "Nieprawidłowe dane logowania.",
+            "unknown": "Nieoczekiwany błąd."
         },
         "step": {
             "user": {
@@ -14,10 +14,155 @@
                     "ip_address": "Host",
                     "password": "Hasło",
                     "port": "Port",
-                    "device_id": "ID",
                     "name": "Nazwa"
                 }
             }
+        }
+    },
+    "services": {
+        "filter_timer_reset": {
+            "name": "Reset filtra",
+            "description": "Resetuje licznik filtra."
+        },
+        "reset_alarms": {
+            "name": "Reset alarmów",
+            "description": "Resetuje aktywne alarmy."
+        }
+    },
+    "entity": {
+        "sensor": {
+            "airflow": {
+                "state": {
+                    "ventilation": "Wentylacja",
+                    "heat_recovery": "Odzysk ciepła",
+                    "air_supply": "Nawiew"
+                }
+            },
+            "beeper": {
+                "state": {
+                    "off": "Wyłączony",
+                    "on": "Włączony",
+                    "silent": "Cichy"
+                }
+            },
+            "boost_status": {
+                "state": {
+                    "off": "Wyłączony",
+                    "on": "Włączony",
+                    "delay": "Opóźnienie"
+                }
+            },
+            "timer_mode": {
+                "state": {
+                    "off": "Wyłączony",
+                    "night": "Noc",
+                    "party": "Party"
+                }
+            },
+            "alarm_status": {
+                "state": {
+                    "no": "Brak alarmu",
+                    "alarm": "Alarm",
+                    "warning": "Ostrzeżenie"
+                }
+            }
+        },
+        "fan": {
+            "vent": {
+                "state_attributes": {
+                    "direction": {
+                        "name": "Przepływ powietrza",
+                        "state": {
+                            "forward": "Wentylacja",
+                            "reverse": "Nawiew"
+                        }
+                    },
+                    "oscillating": {
+                        "name": "Odzysk ciepła",
+                        "state": {
+                            "false": "Wyłączony",
+                            "true": "Włączony"
+                        }
+                    },
+                    "preset_mode": {
+                        "name": "Tryb",
+                        "state": {
+                            "off": "Wyłączony",
+                            "low": "Niski",
+                            "medium": "Średni",
+                            "high": "Wysoki",
+                            "speed_1": "Prędkość 1",
+                            "speed_2": "Prędkość 2",
+                            "speed_3": "Prędkość 3",
+                            "speed_4": "Prędkość 4",
+                            "speed_5": "Prędkość 5",
+                            "all_day": "Cały dzień",
+                            "humidity_trigger": "Automatyczna wilgotność",
+                            "humidity_manual": "Wilgotność ręcznie",
+                            "temperature_trigger": "Temperatura",
+                            "motion_trigger": "Ruch",
+                            "external_switch_trigger": "Wejście zewnętrzne",
+                            "interval_ventilation": "Wentylacja okresowa",
+                            "silent": "Cichy",
+                            "boost": "Boost",
+                            "manual": "Ręczny"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "ui": {
+        "schedule": {
+            "title": "Harmonogram tygodniowy",
+            "close": "Zamknij",
+            "enabled": "Włączony",
+            "disabled": "Wyłączony",
+            "weekly_schedule": "Harmonogram tygodniowy",
+            "disabled_helper": "Po wyłączeniu urządzenie ignoruje ten harmonogram.",
+            "editing": "Edycja",
+            "scope_day": "Ten dzień",
+            "scope_weekdays": "Dni robocze",
+            "scope_weekend": "Weekend",
+            "scope_all": "Codziennie",
+            "editing_day": "Edycja: {day}",
+            "editing_weekdays": "Edycja dni roboczych",
+            "editing_weekend": "Edycja weekendu",
+            "editing_all": "Edycja każdego dnia",
+            "helper_day": "Zmiany zostaną zastosowane tylko do wybranego dnia.",
+            "helper_weekdays": "Zmiany zostaną zastosowane od pon. do pt.",
+            "helper_weekend": "Zmiany zostaną zastosowane od sob. do niedz.",
+            "helper_all": "Zmiany zostaną zastosowane do każdego dnia.",
+            "week_overview": "Przegląd tygodnia",
+            "starts": "Od",
+            "until": "Do",
+            "speed": "Prędkość",
+            "end_of_day": "Koniec dnia",
+            "all_day": "{speed} cały dzień",
+            "until_then": "{speed} do {time}, potem {next_speed}",
+            "rest_of_day": "{speed} do końca dnia",
+            "time_range": "{speed} {start}-{end}",
+            "unsaved_changes": "Niezapisane zmiany",
+            "saving_changes": "Zapisywanie zmian...",
+            "saving": "Zapisywanie...",
+            "saved": "Zapisano",
+            "could_not_save": "Nie udało się zapisać harmonogramu.",
+            "discard_prompt": "Odrzucić niezapisane zmiany?",
+            "keep_editing": "Edytuj dalej",
+            "discard": "Odrzuć",
+            "discard_changes": "Odrzuć zmiany",
+            "save_schedule": "Zapisz harmonogram",
+            "invalid_order": "Okresy muszą być w kolejności chronologicznej.",
+            "end_after": "Czas końca musi być po {time}.",
+            "speed_standby": "Czuwanie",
+            "speed_low": "Niska",
+            "speed_medium": "Średnia",
+            "speed_high": "Wysoka",
+            "speed_speed_1": "Prędkość 1",
+            "speed_speed_2": "Prędkość 2",
+            "speed_speed_3": "Prędkość 3",
+            "speed_speed_4": "Prędkość 4",
+            "speed_speed_5": "Prędkość 5"
         }
     }
 }

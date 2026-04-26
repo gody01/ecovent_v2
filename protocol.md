@@ -110,6 +110,15 @@ The TwinFresh PDF marks the preset fan speed parameters `0x003A` through
 for TwinFresh Style Wi-Fi, TwinFresh Style Wi-Fi Frost, TwinFresh Style Wi-Fi
 mini, and TwinFresh Expert RW1-50 V.3.
 
+The integration now also exposes the documented Vento/TwinFresh weekly
+schedule rows `0x0072` (`weekly_schedule_state`) and `0x0077`
+(`weekly_schedule_setup`) plus the RTC rows `0x006F` (`rtc_time`) and
+`0x0070` (`rtc_date`) for device-clock visibility and synchronization.
+The schedule speed byte uses the same base speed values as the schedule setup
+row (`0` standby, `1` low, `2` medium, `3` high). A Vento-family response at
+`0x0306=03` is therefore treated as `schedule_speed=high`, not as a beeper
+state. The Vento/TwinFresh table does not document a beeper row at `0x0306`.
+
 ### Breezy / Freshpoint Eco notes
 
 The 2025 Breezy Eco and Freshpoint manuals are relabels of the same protocol
@@ -140,6 +149,8 @@ Implemented Breezy/Freshpoint-specific parameters:
 | 0x0022 | `exhaust_out_temperature` | R | Current exhaust air temperature at the outlet | sensor |
 | 0x0027 | `co2` | R | Current indoor CO2 level | sensor |
 | 0x0068 | `heater_state` | R/W/RW | Heater control | switch |
+| 0x0072 | `weekly_schedule_state` | R/W/RW | Weekly schedule enabled | switch |
+| 0x0077 | `weekly_schedule_setup` | R/W/RW | Weekly schedule day editor | One HA schedule entity with a more-info weekly schedule editor |
 | 0x007F | `alarm_list` | R | List of current alarms/warnings | diagnostic sensor |
 | 0x0081 | `heater_status` | R | Heater status | diagnostic sensor |
 | 0x0084 | `air_quality_status` | R | Air quality status: RH, CO2, reserved, reserved, VOC | diagnostic sensor |
@@ -150,7 +161,7 @@ Implemented Breezy/Freshpoint-specific parameters:
 | 0x031F | `voc_treshold` | R/W/RW/INC/DEC | Air quality sensor VOC setpoint | number |
 | 0x0320 | `voc` | R | Current air quality level VOC | sensor |
 | 0x0400 | `screen_brightness` | R/W/RW/INC/DEC | Screen backlight brightness, manual | number |
-| 0x0401 | `beeper` | R/W/RW | Activation of the sound emitter | runtime-probed select |
+| 0x0401 | `beeper` | R/W/RW | Activation of the sound emitter | select |
 | 0x0402 | `screen_backlight_mode` | R/W/RW | Screen backlight mode | disabled-by-default select |
 | 0x0403 | `screen_temperature_source` | R/W/RW/INC/DEC | Temperature sensor shown on the device screen | disabled-by-default select |
 | 0x0404 | `screen_air_quality_source` | R/W/RW/INC/DEC | Air quality sensor shown on the device screen | disabled-by-default select |

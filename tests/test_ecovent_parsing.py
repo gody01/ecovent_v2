@@ -37,6 +37,11 @@ class ParseRobustnessTest(unittest.TestCase):
         self.assertEqual(fan.speed, "Unknown speed 153")
         self.assertEqual(fan.airflow, "Unknown airflow 68")
 
+    def test_beeper_unknown_enum_value_is_stable_sensor_state(self):
+        fan = Fan("192.0.2.1")
+        fan.beeper = "03"
+        self.assertEqual(fan.beeper, "Unknown beeper 3")
+
     def test_heater_status_setter_does_not_recurse(self):
         fan = Fan("192.0.2.1")
         fan.heater_status = "01"

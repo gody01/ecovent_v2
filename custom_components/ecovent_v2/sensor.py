@@ -5,25 +5,28 @@ from __future__ import annotations
 import logging
 import re
 
+import voluptuous as vol
+
 from .ecoventv2 import Fan
 
 from homeassistant.components.sensor import (
+    SensorDeviceClass,
     SensorEntity,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_platform
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import EcoVentCoordinator
+from .schedule_helpers import SCHEDULE_DAY_OPTIONS, SCHEDULE_SPEED_OPTIONS
+from .sensor_helpers import enum_options_with_value
+from .sensor_specs import SENSOR_SPECS
 
 _LOGGER = logging.getLogger(__name__)
-
-
-from .sensor_specs import SENSOR_SPECS
 
 
 def _parse_hours(
@@ -68,32 +71,61 @@ async def async_setup_entry(
 ) -> None:
     """Set up Vento Sensors."""
     coordinator: EcoVentCoordinator = hass.data[DOMAIN][config.entry_id]
-    async_add_entities(
-        [
-            VentoSensor(
-                hass,
-                config,
-                spec.key,
-                spec.name,
-                spec.method,
-                spec.native_unit_of_measurement,
-                spec.device_class,
-                spec.state_class,
-                spec.entity_category,
-                spec.enable_by_default,
-                spec.icon,
-                translation_key=spec.translation_key,
-                suggested_display_precision=spec.suggested_display_precision,
-            )
-            for spec in SENSOR_SPECS
-            if coordinator._fan.supports_entity(
-                required_params=spec.required_params or (spec.method,),
-                required_capabilities=spec.required_capabilities,
-                excluded_params=spec.excluded_params,
-                excluded_capabilities=spec.excluded_capabilities,
-            )
-        ]
-    )
+    entities = [
+        VentoSensor(
+            hass,
+            config,
+            spec.key,
+            spec.name,
+            spec.method,
+            spec.native_unit_of_measurement,
+            spec.device_class,
+            spec.state_class,
+            spec.entity_category,
+            spec.enable_by_default,
+            spec.icon,
+            translation_key=spec.translation_key,
+            suggested_display_precision=spec.suggested_display_precision,
+        )
+        for spec in SENSOR_SPECS
+        if coordinator._fan.supports_entity(
+            required_params=spec.required_params or (spec.method,),
+            required_capabilities=spec.required_capabilities,
+            excluded_params=spec.excluded_params,
+            excluded_capabilities=spec.excluded_capabilities,
+        )
+    ]
+
+    supports_schedule = coordinator._fan.supports_parameter("weekly_schedule_setup")
+    if supports_schedule:
+        entities.append(WeeklyScheduleSummarySensor(hass, config))
+
+    async_add_entities(entities)
+
+    if supports_schedule:
+        platform = entity_platform.async_get_current_platform()
+        platform.async_register_entity_service(
+            "write_schedule",
+            {
+                vol.Optional("selected_day"): vol.In(SCHEDULE_DAY_OPTIONS),
+                vol.Optional("weekly_schedule_enabled"): bool,
+                vol.Optional("days"): [
+                    {
+                        vol.Required("day"): vol.In(SCHEDULE_DAY_OPTIONS),
+                        vol.Required("periods"): [
+                            {
+                                vol.Required("period"): vol.All(
+                                    vol.Coerce(int), vol.Range(min=1, max=4)
+                                ),
+                                vol.Optional("speed"): vol.In(SCHEDULE_SPEED_OPTIONS),
+                                vol.Optional("end"): str,
+                            }
+                        ],
+                    }
+                ],
+            },
+            "async_write_schedule",
+        )
 
 
 # VentoSensor class
@@ -134,7 +166,10 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         self._attr_entity_registry_enabled_default = enable_by_default
         self._method = getattr(self, method)
         self._attr_icon = icon
-        self._attr_options = options or self._fan.parameter_options(method)
+        if method == "schedule_speed":
+            self._attr_options = list(self._fan.device_profile.schedule_speed_modes)
+        else:
+            self._attr_options = options or self._fan.parameter_options(method)
         self._attr_translation_key = translation_key
         if suggested_display_precision is not None:
             self._attr_suggested_display_precision = suggested_display_precision
@@ -147,7 +182,19 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
     def native_value(self):
         """Get native value property from method."""
         self._attr_native_value = self._method()
+        if self._attr_device_class == SensorDeviceClass.ENUM:
+            self._attr_options = enum_options_with_value(
+                self._attr_options,
+                self._attr_native_value,
+            )
         return self._attr_native_value
+
+    @property
+    def options(self):
+        """Return enum options, including any currently reported unknown value."""
+        if self._attr_device_class != SensorDeviceClass.ENUM:
+            return self._attr_options
+        return enum_options_with_value(self._attr_options, self._method())
 
     def get_native_value(self):
         """Get native value method."""
@@ -225,6 +272,14 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
     def timer_status(self):
         """Get timer status."""
         return self._fan.timer_status
+
+    def rtc_time(self):
+        """Get the device clock time."""
+        return self._fan.rtc_time
+
+    def rtc_date(self):
+        """Get the device clock date."""
+        return self._fan.rtc_date
 
     def alarm_status(self):
         """Get alarm status."""
@@ -345,3 +400,55 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
     def current_wifi_ip(self):
         """Get current wifi IP value."""
         return self._fan.current_wifi_ip
+
+
+class WeeklyScheduleSummarySensor(CoordinatorEntity, SensorEntity):
+    """Single visible entity exposing the full weekly schedule summary."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+
+    def __init__(self, hass: HomeAssistant, config: ConfigEntry) -> None:
+        """Initialize the schedule summary sensor."""
+        coordinator: EcoVentCoordinator = hass.data[DOMAIN][config.entry_id]
+        super().__init__(coordinator)
+        self._fan: Fan = coordinator._fan
+        self._attr_name = "Schedule"
+        self._attr_unique_id = self._fan.id + "_schedule"
+        self._attr_icon = "mdi:calendar-clock"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, self._fan.id)},
+            name=self._fan.name,
+        )
+
+    @property
+    def native_value(self) -> str:
+        """Return a compact summary state for the schedule entity."""
+        return "Enabled" if self._fan.weekly_schedule_state == "on" else "Disabled"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        """Expose the full schedule summary for the custom editor."""
+        attrs: dict[str, object] = {
+            "editor": "ecovent_schedule",
+            "weekly_schedule_enabled": self._fan.weekly_schedule_state == "on",
+            "selected_day": self.coordinator.schedule_day_option,
+            "day_options": list(SCHEDULE_DAY_OPTIONS),
+            "speed_options": self._fan.available_schedule_speed_options(),
+            "speed_option_meta": self._fan.available_schedule_speed_option_meta(),
+            "days": self.coordinator.weekly_schedule_payload(),
+        }
+        return attrs
+
+    async def async_write_schedule(
+        self,
+        selected_day: str | None = None,
+        weekly_schedule_enabled: bool | None = None,
+        days: list[dict[str, object]] | None = None,
+    ) -> None:
+        """Apply a weekly schedule payload from the custom editor."""
+        await self.coordinator.async_write_schedule(
+            selected_day=selected_day,
+            weekly_schedule_enabled=weekly_schedule_enabled,
+            days=days,
+        )

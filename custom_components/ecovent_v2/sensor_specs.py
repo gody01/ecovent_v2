@@ -238,6 +238,24 @@ SENSOR_SPECS = (
         translation_key="alarm_status",
     ),
     SensorSpec(
+        "_rtc_time",
+        "Device clock time",
+        "rtc_time",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        enable_by_default=False,
+        icon="mdi:clock-outline",
+        required_params=("rtc_time",),
+    ),
+    SensorSpec(
+        "_rtc_date",
+        "Device clock date",
+        "rtc_date",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        enable_by_default=False,
+        icon="mdi:calendar-month-outline",
+        required_params=("rtc_date",),
+    ),
+    SensorSpec(
         "_alarm_list",
         "Alarm list",
         "alarm_list",
@@ -287,7 +305,7 @@ SENSOR_SPECS = (
         device_class=SensorDeviceClass.ENUM,
         entity_category=EntityCategory.DIAGNOSTIC,
         icon="mdi:calendar-clock",
-        required_capabilities=("air_quality",),
+        required_params=("schedule_speed",),
     ),
     SensorSpec(
         "_frost_protection_status",

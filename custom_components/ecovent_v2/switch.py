@@ -156,17 +156,6 @@ SWITCH_SPECS = (
         required_capabilities=("arc_environment",),
     ),
     SwitchSpec(
-        "_weekly_schedule_state",
-        "Weekly schedule",
-        "weekly_schedule_state",
-        SwitchDeviceClass.SWITCH,
-        False,
-        EntityCategory.CONFIG,
-        True,
-        "mdi:calendar-clock",
-        False,
-    ),
-    SwitchSpec(
         "_co2_sensor_state",
         "CO2 sensor",
         "co2_sensor_state",
@@ -344,10 +333,6 @@ class VentoSwitch(CoordinatorEntity, SwitchEntity):
     def silent_mode_state(self):
         """Silent mode state."""
         return self._fan.silent_mode_state
-
-    def weekly_schedule_state(self):
-        """Weekly schedule state."""
-        return self._fan.weekly_schedule_state
 
     def co2_sensor_state(self):
         """CO2 sensor state."""

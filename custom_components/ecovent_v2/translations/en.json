@@ -21,12 +21,12 @@
     },
     "services": {
         "filter_timer_reset": {
-            "description": "Reset the Vento Air Filter Timer.",
-            "name": "Reset air filter timer"
+            "description": "Reset the air filter timer.",
+            "name": "Reset filter timer"
         },
         "reset_alarms": {
-            "description": "Reset Vento alarms.",
-            "name": "Reset fan Vento alarms"
+            "description": "Reset active alarms.",
+            "name": "Reset alarms"
         }
     },
     "entity": {
@@ -110,6 +110,59 @@
                     }
                 }
             }
+        }
+    },
+    "ui": {
+        "schedule": {
+            "title": "Weekly schedule",
+            "close": "Close",
+            "enabled": "Enabled",
+            "disabled": "Disabled",
+            "weekly_schedule": "Weekly schedule",
+            "disabled_helper": "When disabled, the device ignores this weekly schedule.",
+            "editing": "Editing",
+            "scope_day": "This day",
+            "scope_weekdays": "Weekdays",
+            "scope_weekend": "Weekend",
+            "scope_all": "Every day",
+            "editing_day": "Editing {day}",
+            "editing_weekdays": "Editing weekdays",
+            "editing_weekend": "Editing weekend",
+            "editing_all": "Editing every day",
+            "helper_day": "Changes will be applied only to the selected day.",
+            "helper_weekdays": "Changes will be applied to Mon-Fri.",
+            "helper_weekend": "Changes will be applied to Sat-Sun.",
+            "helper_all": "Changes will be applied to every day.",
+            "week_overview": "Week overview",
+            "starts": "Starts",
+            "until": "Until",
+            "speed": "Speed",
+            "end_of_day": "End of day",
+            "all_day": "{speed} all day",
+            "until_then": "{speed} until {time}, then {next_speed}",
+            "rest_of_day": "{speed} rest of day",
+            "time_range": "{speed} {start}-{end}",
+            "unsaved_changes": "Unsaved changes",
+            "saving_changes": "Saving changes...",
+            "saving": "Saving...",
+            "saved": "Saved",
+            "could_not_save": "Could not save schedule.",
+            "discard_prompt": "Discard unsaved changes?",
+            "keep_editing": "Keep editing",
+            "discard": "Discard",
+            "discard_changes": "Discard changes",
+            "save_schedule": "Save schedule",
+            "invalid_order": "Periods must be in chronological order.",
+            "end_after": "End time must be after {time}.",
+            "speed_standby": "Standby",
+            "speed_low": "Low",
+            "speed_medium": "Medium",
+            "speed_high": "High",
+            "speed_speed_1": "Speed 1",
+            "speed_speed_2": "Speed 2",
+            "speed_speed_3": "Speed 3",
+            "speed_speed_4": "Speed 4",
+            "speed_speed_5": "Speed 5"
         }
     }
 }

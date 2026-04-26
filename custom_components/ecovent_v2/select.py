@@ -22,7 +22,7 @@ _LOGGER = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class SelectSpec:
-    """Writable enum description guarded by runtime capabilities."""
+    """Writable enum description guarded by documented profile support."""
 
     key: str
     name: str
@@ -40,7 +40,7 @@ SELECT_SPECS = (
         "Beeper",
         "beeper",
         "mdi:volume-high",
-        ("beeper_control",),
+        (),
         translation_key="beeper",
     ),
     SelectSpec(
@@ -149,16 +149,16 @@ async def async_setup_entry(
 ) -> None:
     """Set up writable enum select entities."""
     coordinator: EcoVentCoordinator = hass.data[DOMAIN][config.entry_id]
-    async_add_entities(
-        [
-            VentoSelect(hass, config, spec)
-            for spec in SELECT_SPECS
-            if coordinator._fan.supports_entity(
-                required_params=(spec.method,),
-                required_capabilities=spec.required_capabilities,
-            )
-        ]
-    )
+    entities = [
+        VentoSelect(hass, config, spec)
+        for spec in SELECT_SPECS
+        if coordinator._fan.supports_entity(
+            required_params=(spec.method,),
+            required_capabilities=spec.required_capabilities,
+        )
+    ]
+
+    async_add_entities(entities)
 
 
 class VentoSelect(CoordinatorEntity, SelectEntity):

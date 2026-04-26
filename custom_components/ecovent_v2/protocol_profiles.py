@@ -15,12 +15,12 @@ DEVICE_PROFILES = {
         preset_modes=("off", "low", "medium", "high", "manual"),
         boost_statuses_name="boost_statuses",
         humidity_sensor_states_name="states",
+        schedule_speed_modes=("standby", "low", "medium", "high"),
         capabilities=frozenset(
             {
                 "analog_voltage",
                 "airflow",
                 "battery_voltage",
-                "beeper_status",
                 "binary_diagnostics",
                 "boost_delay_status",
                 "filter_maintenance",
@@ -41,6 +41,7 @@ DEVICE_PROFILES = {
         preset_modes=("off", *OPERATING_MODE_PRESETS),
         boost_statuses_name="states",
         humidity_sensor_states_name="humidity_permission_modes",
+        schedule_speed_modes=(),
         capabilities=frozenset(
             {
                 "battery_status",
@@ -59,6 +60,7 @@ DEVICE_PROFILES = {
         preset_modes=("off", "low", "medium", "high", "speed_4", "speed_5", "manual"),
         boost_statuses_name="statuses",
         humidity_sensor_states_name="states",
+        schedule_speed_modes=("standby", "low", "medium", "high", "speed_4", "speed_5"),
         capabilities=frozenset(
             {
                 "airflow",
@@ -88,6 +90,7 @@ DEVICE_PROFILES = {
         preset_modes=("off", "speed_1", "speed_2", "speed_3", "speed_4", "speed_5"),
         boost_statuses_name="statuses",
         humidity_sensor_states_name="states",
+        schedule_speed_modes=("speed_1", "speed_2", "speed_3", "speed_4", "speed_5"),
         capabilities=frozenset(
             {
                 "filter_maintenance",
@@ -105,6 +108,7 @@ DEVICE_PROFILES = {
         preset_modes=(),
         boost_statuses_name="states",
         humidity_sensor_states_name="humidity_permission_modes",
+        schedule_speed_modes=(),
         capabilities=frozenset(
             {
                 "arc_environment",

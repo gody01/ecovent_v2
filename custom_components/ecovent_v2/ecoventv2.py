@@ -17,7 +17,7 @@ try:
     from .fan_protocol import FanProtocolMixin
     from .fan_protocol_parse import FanProtocolParseMixin
     from .fan_speed_properties import FanSpeedPropertiesMixin
-    from .protocol_profiles import DEVICE_MODELS, DEVICE_PROFILES, UNIT_TYPE_NAMES
+    from .protocol_profiles import DEVICE_MODELS, DEVICE_PROFILES
 except ImportError:
     import protocol_maps
     from fan_breezy_properties import FanBreezyPropertiesMixin
@@ -29,7 +29,7 @@ except ImportError:
     from fan_protocol import FanProtocolMixin
     from fan_protocol_parse import FanProtocolParseMixin
     from fan_speed_properties import FanSpeedPropertiesMixin
-    from protocol_profiles import DEVICE_MODELS, DEVICE_PROFILES, UNIT_TYPE_NAMES
+    from protocol_profiles import DEVICE_MODELS, DEVICE_PROFILES
 
 """"
 # currently having entities in HA:
@@ -84,7 +84,7 @@ I       0x009C: ["wifi_assigned_ip", None],
         0x0303: ["party_mode_timer", None],
 B       0x0304: ["humidity_status", statuses],
 B       0x0305: ["analogV_status", statuses],
-        0x0306: ["beeper", bstatuses]        # beeper seems not to work on V2 eco vents, needs firmware 1.xxx or higher
+        0x0306: ["schedule_speed", speeds]
 
 B used as binary sensor
 I used for initialization and discovery
@@ -112,8 +112,6 @@ class Fan(
 
     HEADER = "FDFD"
     HEADER_BYTES = bytes.fromhex(HEADER)
-    beeper_probe_read_count = 3
-    beeper_probe_settle_seconds = 1
 
     # Protocol enum maps and parameter tables live in protocol_maps.py.
     func = protocol_maps.func
@@ -193,8 +191,10 @@ class Fan(
     _boost_time = None
     _rtc_time = None
     _rtc_date = None
+    _rtc_weekday = None
     _weekly_schedule_state = None
     _weekly_schedule_setup = None
+    _weekly_schedule_setup_record = None
     _device_search = None
     _device_password = None
     _machine_hours = None
@@ -310,7 +310,6 @@ class Fan(
         self.socket = None
         self._bulk_read_supported = None
         self._profile_key = "vento"
-        self._runtime_capabilities = set()
         self._set_device_profile("vento")
 
     def init_device(self):
@@ -322,7 +321,4 @@ class Fan(
             return False
         self.get_param("unit_type")
         self._apply_device_profile()
-        success = self.update()
-        if success:
-            self.detect_runtime_capabilities()
-        return success
+        return self.update()

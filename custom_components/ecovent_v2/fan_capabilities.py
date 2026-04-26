@@ -1,7 +1,11 @@
 """EcoVent Fan mixin extracted from the vendored protocol client."""
 
 import logging
-import time
+
+try:
+    from .schedule_helpers import SCHEDULE_SPEED_ICONS, SCHEDULE_SPEED_TO_OPTION
+except ImportError:
+    from schedule_helpers import SCHEDULE_SPEED_ICONS, SCHEDULE_SPEED_TO_OPTION
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -50,10 +54,7 @@ class FanCapabilitiesMixin:
 
     def supports_capability(self, capability):
         """Return whether the active profile declares a named capability."""
-        return (
-            capability in self.device_profile.capabilities
-            or capability in self._runtime_capabilities
-        )
+        return capability in self.device_profile.capabilities
 
     def supports_parameter(self, parameter):
         """Return whether the active protocol profile knows a parameter."""
@@ -92,58 +93,41 @@ class FanCapabilitiesMixin:
             return None
         return list(param[1].values())
 
-    def detect_runtime_capabilities(self):
-        """Probe optional writable capabilities that cannot be trusted by model id."""
-        self._runtime_capabilities.clear()
-        if self._detect_beeper_control():
-            self._runtime_capabilities.add("beeper_control")
+    def available_schedule_speed_options(self):
+        """Return schedule speed options that make sense for the active device."""
+        speed_modes = self.device_profile.schedule_speed_modes or tuple(
+            preset for preset in self.fan_preset_modes if preset not in {"off", "manual"}
+        )
+        options = [
+            SCHEDULE_SPEED_TO_OPTION[mode]
+            for mode in speed_modes
+            if mode in SCHEDULE_SPEED_TO_OPTION
+        ]
+        return options or ["Standby", "Low", "Medium", "High"]
 
-    def _detect_beeper_control(self):
-        """Return whether beeper can stay off after a command that may beep."""
-        original = self.beeper
-        options = self.parameter_options("beeper")
-        if original is None or not options or "off" not in options:
-            return False
-
-        restored = original == "off"
-        try:
-            if not self.set_param("beeper", "off"):
-                return False
-            if not self._trigger_beeper_probe_command():
-                return False
-            if not self._beeper_stays_off_after_probe():
-                return False
-
-            if original != "off":
-                if not self.set_param("beeper", original):
-                    return False
-                if not self.get_param("beeper"):
-                    return False
-                restored = self.beeper == original
-            return restored
-        finally:
-            if not restored and self.beeper != original:
-                self.set_param("beeper", original)
-                self.get_param("beeper")
-
-    def _beeper_stays_off_after_probe(self):
-        """Return whether repeated reads show the command did not re-enable beep."""
-        for attempt in range(self.beeper_probe_read_count):
-            if attempt:
-                time.sleep(self.beeper_probe_settle_seconds)
-            if not self.get_param("beeper"):
-                return False
-            if self.beeper != "off":
-                return False
-        return True
-
-    def _trigger_beeper_probe_command(self):
-        """Send a no-op command that exercises the device command beeper path."""
-        if self.supports_parameter("state") and self.state is not None:
-            return self.set_param("state", self.state)
-        if self.supports_parameter("speed") and self.speed is not None:
-            return self.set_param("speed", self.speed)
-        return False
+    def available_schedule_speed_option_meta(self):
+        """Return schedule speed options with icons for the custom editor."""
+        speed_modes = self.device_profile.schedule_speed_modes or tuple(
+            preset for preset in self.fan_preset_modes if preset not in {"off", "manual"}
+        )
+        items = []
+        for mode in speed_modes:
+            option = SCHEDULE_SPEED_TO_OPTION.get(mode)
+            if option is None:
+                continue
+            items.append(
+                {
+                    "value": option,
+                    "label": option,
+                    "icon": SCHEDULE_SPEED_ICONS.get(mode, "mdi:fan"),
+                }
+            )
+        return items or [
+            {"value": "Standby", "label": "Standby", "icon": "mdi:power-sleep"},
+            {"value": "Low", "label": "Low", "icon": "mdi:fan-speed-1"},
+            {"value": "Medium", "label": "Medium", "icon": "mdi:fan-speed-2"},
+            {"value": "High", "label": "High", "icon": "mdi:fan-speed-3"},
+        ]
 
     def _profile_enum(self, enum_name):
         """Return a profile-specific enum map by class attribute name."""

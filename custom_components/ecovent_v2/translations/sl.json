@@ -1,12 +1,12 @@
 {
     "config": {
         "abort": {
-            "already_configured": "Ventilator je že konfiguriran"
+            "already_configured": "Ventilator je že konfiguriran."
         },
         "error": {
-            "cannot_connect": "Povezava ni uspela",
-            "invalid_auth": "Neuspešna priajava/napačno geslo",
-            "unknown": "Nepričakovana napaka"
+            "cannot_connect": "Povezava ni uspela.",
+            "invalid_auth": "Neveljavni podatki za prijavo.",
+            "unknown": "Nepričakovana napaka."
         },
         "step": {
             "user": {
@@ -14,10 +14,155 @@
                     "ip_address": "IP",
                     "password": "Geslo",
                     "port": "Vrata",
-                    "device_id": "ID",
                     "name": "Naziv"
                 }
             }
+        }
+    },
+    "services": {
+        "filter_timer_reset": {
+            "name": "Ponastavi filter",
+            "description": "Ponastavi časovnik filtra."
+        },
+        "reset_alarms": {
+            "name": "Ponastavi alarme",
+            "description": "Ponastavi aktivne alarme."
+        }
+    },
+    "entity": {
+        "sensor": {
+            "airflow": {
+                "state": {
+                    "ventilation": "Prezračevanje",
+                    "heat_recovery": "Rekuperacija toplote",
+                    "air_supply": "Dovod zraka"
+                }
+            },
+            "beeper": {
+                "state": {
+                    "off": "Izklopljeno",
+                    "on": "Vklopljeno",
+                    "silent": "Tiho"
+                }
+            },
+            "boost_status": {
+                "state": {
+                    "off": "Izklopljeno",
+                    "on": "Vklopljeno",
+                    "delay": "Zakasnitev"
+                }
+            },
+            "timer_mode": {
+                "state": {
+                    "off": "Izklopljeno",
+                    "night": "Noč",
+                    "party": "Zabava"
+                }
+            },
+            "alarm_status": {
+                "state": {
+                    "no": "Brez alarma",
+                    "alarm": "Alarm",
+                    "warning": "Opozorilo"
+                }
+            }
+        },
+        "fan": {
+            "vent": {
+                "state_attributes": {
+                    "direction": {
+                        "name": "Pretok zraka",
+                        "state": {
+                            "forward": "Prezračevanje",
+                            "reverse": "Dovod zraka"
+                        }
+                    },
+                    "oscillating": {
+                        "name": "Rekuperacija toplote",
+                        "state": {
+                            "false": "Izklopljeno",
+                            "true": "Vklopljeno"
+                        }
+                    },
+                    "preset_mode": {
+                        "name": "Način",
+                        "state": {
+                            "off": "Izklopljeno",
+                            "low": "Nizko",
+                            "medium": "Srednje",
+                            "high": "Visoko",
+                            "speed_1": "Hitrost 1",
+                            "speed_2": "Hitrost 2",
+                            "speed_3": "Hitrost 3",
+                            "speed_4": "Hitrost 4",
+                            "speed_5": "Hitrost 5",
+                            "all_day": "Ves dan",
+                            "humidity_trigger": "Samodejna vlažnost",
+                            "humidity_manual": "Vlažnost ročno",
+                            "temperature_trigger": "Temperatura",
+                            "motion_trigger": "Gibanje",
+                            "external_switch_trigger": "Zunanji vhod",
+                            "interval_ventilation": "Intervalno prezračevanje",
+                            "silent": "Tiho",
+                            "boost": "Boost",
+                            "manual": "Ročno"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "ui": {
+        "schedule": {
+            "title": "Tedenski urnik",
+            "close": "Zapri",
+            "enabled": "Omogočeno",
+            "disabled": "Onemogočeno",
+            "weekly_schedule": "Tedenski urnik",
+            "disabled_helper": "Ko je izklopljeno, naprava ta urnik prezre.",
+            "editing": "Urejanje",
+            "scope_day": "Ta dan",
+            "scope_weekdays": "Delavniki",
+            "scope_weekend": "Konec tedna",
+            "scope_all": "Vsak dan",
+            "editing_day": "Urejanje: {day}",
+            "editing_weekdays": "Urejanje delavnikov",
+            "editing_weekend": "Urejanje konca tedna",
+            "editing_all": "Urejanje vsakega dne",
+            "helper_day": "Spremembe veljajo samo za izbrani dan.",
+            "helper_weekdays": "Spremembe veljajo za pon-pet.",
+            "helper_weekend": "Spremembe veljajo za sob-ned.",
+            "helper_all": "Spremembe veljajo za vsak dan.",
+            "week_overview": "Pregled tedna",
+            "starts": "Od",
+            "until": "Do",
+            "speed": "Hitrost",
+            "end_of_day": "Konec dneva",
+            "all_day": "{speed} ves dan",
+            "until_then": "{speed} do {time}, nato {next_speed}",
+            "rest_of_day": "{speed} do konca dneva",
+            "time_range": "{speed} {start}-{end}",
+            "unsaved_changes": "Neshranjene spremembe",
+            "saving_changes": "Shranjevanje sprememb...",
+            "saving": "Shranjevanje...",
+            "saved": "Shranjeno",
+            "could_not_save": "Urnika ni bilo mogoče shraniti.",
+            "discard_prompt": "Zavrzi neshranjene spremembe?",
+            "keep_editing": "Nadaljuj urejanje",
+            "discard": "Zavrzi",
+            "discard_changes": "Zavrzi spremembe",
+            "save_schedule": "Shrani urnik",
+            "invalid_order": "Obdobja morajo biti kronološko urejena.",
+            "end_after": "Končni čas mora biti po {time}.",
+            "speed_standby": "Pripravljenost",
+            "speed_low": "Nizko",
+            "speed_medium": "Srednje",
+            "speed_high": "Visoko",
+            "speed_speed_1": "Hitrost 1",
+            "speed_speed_2": "Hitrost 2",
+            "speed_speed_3": "Hitrost 3",
+            "speed_speed_4": "Hitrost 4",
+            "speed_speed_5": "Hitrost 5"
         }
     }
 }

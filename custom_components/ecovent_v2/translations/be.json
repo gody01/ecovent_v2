@@ -1,0 +1,168 @@
+{
+    "config": {
+        "abort": {
+            "already_configured": "Вентылятар ужо наладжаны."
+        },
+        "error": {
+            "cannot_connect": "Не ўдалося падключыцца.",
+            "invalid_auth": "Няправільныя ўліковыя даныя.",
+            "unknown": "Невядомая памылка."
+        },
+        "step": {
+            "user": {
+                "data": {
+                    "ip_address": "IP-адрас",
+                    "password": "Пароль",
+                    "port": "Порт",
+                    "name": "Назва"
+                }
+            }
+        }
+    },
+    "services": {
+        "filter_timer_reset": {
+            "name": "Скінуць фільтр",
+            "description": "Скідвае таймер фільтра."
+        },
+        "reset_alarms": {
+            "name": "Скінуць аварыі",
+            "description": "Скідвае актыўныя аварыі."
+        }
+    },
+    "entity": {
+        "sensor": {
+            "airflow": {
+                "state": {
+                    "ventilation": "Вентыляцыя",
+                    "heat_recovery": "Рэкуперацыя цяпла",
+                    "air_supply": "Прыток паветра"
+                }
+            },
+            "beeper": {
+                "state": {
+                    "off": "Выключана",
+                    "on": "Уключана",
+                    "silent": "Ціха"
+                }
+            },
+            "boost_status": {
+                "state": {
+                    "off": "Выключана",
+                    "on": "Уключана",
+                    "delay": "Затрымка"
+                }
+            },
+            "timer_mode": {
+                "state": {
+                    "off": "Выключана",
+                    "night": "Ноч",
+                    "party": "Вечарынка"
+                }
+            },
+            "alarm_status": {
+                "state": {
+                    "no": "Няма аварыі",
+                    "alarm": "Аварыя",
+                    "warning": "Папярэджанне"
+                }
+            }
+        },
+        "fan": {
+            "vent": {
+                "state_attributes": {
+                    "direction": {
+                        "name": "Паток паветра",
+                        "state": {
+                            "forward": "Вентыляцыя",
+                            "reverse": "Прыток паветра"
+                        }
+                    },
+                    "oscillating": {
+                        "name": "Рэкуперацыя цяпла",
+                        "state": {
+                            "false": "Выключана",
+                            "true": "Уключана"
+                        }
+                    },
+                    "preset_mode": {
+                        "name": "Рэжым",
+                        "state": {
+                            "off": "Выключана",
+                            "low": "Нізкая",
+                            "medium": "Сярэдняя",
+                            "high": "Высокая",
+                            "speed_1": "Хуткасць 1",
+                            "speed_2": "Хуткасць 2",
+                            "speed_3": "Хуткасць 3",
+                            "speed_4": "Хуткасць 4",
+                            "speed_5": "Хуткасць 5",
+                            "all_day": "Увесь дзень",
+                            "humidity_trigger": "Аўта па вільготнасці",
+                            "humidity_manual": "Вільготнасць уручную",
+                            "temperature_trigger": "Тэмпература",
+                            "motion_trigger": "Рух",
+                            "external_switch_trigger": "Вонкавы ўваход",
+                            "interval_ventilation": "Інтэрвальная вентыляцыя",
+                            "silent": "Ціхі",
+                            "boost": "Фарсаж",
+                            "manual": "Ручны"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "ui": {
+        "schedule": {
+            "title": "Тыднёвы расклад",
+            "close": "Закрыць",
+            "enabled": "Уключана",
+            "disabled": "Выключана",
+            "weekly_schedule": "Тыднёвы расклад",
+            "disabled_helper": "Калі выключана, прылада ігнаруе гэты расклад.",
+            "editing": "Рэдагаванне",
+            "scope_day": "Гэты дзень",
+            "scope_weekdays": "Будні",
+            "scope_weekend": "Выхадныя",
+            "scope_all": "Кожны дзень",
+            "editing_day": "Рэдагуецца {day}",
+            "editing_weekdays": "Рэдагуюцца будні",
+            "editing_weekend": "Рэдагуюцца выходныя",
+            "editing_all": "Рэдагуюцца ўсе дні",
+            "helper_day": "Змены будуць ужытыя толькі да выбранага дня.",
+            "helper_weekdays": "Змены будуць ужытыя да Пн-Пт.",
+            "helper_weekend": "Змены будуць ужытыя да Сб-Нд.",
+            "helper_all": "Змены будуць ужытыя да ўсіх дзён.",
+            "week_overview": "Агляд тыдня",
+            "starts": "З",
+            "until": "Да",
+            "speed": "Хуткасць",
+            "end_of_day": "Канец дня",
+            "all_day": "{speed} увесь дзень",
+            "until_then": "{speed} да {time}, потым {next_speed}",
+            "rest_of_day": "{speed} да канца дня",
+            "time_range": "{speed} {start}-{end}",
+            "unsaved_changes": "Ёсць незахаваныя змены",
+            "saving_changes": "Захоўваю змены...",
+            "saving": "Захоўваю...",
+            "saved": "Захавана",
+            "could_not_save": "Не ўдалося захаваць расклад.",
+            "discard_prompt": "Скінуць незахаваныя змены?",
+            "keep_editing": "Працягнуць",
+            "discard": "Скінуць",
+            "discard_changes": "Скінуць змены",
+            "save_schedule": "Захаваць расклад",
+            "invalid_order": "Перыяды павінны ісці па парадку.",
+            "end_after": "Канец павінен быць пазней за {time}.",
+            "speed_standby": "Чаканне",
+            "speed_low": "Нізкая",
+            "speed_medium": "Сярэдняя",
+            "speed_high": "Высокая",
+            "speed_speed_1": "Хуткасць 1",
+            "speed_speed_2": "Хуткасць 2",
+            "speed_speed_3": "Хуткасць 3",
+            "speed_speed_4": "Хуткасць 4",
+            "speed_speed_5": "Хуткасць 5"
+        }
+    }
+}

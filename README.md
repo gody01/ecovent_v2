@@ -273,6 +273,32 @@ Version 1.2.5
   the PDF-documented current schedule speed; writable beeper control remains
   exposed only for profiles with a documented sound-emitter parameter.
 
+Version 1.2.6
+* Harden the vendored protocol client with better transport error handling,
+  bulk-read fallback, missing-battery tolerance, and four-byte filter countdown
+  parsing.
+* Split protocol maps, device profiles, model metadata, sensor specs, and tests
+  out of the monolithic client for easier review and maintenance.
+* Add profile-aware support for Smart Wi-Fi/iFan extract fans, Breezy/Freshpoint,
+  Freshbox/Micra, and Arc Smart/O2 Supreme devices.
+* Expand PDF-backed model aliases and README discovery keywords for Blauberg,
+  VENTS, OXXIFY, SIKU, Flexit, DUKA, RL, Winzel, and NIBE labels.
+* Keep Home Assistant fan direction values separate from EcoVent protocol airflow
+  values, and expose optional entities only when the active profile supports
+  them.
+
+Version 1.2.7
+* Add the built-in weekly schedule editor and expose the full weekly schedule
+  through a single schedule summary entity.
+* Register the custom schedule frontend with a content-hashed module URL and add
+  localized schedule editor strings.
+* Make schedule writes bounded by sending only changed days/periods and writing
+  only changed records to the device.
+* Correct VENTO/TwinFresh `0x0306` to schedule speed, remove false VENTO beeper
+  exposure, and keep unknown enum sensor values stable.
+* Add device clock sync support and clean stale helper entities from the previous
+  schedule editor approach.
+
 Version 1.2.8
 * Expose manual speed as a visible configuration number so it can be adjusted
   without using the live fan speed control.

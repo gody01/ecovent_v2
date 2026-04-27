@@ -37,6 +37,7 @@ class BinarySensorSpec:
     icon: str
     device_class: BinarySensorDeviceClass | None = None
     required_capabilities: tuple[str, ...] = ("binary_diagnostics",)
+    on_values: tuple[str, ...] = ("on",)
 
 
 BINARY_SENSOR_SPECS = (
@@ -54,6 +55,16 @@ BINARY_SENSOR_SPECS = (
         True,
         "mdi:air-filter",
         BinarySensorDeviceClass.PROBLEM,
+    ),
+    BinarySensorSpec(
+        "_alarm_status",
+        "Device problem",
+        "alarm_status",
+        True,
+        "mdi:alert-outline",
+        BinarySensorDeviceClass.PROBLEM,
+        required_capabilities=(),
+        on_values=("alarm", "warning"),
     ),
     BinarySensorSpec(
         "_cloud_server_state",
@@ -146,6 +157,7 @@ async def async_setup_entry(
                 spec.enable_by_default,
                 spec.icon,
                 spec.device_class,
+                spec.on_values,
             )
             for spec in BINARY_SENSOR_SPECS
             if coordinator._fan.supports_entity(
@@ -173,6 +185,7 @@ class VentoBinarySensor(CoordinatorEntity, BinarySensorEntity):  # CoordinatorEn
         enable_by_default: bool = False,
         icon: str | None = "",
         device_class: BinarySensorDeviceClass | None = None,
+        on_values: tuple[str, ...] = ("on",),
     ) -> None:
         """Initialize fan binary sensors."""
         coordinator: EcoVentCoordinator = hass.data[DOMAIN][config.entry_id]
@@ -184,6 +197,7 @@ class VentoBinarySensor(CoordinatorEntity, BinarySensorEntity):  # CoordinatorEn
         self._attr_device_class = device_class
         self._attr_entity_registry_enabled_default = enable_by_default
         self._method = method
+        self._on_values = on_values
         self._attr_icon = icon
 
         self._attr_device_info = DeviceInfo(
@@ -193,7 +207,8 @@ class VentoBinarySensor(CoordinatorEntity, BinarySensorEntity):  # CoordinatorEn
     @property
     def is_on(self):
         """Is on."""
-        self._state = getattr(self._fan, self._method) == "on"
+        value = getattr(self._fan, self._method)
+        self._state = None if value is None else value in self._on_values
         # self.async_write_ha_state() dangerous not allowed
         # self.schedule_update_ha_state() # not needed
         # _LOGGER.debug(f"VentoBinarySensor: {self._attr_name} state updated to {self._state}")

@@ -55,7 +55,6 @@ def _async_migrate_entity_registry(
     stale_binary_unique_ids = (
         fan.id + "_boost_status",
         fan.id + "_timer_mode",
-        fan.id + "_alarm_status",
     )
     for unique_id in stale_binary_unique_ids:
         entity_id = registry.async_get_entity_id(
@@ -124,8 +123,24 @@ def _async_migrate_entity_registry(
         _LOGGER.info("Migrated EcoVent V2 entity id %s to %s", entity_id, new_entity_id)
 
     if fan.supports_parameter("weekly_schedule_setup"):
+        schedule_switch_entity_id = registry.async_get_entity_id(
+            Platform.SWITCH,
+            DOMAIN,
+            fan.id + "_weekly_schedule_state",
+        )
+        if schedule_switch_entity_id is not None:
+            schedule_switch_entry = registry.async_get(schedule_switch_entity_id)
+            if schedule_switch_entry.hidden_by is not None:
+                registry.async_update_entity(
+                    schedule_switch_entity_id,
+                    hidden_by=None,
+                )
+                _LOGGER.info(
+                    "Restored visible EcoVent V2 weekly schedule switch %s",
+                    schedule_switch_entity_id,
+                )
+
         schedule_helper_entity_ids = (
-            f"switch.{device_slug}_weekly_schedule",
             f"select.{device_slug}_schedule_day",
             *[
                 f"select.{device_slug}_schedule_period_{period}_speed"

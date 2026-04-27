@@ -26,6 +26,7 @@ DEVICE_PROFILES = {
                 "filter_maintenance",
                 "night_party_timers",
                 "sensor_switches",
+                "three_speed_setpoints",
                 "timer_mode",
             }
         ),
@@ -73,6 +74,7 @@ DEVICE_PROFILES = {
                 "night_party_timers",
                 "sensor_switches",
                 "temperature_probes",
+                "three_speed_setpoints",
                 "timer_mode",
                 "voc",
             }
@@ -93,6 +95,7 @@ DEVICE_PROFILES = {
         schedule_speed_modes=("speed_1", "speed_2", "speed_3", "speed_4", "speed_5"),
         capabilities=frozenset(
             {
+                "five_speed_setpoints",
                 "filter_maintenance",
                 "timer_mode",
             }

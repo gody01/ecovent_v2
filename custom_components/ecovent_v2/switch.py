@@ -72,6 +72,17 @@ SWITCH_SPECS = (
         False,
     ),
     SwitchSpec(
+        "_weekly_schedule_state",
+        "Weekly schedule",
+        "weekly_schedule_state",
+        SwitchDeviceClass.SWITCH,
+        False,
+        EntityCategory.CONFIG,
+        True,
+        "mdi:calendar-clock",
+        False,
+    ),
+    SwitchSpec(
         "_light_sensor_state",
         "Light sensor",
         "light_sensor_state",
@@ -305,6 +316,10 @@ class VentoSwitch(CoordinatorEntity, SwitchEntity):
         # _LOGGER.debug(f"Getting analogV_sensor_state: {self._fan.analogV_sensor_state}")
         # _LOGGER.debug(f"Attribute2 value: {self._attribute2}")
         return self._fan.analogV_sensor_state
+
+    def weekly_schedule_state(self):
+        """Weekly schedule state."""
+        return self._fan.weekly_schedule_state
 
     def light_sensor_state(self):
         """Light sensor state."""

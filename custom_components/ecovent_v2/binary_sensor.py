@@ -58,7 +58,7 @@ BINARY_SENSOR_SPECS = (
     ),
     BinarySensorSpec(
         "_alarm_status",
-        "Alarm problem",
+        "Device problem",
         "alarm_status",
         True,
         "mdi:alert-outline",

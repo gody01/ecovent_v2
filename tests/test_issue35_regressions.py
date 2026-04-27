@@ -123,7 +123,7 @@ class Issue35RegressionTest(unittest.TestCase):
         init_source = INIT_PATH.read_text()
 
         self.assertIn('"_alarm_status"', binary_sensor_source)
-        self.assertIn('"Alarm problem"', binary_sensor_source)
+        self.assertIn('"Device problem"', binary_sensor_source)
         self.assertIn('"alarm_status"', binary_sensor_source)
         self.assertIn("BinarySensorDeviceClass.PROBLEM", binary_sensor_source)
         self.assertIn('on_values=("alarm", "warning")', binary_sensor_source)

@@ -72,6 +72,17 @@ SWITCH_SPECS = (
         False,
     ),
     SwitchSpec(
+        "_weekly_schedule_state",
+        "Weekly schedule",
+        "weekly_schedule_state",
+        SwitchDeviceClass.SWITCH,
+        False,
+        EntityCategory.CONFIG,
+        True,
+        "mdi:calendar-clock",
+        False,
+    ),
+    SwitchSpec(
         "_light_sensor_state",
         "Light sensor",
         "light_sensor_state",

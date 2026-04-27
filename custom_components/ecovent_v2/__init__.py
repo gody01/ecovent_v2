@@ -125,7 +125,6 @@ def _async_migrate_entity_registry(
 
     if fan.supports_parameter("weekly_schedule_setup"):
         schedule_helper_entity_ids = (
-            f"switch.{device_slug}_weekly_schedule",
             f"select.{device_slug}_schedule_day",
             *[
                 f"select.{device_slug}_schedule_period_{period}_speed"

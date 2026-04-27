@@ -37,5 +37,6 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
             )
         ]
     )
-    add_extra_js_url(hass, _frontend_module_url(frontend_dir))
+    module_url = await hass.async_add_executor_job(_frontend_module_url, frontend_dir)
+    add_extra_js_url(hass, module_url)
     hass.data[_REGISTERED_KEY] = True

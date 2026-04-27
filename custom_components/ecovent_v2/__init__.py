@@ -55,7 +55,6 @@ def _async_migrate_entity_registry(
     stale_binary_unique_ids = (
         fan.id + "_boost_status",
         fan.id + "_timer_mode",
-        fan.id + "_alarm_status",
     )
     for unique_id in stale_binary_unique_ids:
         entity_id = registry.async_get_entity_id(

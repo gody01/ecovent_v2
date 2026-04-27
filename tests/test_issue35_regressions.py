@@ -12,6 +12,7 @@ FAN_PATH = COMPONENT_PATH / "fan.py"
 FRONTEND_PATH = COMPONENT_PATH / "frontend.py"
 INIT_PATH = COMPONENT_PATH / "__init__.py"
 SWITCH_PATH = COMPONENT_PATH / "switch.py"
+BINARY_SENSOR_PATH = COMPONENT_PATH / "binary_sensor.py"
 
 
 def _tree(path):
@@ -108,9 +109,18 @@ class Issue35RegressionTest(unittest.TestCase):
     def test_reported_legacy_entity_migrations_are_listed(self):
         init_source = INIT_PATH.read_text()
 
-        self.assertIn('fan.id + "_alarm_status"', init_source)
         self.assertIn('fan.id + "_speed1"', init_source)
         self.assertIn('f"sensor.{device_slug}_fan_1_speed"', init_source)
+
+    def test_alarm_status_keeps_problem_binary_sensor(self):
+        binary_sensor_source = BINARY_SENSOR_PATH.read_text()
+        init_source = INIT_PATH.read_text()
+
+        self.assertIn('"_alarm_status"', binary_sensor_source)
+        self.assertIn('"alarm_status"', binary_sensor_source)
+        self.assertIn("BinarySensorDeviceClass.PROBLEM", binary_sensor_source)
+        self.assertIn('on_values=("alarm", "warning")', binary_sensor_source)
+        self.assertNotIn('fan.id + "_alarm_status"', init_source)
 
 
 if __name__ == "__main__":

@@ -300,6 +300,8 @@ Version 1.2.7
   schedule editor approach.
 
 Version 1.2.8
+* Restore `alarm_status` as a Home Assistant `problem` binary sensor while
+  keeping the enum alarm sensor for `no` / `warning` / `alarm` detail.
 * Expose manual speed as a visible configuration number so it can be adjusted
   without using the live fan speed control.
 * Add disabled-by-default configuration numbers for preset supply/exhaust speed

@@ -101,9 +101,13 @@ class Issue35RegressionTest(unittest.TestCase):
     def test_weekly_schedule_switch_stays_visible(self):
         switch_source = SWITCH_PATH.read_text()
         init_source = INIT_PATH.read_text()
+        tree = _tree(SWITCH_PATH)
 
         self.assertIn('"_weekly_schedule_state"', switch_source)
         self.assertIn('"weekly_schedule_state"', switch_source)
+        self.assertIsNotNone(
+            _class_method(tree, "VentoSwitch", "weekly_schedule_state")
+        )
         self.assertNotIn('f"switch.{device_slug}_weekly_schedule"', init_source)
 
     def test_reported_legacy_entity_migrations_are_listed(self):

@@ -317,6 +317,10 @@ class VentoSwitch(CoordinatorEntity, SwitchEntity):
         # _LOGGER.debug(f"Attribute2 value: {self._attribute2}")
         return self._fan.analogV_sensor_state
 
+    def weekly_schedule_state(self):
+        """Weekly schedule state."""
+        return self._fan.weekly_schedule_state
+
     def light_sensor_state(self):
         """Light sensor state."""
         return self._fan.light_sensor_state

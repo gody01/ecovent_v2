@@ -69,7 +69,7 @@ class Issue35RegressionTest(unittest.TestCase):
         self.assertEqual(read_bytes_calls, [])
         self.assertTrue(executor_calls)
 
-    def test_direct_speed_change_does_not_turn_on_off_fan(self):
+    def test_direct_speed_change_is_live_fan_control(self):
         tree = _tree(FAN_PATH)
         turn_on = _class_method(tree, "VentoExpertFan", "async_turn_on")
         set_percentage = _class_method(tree, "VentoExpertFan", "async_set_percentage")
@@ -82,14 +82,14 @@ class Issue35RegressionTest(unittest.TestCase):
                 for call in _executor_calls(turn_on, "set_percentage")
             )
         )
-        self.assertFalse(
+        self.assertTrue(
             any(
                 len(call.args) >= 3 and isinstance(call.args[2], ast.Constant)
                 and call.args[2].value is True
                 for call in _executor_calls(set_percentage, "set_percentage")
             )
         )
-        self.assertFalse(
+        self.assertTrue(
             any(
                 len(call.args) >= 3 and isinstance(call.args[2], ast.Constant)
                 and call.args[2].value is True

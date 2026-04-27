@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 import re
 
 from .ecoventv2 import Fan
@@ -17,7 +18,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import EcoVentCoordinator
-import logging
+from .number_helpers import encode_raw_number, encode_speed_percent
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,9 +40,213 @@ class NumberSpec:
     device_class: NumberDeviceClass | None = None
     required_capabilities: tuple[str, ...] = ()
     value_bytes: int = 1
+    write_mode: str = "raw"
 
 
 NUMBER_SPECS = (
+    NumberSpec(
+        "Manual speed",
+        "man_speed",
+        "mdi:fan",
+        True,
+        native_min_value=2.0,
+        native_max_value=100.0,
+        native_step=1,
+        unit_of_measurement=PERCENTAGE,
+        write_mode="manual_speed_percent",
+    ),
+    NumberSpec(
+        "Low supply speed",
+        "supply_speed_low",
+        "mdi:fan-speed-1",
+        False,
+        native_min_value=1.0,
+        native_max_value=100.0,
+        native_step=1,
+        unit_of_measurement=PERCENTAGE,
+        required_capabilities=("three_speed_setpoints",),
+        write_mode="speed_percent",
+    ),
+    NumberSpec(
+        "Low exhaust speed",
+        "exhaust_speed_low",
+        "mdi:fan-speed-1",
+        False,
+        native_min_value=1.0,
+        native_max_value=100.0,
+        native_step=1,
+        unit_of_measurement=PERCENTAGE,
+        required_capabilities=("three_speed_setpoints",),
+        write_mode="speed_percent",
+    ),
+    NumberSpec(
+        "Medium supply speed",
+        "supply_speed_medium",
+        "mdi:fan-speed-2",
+        False,
+        native_min_value=1.0,
+        native_max_value=100.0,
+        native_step=1,
+        unit_of_measurement=PERCENTAGE,
+        required_capabilities=("three_speed_setpoints",),
+        write_mode="speed_percent",
+    ),
+    NumberSpec(
+        "Medium exhaust speed",
+        "exhaust_speed_medium",
+        "mdi:fan-speed-2",
+        False,
+        native_min_value=1.0,
+        native_max_value=100.0,
+        native_step=1,
+        unit_of_measurement=PERCENTAGE,
+        required_capabilities=("three_speed_setpoints",),
+        write_mode="speed_percent",
+    ),
+    NumberSpec(
+        "High supply speed",
+        "supply_speed_high",
+        "mdi:fan-speed-3",
+        False,
+        native_min_value=1.0,
+        native_max_value=100.0,
+        native_step=1,
+        unit_of_measurement=PERCENTAGE,
+        required_capabilities=("three_speed_setpoints",),
+        write_mode="speed_percent",
+    ),
+    NumberSpec(
+        "High exhaust speed",
+        "exhaust_speed_high",
+        "mdi:fan-speed-3",
+        False,
+        native_min_value=1.0,
+        native_max_value=100.0,
+        native_step=1,
+        unit_of_measurement=PERCENTAGE,
+        required_capabilities=("three_speed_setpoints",),
+        write_mode="speed_percent",
+    ),
+    NumberSpec(
+        "Speed 1 supply speed",
+        "supply_speed_low",
+        "mdi:fan-speed-1",
+        False,
+        native_min_value=1.0,
+        native_max_value=100.0,
+        native_step=1,
+        unit_of_measurement=PERCENTAGE,
+        required_capabilities=("five_speed_setpoints",),
+        write_mode="speed_percent",
+    ),
+    NumberSpec(
+        "Speed 1 exhaust speed",
+        "exhaust_speed_low",
+        "mdi:fan-speed-1",
+        False,
+        native_min_value=1.0,
+        native_max_value=100.0,
+        native_step=1,
+        unit_of_measurement=PERCENTAGE,
+        required_capabilities=("five_speed_setpoints",),
+        write_mode="speed_percent",
+    ),
+    NumberSpec(
+        "Speed 2 supply speed",
+        "supply_speed_medium",
+        "mdi:fan-speed-2",
+        False,
+        native_min_value=1.0,
+        native_max_value=100.0,
+        native_step=1,
+        unit_of_measurement=PERCENTAGE,
+        required_capabilities=("five_speed_setpoints",),
+        write_mode="speed_percent",
+    ),
+    NumberSpec(
+        "Speed 2 exhaust speed",
+        "exhaust_speed_medium",
+        "mdi:fan-speed-2",
+        False,
+        native_min_value=1.0,
+        native_max_value=100.0,
+        native_step=1,
+        unit_of_measurement=PERCENTAGE,
+        required_capabilities=("five_speed_setpoints",),
+        write_mode="speed_percent",
+    ),
+    NumberSpec(
+        "Speed 3 supply speed",
+        "supply_speed_high",
+        "mdi:fan-speed-3",
+        False,
+        native_min_value=1.0,
+        native_max_value=100.0,
+        native_step=1,
+        unit_of_measurement=PERCENTAGE,
+        required_capabilities=("five_speed_setpoints",),
+        write_mode="speed_percent",
+    ),
+    NumberSpec(
+        "Speed 3 exhaust speed",
+        "exhaust_speed_high",
+        "mdi:fan-speed-3",
+        False,
+        native_min_value=1.0,
+        native_max_value=100.0,
+        native_step=1,
+        unit_of_measurement=PERCENTAGE,
+        required_capabilities=("five_speed_setpoints",),
+        write_mode="speed_percent",
+    ),
+    NumberSpec(
+        "Speed 4 supply speed",
+        "supply_speed_4",
+        "mdi:fan-plus",
+        False,
+        native_min_value=1.0,
+        native_max_value=100.0,
+        native_step=1,
+        unit_of_measurement=PERCENTAGE,
+        required_capabilities=("five_speed_setpoints",),
+        write_mode="speed_percent",
+    ),
+    NumberSpec(
+        "Speed 4 exhaust speed",
+        "exhaust_speed_4",
+        "mdi:fan-plus",
+        False,
+        native_min_value=1.0,
+        native_max_value=100.0,
+        native_step=1,
+        unit_of_measurement=PERCENTAGE,
+        required_capabilities=("five_speed_setpoints",),
+        write_mode="speed_percent",
+    ),
+    NumberSpec(
+        "Speed 5 supply speed",
+        "supply_speed_5",
+        "mdi:fan-plus",
+        False,
+        native_min_value=1.0,
+        native_max_value=100.0,
+        native_step=1,
+        unit_of_measurement=PERCENTAGE,
+        required_capabilities=("five_speed_setpoints",),
+        write_mode="speed_percent",
+    ),
+    NumberSpec(
+        "Speed 5 exhaust speed",
+        "exhaust_speed_5",
+        "mdi:fan-plus",
+        False,
+        native_min_value=1.0,
+        native_max_value=100.0,
+        native_step=1,
+        unit_of_measurement=PERCENTAGE,
+        required_capabilities=("five_speed_setpoints",),
+        write_mode="speed_percent",
+    ),
     NumberSpec(
         "Humidity threshold",
         "humidity_treshold",
@@ -216,6 +421,7 @@ async def async_setup_entry(
                 native_step=spec.native_step,
                 unit_of_measurement=spec.unit_of_measurement,
                 value_bytes=spec.value_bytes,
+                write_mode=spec.write_mode,
             )
             for spec in NUMBER_SPECS
             if coordinator._fan.supports_entity(
@@ -251,6 +457,7 @@ class VentoNumber(CoordinatorEntity, NumberEntity):
         native_step: float | None = None,
         unit_of_measurement: str | None = None,
         value_bytes: int = 1,
+        write_mode: str = "raw",
     ) -> None:
         """Initialize the Vento Number entity."""
 
@@ -269,6 +476,7 @@ class VentoNumber(CoordinatorEntity, NumberEntity):
         self._attr_native_value = getattr(self._fan, method)
         self._func = method
         self._value_bytes = value_bytes
+        self._write_mode = write_mode
 
         if native_min_value is not None:
             self._attr_native_min_value = native_min_value
@@ -299,11 +507,24 @@ class VentoNumber(CoordinatorEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Update the current value."""
         self._attr_native_value = value
-        intval = int(value)
-        if self._value_bytes > 1:
-            value_hex = intval.to_bytes(self._value_bytes, "little").hex()
+
+        if self._write_mode == "manual_speed_percent":
+            await self.hass.async_add_executor_job(
+                self._fan.set_man_speed_percent,
+                int(value),
+            )
+            self.async_write_ha_state()
+            await self.coordinator.async_refresh()
+            return
+
+        if self._write_mode == "speed_percent":
+            value_hex = encode_speed_percent(
+                value,
+                self._fan.device_profile.speed_percent_scale,
+            )
         else:
-            value_hex = hex(intval).replace("0x", "").zfill(2)
+            value_hex = encode_raw_number(value, self._value_bytes)
+
         await self.hass.async_add_executor_job(
             self._fan.set_param,
             self._func,

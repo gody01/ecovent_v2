@@ -272,3 +272,11 @@ Version 1.2.5
 * Correct the VENTO/TwinFresh Expert `0x0306` interpretation from beeper state to
   the PDF-documented current schedule speed; writable beeper control remains
   exposed only for profiles with a documented sound-emitter parameter.
+
+Version 1.2.8
+* Expose manual speed as a visible configuration number so it can be adjusted
+  without using the live fan speed control.
+* Add disabled-by-default configuration numbers for preset supply/exhaust speed
+  setpoints on VENTO/TwinFresh, Breezy/Freshpoint, and Freshbox/Micra profiles.
+* Encode speed setpoint writes with the active protocol profile's percent scale,
+  while keeping live fan percentage control Home Assistant-native.

@@ -112,7 +112,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
     def percentage(self) -> int | None:
         """Return the current speed."""
         if self._fan.state == "off":
-            return None
+            return 0
         return self._fan.preset_speed_percent(self._fan.speed)
 
     @property
@@ -235,7 +235,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         )
         await self.coordinator.async_refresh()
 
-    def set_preset_mode(self, preset_mode: str, turn_on: bool = False) -> None:
+    def set_preset_mode(self, preset_mode: str, turn_on: bool = True) -> None:
         """Set the preset mode of the fan."""
         if preset_mode == "off":
             self._set_param_if_changed("state", "off")
@@ -259,10 +259,10 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set the preset mode of the fan."""
-        await self.hass.async_add_executor_job(self.set_preset_mode, preset_mode)
+        await self.hass.async_add_executor_job(self.set_preset_mode, preset_mode, True)
         await self.coordinator.async_refresh()
 
-    def set_percentage(self, percentage: int, turn_on: bool = False) -> None:
+    def set_percentage(self, percentage: int, turn_on: bool = True) -> None:
         """Set the speed of the fan, as a percentage."""
         if percentage <= 0:
             self._set_param_if_changed("state", "off")
@@ -270,12 +270,6 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
 
         if turn_on:
             self._set_param_if_changed("state", "on")
-        elif self._fan.state == "off":
-            _LOGGER.debug(
-                "Skipping manual speed command for %s while fan is off",
-                self._fan.name,
-            )
-            return
 
         if self._fan.uses_operating_mode_presets:
             self._fan.set_speed_setpoint_percent(percentage)
@@ -286,7 +280,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
 
     async def async_set_percentage(self, percentage: int) -> None:
         """Set the speed of the fan, as a percentage."""
-        await self.hass.async_add_executor_job(self.set_percentage, percentage)
+        await self.hass.async_add_executor_job(self.set_percentage, percentage, True)
         await self.coordinator.async_refresh()
 
     async def async_set_direction(self, direction: str) -> None:

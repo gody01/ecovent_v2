@@ -302,8 +302,8 @@ Version 1.2.7
 Version 1.2.8
 * Restore the visible weekly schedule switch and keep the schedule frontend file
   digest out of the Home Assistant event loop.
-* Restore `alarm_status` as a Home Assistant `problem` binary sensor while
-  keeping the enum alarm sensor for `no` / `warning` / `alarm` detail.
+* Restore `alarm_status` as a Home Assistant `Alarm problem` binary sensor
+  while keeping the enum alarm sensor for `no` / `warning` / `alarm` detail.
 * Expose manual speed as a visible configuration number so it can be adjusted
   without using the live fan speed control.
 * Add disabled-by-default configuration numbers for preset supply/exhaust speed

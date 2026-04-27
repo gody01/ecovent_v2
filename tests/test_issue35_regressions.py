@@ -108,6 +108,8 @@ class Issue35RegressionTest(unittest.TestCase):
         self.assertIsNotNone(
             _class_method(tree, "VentoSwitch", "weekly_schedule_state")
         )
+        self.assertIn('fan.id + "_weekly_schedule_state"', init_source)
+        self.assertIn("hidden_by=None", init_source)
         self.assertNotIn('f"switch.{device_slug}_weekly_schedule"', init_source)
 
     def test_reported_legacy_entity_migrations_are_listed(self):

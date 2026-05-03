@@ -18,7 +18,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import slugify
 
-from .const import DOMAIN, UPDATE_INTERVAL
+from .const import CONF_AUTO_CLOCK_SYNC, DOMAIN, UPDATE_INTERVAL
 from .coordinator import EcoVentCoordinator
 from .frontend import async_register_frontend
 
@@ -230,6 +230,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         CONF_PASSWORD: entry.data.get(CONF_PASSWORD, "1111"),
         CONF_NAME: entry.data.get(CONF_NAME, "Vento Expert Fan"),
         UPDATE_INTERVAL: entry.data.get(UPDATE_INTERVAL, 30),
+        CONF_AUTO_CLOCK_SYNC: entry.data.get(CONF_AUTO_CLOCK_SYNC, True),
     }
 
     coordinator = EcoVentCoordinator(

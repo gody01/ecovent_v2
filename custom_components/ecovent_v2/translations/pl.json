@@ -14,7 +14,8 @@
                     "ip_address": "Host",
                     "password": "Hasło",
                     "port": "Port",
-                    "name": "Nazwa"
+                    "name": "Nazwa",
+                    "auto_clock_sync": "Automatycznie synchronizuj zegar urządzenia"
                 }
             }
         }
@@ -27,6 +28,10 @@
         "reset_alarms": {
             "name": "Reset alarmów",
             "description": "Resetuje aktywne alarmy."
+        },
+        "sync_device_clock": {
+            "name": "Synchronizuj zegar urządzenia",
+            "description": "Ustawia zegar urządzenia na lokalny czas Home Assistant."
         }
     },
     "entity": {

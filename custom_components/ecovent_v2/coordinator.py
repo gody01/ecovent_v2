@@ -26,7 +26,7 @@ from homeassistant.helpers.update_coordinator import (
 )
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN
+from .const import CONF_AUTO_CLOCK_SYNC, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -54,6 +54,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         self.updateCounter = 0
         self._schedule_day = 1
         self._weekly_schedule: dict[int, dict[int, WeeklyScheduleRecord]] = {}
+        self._auto_clock_sync = config.data.get(CONF_AUTO_CLOCK_SYNC, True)
         self._last_clock_sync = None
         _LOGGER.debug(
             "EcoVentCoordinator initialized with update rate: %d", update_seconds
@@ -96,9 +97,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         if self._should_refresh_schedule_week():
             await self.hass.async_add_executor_job(self._load_schedule_week)
 
-        if self._fan.supports_parameter("rtc_time") and self._fan.supports_parameter(
-            "rtc_date"
-        ):
+        if self._auto_clock_sync and self._supports_device_clock_sync():
             await self._async_maybe_sync_clock()
 
     async def _async_post_init_setup(self) -> None:
@@ -123,19 +122,26 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         for day in sorted(set(days)):
             self._weekly_schedule[day] = self._fan.read_weekly_schedule_day(day)
 
+    def _supports_device_clock_sync(self) -> bool:
+        """Return whether this device exposes writable RTC date and time rows."""
+        return self._fan.supports_parameter("rtc_time") and self._fan.supports_parameter(
+            "rtc_date"
+        )
+
     async def _async_maybe_sync_clock(self) -> None:
         """Keep documented RTC-capable devices close to HA local time."""
-        now = dt_util.now()
+        now = self._device_clock_now()
         if self._last_clock_sync is not None and (
             now - self._last_clock_sync < timedelta(hours=12)
         ):
             return
 
-        await self.hass.async_add_executor_job(
-            self._fan.set_rtc_datetime,
-            now.replace(tzinfo=None),
-        )
+        await self.hass.async_add_executor_job(self._fan.set_rtc_datetime, now)
         self._last_clock_sync = now
+
+    def _device_clock_now(self):
+        """Return the HA-local wall clock value the device RTC should store."""
+        return dt_util.now()
 
     @property
     def schedule_day_option(self) -> str:
@@ -232,9 +238,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
 
     async def async_sync_device_clock(self) -> None:
         """Synchronize the device RTC with HA local time immediately."""
-        await self.hass.async_add_executor_job(
-            self._fan.set_rtc_datetime,
-            dt_util.now().replace(tzinfo=None),
-        )
-        self._last_clock_sync = dt_util.now()
+        now = self._device_clock_now()
+        await self.hass.async_add_executor_job(self._fan.set_rtc_datetime, now)
+        self._last_clock_sync = now
         await self.async_refresh()

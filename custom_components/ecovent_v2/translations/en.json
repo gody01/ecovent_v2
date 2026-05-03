@@ -14,7 +14,8 @@
                     "ip_address": "ip_address",
                     "name": "Name",
                     "password": "Password",
-                    "port": "Port"
+                    "port": "Port",
+                    "auto_clock_sync": "Automatically sync device clock"
                 }
             }
         }
@@ -27,6 +28,10 @@
         "reset_alarms": {
             "description": "Reset active alarms.",
             "name": "Reset alarms"
+        },
+        "sync_device_clock": {
+            "description": "Set the device clock to Home Assistant local time.",
+            "name": "Sync device clock"
         }
     },
     "entity": {

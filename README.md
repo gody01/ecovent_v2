@@ -85,6 +85,9 @@ External relabels and OEM names tracked as evidence or candidates:
 * Weekly schedule support on devices exposing `0x0072` / `0x0077`
   - one visible schedule entity for the weekly schedule
   - open the schedule entity's more-info dialog to edit the weekly schedule
+* Device clock synchronization
+  - automatic sync is enabled by default and can be disabled in reconfigure
+  - the `sync_device_clock` fan service can be used for manual or automated sync
 
 # Changelog
 version 0.0.5:
@@ -304,6 +307,9 @@ Version 1.2.8
   digest out of the Home Assistant event loop.
 * Stop polling the full weekly schedule setup while the schedule switch is off;
   normal updates now read only the lightweight schedule enabled state.
+* Refresh edited schedule days from the device before saving, and make device
+  clock synchronization explicit: automatic sync is configurable, uses HA local
+  time, and the manual `sync_device_clock` service is available.
 * Restore `alarm_status` as a Home Assistant `Device problem` binary sensor
   while keeping the enum alarm sensor for `no` / `warning` / `alarm` detail.
 * Expose manual speed as a visible configuration number so it can be adjusted

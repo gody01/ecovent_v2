@@ -10,6 +10,12 @@ reset_alarms:
       integration: ecovent_v2
       domain: fan
 
+sync_device_clock:
+  target:
+    entity:
+      integration: ecovent_v2
+      domain: fan
+
 write_schedule:
   target:
     entity:

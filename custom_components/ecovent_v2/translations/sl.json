@@ -14,7 +14,8 @@
                     "ip_address": "IP",
                     "password": "Geslo",
                     "port": "Vrata",
-                    "name": "Naziv"
+                    "name": "Naziv",
+                    "auto_clock_sync": "Samodejno sinhroniziraj uro naprave"
                 }
             }
         }
@@ -27,6 +28,10 @@
         "reset_alarms": {
             "name": "Ponastavi alarme",
             "description": "Ponastavi aktivne alarme."
+        },
+        "sync_device_clock": {
+            "name": "Sinhroniziraj uro naprave",
+            "description": "Nastavi uro naprave na lokalni čas Home Assistant."
         }
     },
     "entity": {

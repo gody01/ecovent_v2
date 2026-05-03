@@ -10,9 +10,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from .const import SERVICE_FILTER_TIMER_RESET
-from .const import SERVICE_RESET_ALARMS
-from .const import DOMAIN
+from .const import (
+    DOMAIN,
+    SERVICE_FILTER_TIMER_RESET,
+    SERVICE_RESET_ALARMS,
+    SERVICE_SYNC_DEVICE_CLOCK,
+)
 from .coordinator import EcoVentCoordinator
 
 from homeassistant.helpers.update_coordinator import (
@@ -46,6 +49,9 @@ async def async_setup_entry(
     # This will call VentoExpertFana.sync_reset_alarms()
     platform.async_register_entity_service(
         SERVICE_RESET_ALARMS, {}, VentoExpertFan.async_reset_alarms
+    )
+    platform.async_register_entity_service(
+        SERVICE_SYNC_DEVICE_CLOCK, {}, VentoExpertFan.async_sync_device_clock
     )
 
 
@@ -327,3 +333,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         """Reset Fan's Alarms."""
         await self.hass.async_add_executor_job(self._fan.set_param, "reset_alarms", "")
         await self.coordinator.async_refresh()
+
+    async def async_sync_device_clock(self, fan_target) -> None:
+        """Synchronize the device clock with Home Assistant local time."""
+        await self.coordinator.async_sync_device_clock()

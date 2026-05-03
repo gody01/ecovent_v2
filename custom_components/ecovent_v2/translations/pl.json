@@ -15,7 +15,8 @@
                     "password": "Hasło",
                     "port": "Port",
                     "name": "Nazwa",
-                    "auto_clock_sync": "Automatycznie synchronizuj zegar urządzenia"
+                    "auto_clock_sync": "Automatycznie synchronizuj zegar urządzenia",
+                    "silent_mode": "Tryb cichy"
                 }
             }
         }

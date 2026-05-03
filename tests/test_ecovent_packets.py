@@ -130,6 +130,34 @@ class PacketBuilderTest(unittest.TestCase):
             ],
         )
 
+    def test_manual_speed_and_airflow_can_be_batched_in_one_write(self):
+        fan = Fan("192.0.2.1")
+        calls = []
+
+        def do_func(func, param, value="", retries=10):
+            calls.append((func, param, value))
+            return True
+
+        fan.do_func = do_func
+        fan.set_params(
+            {
+                "speed": "manual",
+                "man_speed": "73",
+                "airflow": "air_supply",
+            }
+        )
+
+        self.assertEqual(
+            calls,
+            [
+                (
+                    fan.func["write_return"],
+                    "0002ff00447300b702",
+                    "",
+                )
+            ],
+        )
+
     def test_extract_fan_preset_writes_one_operating_mode_packet(self):
         fan = Fan("192.0.2.1")
         fan.unit_type = "0600"

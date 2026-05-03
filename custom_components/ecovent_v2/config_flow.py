@@ -18,7 +18,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 
-from .const import CONF_AUTO_CLOCK_SYNC, DOMAIN, UPDATE_INTERVAL
+from .const import CONF_AUTO_CLOCK_SYNC, CONF_SILENT_MODE, DOMAIN, UPDATE_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,6 +33,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Optional(CONF_NAME, default="Vento Expert Fan"): str,
         vol.Optional(UPDATE_INTERVAL, default=30): int,
         vol.Optional(CONF_AUTO_CLOCK_SYNC, default=True): bool,
+        vol.Optional(CONF_SILENT_MODE, default=False): bool,
     }
 )
 
@@ -239,6 +240,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         auto_clock_sync_configured = self._get_reconfigure_entry().data.get(
             CONF_AUTO_CLOCK_SYNC, True
         )
+        silent_mode_configured = self._get_reconfigure_entry().data.get(
+            CONF_SILENT_MODE, False
+        )
 
         return self.async_show_form(
             step_id="reconfigure",
@@ -254,6 +258,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ): int,
                     vol.Optional(
                         CONF_AUTO_CLOCK_SYNC, default=auto_clock_sync_configured
+                    ): bool,
+                    vol.Optional(
+                        CONF_SILENT_MODE, default=silent_mode_configured
                     ): bool,
                 }
             ),

@@ -15,7 +15,8 @@
                     "password": "Geslo",
                     "port": "Vrata",
                     "name": "Naziv",
-                    "auto_clock_sync": "Samodejno sinhroniziraj uro naprave"
+                    "auto_clock_sync": "Samodejno sinhroniziraj uro naprave",
+                    "silent_mode": "Tihi način"
                 }
             }
         }

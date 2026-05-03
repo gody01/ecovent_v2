@@ -9,6 +9,7 @@ COMPONENT_PATH = (
     Path(__file__).resolve().parents[1] / "custom_components" / "ecovent_v2"
 )
 FAN_PATH = COMPONENT_PATH / "fan.py"
+CONFIG_FLOW_PATH = COMPONENT_PATH / "config_flow.py"
 FRONTEND_PATH = COMPONENT_PATH / "frontend.py"
 INIT_PATH = COMPONENT_PATH / "__init__.py"
 SWITCH_PATH = COMPONENT_PATH / "switch.py"
@@ -128,6 +129,36 @@ class Issue35RegressionTest(unittest.TestCase):
         self.assertIn("BinarySensorDeviceClass.PROBLEM", binary_sensor_source)
         self.assertIn('on_values=("alarm", "warning")', binary_sensor_source)
         self.assertNotIn('fan.id + "_alarm_status"', init_source)
+
+    def test_silent_mode_keeps_manual_speed_facade(self):
+        config_source = CONFIG_FLOW_PATH.read_text()
+        fan_source = FAN_PATH.read_text()
+        tree = _tree(FAN_PATH)
+
+        self.assertIn("CONF_SILENT_MODE", config_source)
+        self.assertIn("default=False", config_source)
+        self.assertIn("silent_preset_mode", fan_source)
+        self.assertIn("_set_silent_manual_percentage", fan_source)
+        self.assertIn("_set_params_if_changed", fan_source)
+
+        set_direction = _class_method(tree, "VentoExpertFan", "set_direction")
+        set_oscillating = _class_method(tree, "VentoExpertFan", "set_oscillating")
+        self.assertTrue(
+            any(
+                isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Attribute)
+                and call.func.attr == "_set_silent_manual_percentage"
+                for call in ast.walk(set_direction)
+            )
+        )
+        self.assertTrue(
+            any(
+                isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Attribute)
+                and call.func.attr == "_set_silent_manual_percentage"
+                for call in ast.walk(set_oscillating)
+            )
+        )
 
 
 if __name__ == "__main__":

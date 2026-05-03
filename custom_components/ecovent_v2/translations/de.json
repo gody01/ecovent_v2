@@ -15,7 +15,8 @@
                     "password": "Passwort",
                     "port": "Port",
                     "name": "Name",
-                    "auto_clock_sync": "Geräteuhr automatisch synchronisieren"
+                    "auto_clock_sync": "Geräteuhr automatisch synchronisieren",
+                    "silent_mode": "Leiser Modus"
                 }
             }
         }

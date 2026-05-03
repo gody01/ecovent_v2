@@ -77,6 +77,12 @@ External relabels and OEM names tracked as evidence or candidates:
   - high
   - manual
 * In manual mode speed percentage
+* Silent mode
+  - optional configuration checkbox for VENTO/TwinFresh-style devices
+  - keeps the device in manual speed mode and maps Home Assistant preset changes
+    to manual speed percentages to avoid unnecessary confirmation beeps
+  - airflow/direction changes still use the device airflow command, but the
+    integration batches the current manual speed state into the same write
 * Oscillating
   - When on, Fans are in 'heat_recovery' airflow
 * Direction

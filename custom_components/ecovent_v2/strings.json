@@ -7,7 +7,8 @@
                     "port": "[%key:common::config_flow::data::port%]",
                     "password": "[%key:common::config_flow::data::password%]",
                     "name": "[%key:common::config_flow::data::name%]",
-                    "auto_clock_sync": "Automatically sync device clock"
+                    "auto_clock_sync": "Automatically sync device clock",
+                    "silent_mode": "Silent mode"
                 }
             }
         },

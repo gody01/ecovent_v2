@@ -54,7 +54,7 @@ class FanDirectionTest(unittest.TestCase):
     def test_advertised_directions_match_home_assistant_service_values(self):
         tree = _fan_tree()
         directions = _constant_assignment(tree, "DIRECTIONS")
-        set_direction = _class_method(tree, "VentoExpertFan", "async_set_direction")
+        set_direction = _class_method(tree, "VentoExpertFan", "set_direction")
 
         self.assertEqual(directions, ["forward", "reverse"])
         self.assertTrue(set(directions).issubset(_string_constants(set_direction)))
@@ -62,7 +62,7 @@ class FanDirectionTest(unittest.TestCase):
     def test_protocol_airflow_values_stay_internal_to_direction_mapping(self):
         tree = _fan_tree()
         current_direction = _class_method(tree, "VentoExpertFan", "current_direction")
-        set_direction = _class_method(tree, "VentoExpertFan", "async_set_direction")
+        set_direction = _class_method(tree, "VentoExpertFan", "set_direction")
 
         current_constants = _string_constants(current_direction)
         set_constants = _string_constants(set_direction)

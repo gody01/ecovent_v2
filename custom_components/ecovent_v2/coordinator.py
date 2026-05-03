@@ -26,7 +26,7 @@ from homeassistant.helpers.update_coordinator import (
 )
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_AUTO_CLOCK_SYNC, DOMAIN
+from .const import CONF_AUTO_CLOCK_SYNC, CONF_SILENT_MODE, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -55,6 +55,8 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         self._schedule_day = 1
         self._weekly_schedule: dict[int, dict[int, WeeklyScheduleRecord]] = {}
         self._auto_clock_sync = config.data.get(CONF_AUTO_CLOCK_SYNC, True)
+        self._silent_mode = config.data.get(CONF_SILENT_MODE, False)
+        self._silent_preset_mode: str | None = None
         self._last_clock_sync = None
         _LOGGER.debug(
             "EcoVentCoordinator initialized with update rate: %d", update_seconds
@@ -142,6 +144,20 @@ class EcoVentCoordinator(DataUpdateCoordinator):
     def _device_clock_now(self):
         """Return the HA-local wall clock value the device RTC should store."""
         return dt_util.now()
+
+    @property
+    def silent_mode_enabled(self) -> bool:
+        """Return whether HA should avoid beeping fan mode writes."""
+        return self._silent_mode
+
+    @property
+    def silent_preset_mode(self) -> str | None:
+        """Return the virtual preset shown while silent mode keeps manual speed."""
+        return self._silent_preset_mode
+
+    def set_silent_preset_mode(self, preset_mode: str | None) -> None:
+        """Remember the HA-facing preset when the device stays in manual mode."""
+        self._silent_preset_mode = preset_mode
 
     @property
     def schedule_day_option(self) -> str:

@@ -15,7 +15,8 @@
                     "name": "Name",
                     "password": "Password",
                     "port": "Port",
-                    "auto_clock_sync": "Automatically sync device clock"
+                    "auto_clock_sync": "Automatically sync device clock",
+                    "silent_mode": "Silent mode"
                 }
             }
         }

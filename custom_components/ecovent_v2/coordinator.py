@@ -116,9 +116,12 @@ class EcoVentCoordinator(DataUpdateCoordinator):
 
     def _load_schedule_week(self) -> None:
         """Read and cache the full weekly schedule from the device."""
-        self._weekly_schedule = {
-            day: self._fan.read_weekly_schedule_day(day) for day in range(1, 8)
-        }
+        self._load_schedule_days(range(1, 8))
+
+    def _load_schedule_days(self, days) -> None:
+        """Read and cache selected weekly schedule days from the device."""
+        for day in sorted(set(days)):
+            self._weekly_schedule[day] = self._fan.read_weekly_schedule_day(day)
 
     async def _async_maybe_sync_clock(self) -> None:
         """Keep documented RTC-capable devices close to HA local time."""
@@ -193,14 +196,19 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                 )
 
         if days:
-            if not self._weekly_schedule and self._fan.supports_parameter(
-                "weekly_schedule_setup"
-            ):
-                await self.hass.async_add_executor_job(self._load_schedule_week)
-
+            day_payloads = []
             for day_payload in days:
                 day_label = str(day_payload["day"])
                 day = SCHEDULE_DAY_TO_INDEX[day_label]
+                day_payloads.append((day_label, day, day_payload))
+
+            if self._fan.supports_parameter("weekly_schedule_setup"):
+                await self.hass.async_add_executor_job(
+                    self._load_schedule_days,
+                    [day for _, day, _ in day_payloads],
+                )
+
+            for day_label, day, day_payload in day_payloads:
                 current_records = self.schedule_day_records(day)
                 records_to_write = changed_schedule_records(
                     day,

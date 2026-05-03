@@ -48,6 +48,46 @@ class Issue16RegressionTest(unittest.TestCase):
             )
         )
 
+    def test_schedule_save_refreshes_edited_days_before_diffing(self):
+        tree = ast.parse(COORDINATOR_PATH.read_text())
+        write_schedule = _class_method(
+            tree, "EcoVentCoordinator", "async_write_schedule"
+        )
+        load_schedule_days = _class_method(
+            tree, "EcoVentCoordinator", "_load_schedule_days"
+        )
+
+        calls = [
+            node
+            for node in ast.walk(write_schedule)
+            if isinstance(node, ast.Call)
+        ]
+        load_call_lineno = next(
+            node.lineno
+            for node in calls
+            if isinstance(node.func, ast.Attribute)
+            and node.func.attr == "async_add_executor_job"
+            and any(
+                isinstance(arg, ast.Attribute) and arg.attr == "_load_schedule_days"
+                for arg in node.args
+            )
+        )
+        diff_call_lineno = next(
+            node.lineno
+            for node in calls
+            if isinstance(node.func, ast.Name)
+            and node.func.id == "changed_schedule_records"
+        )
+
+        self.assertLess(load_call_lineno, diff_call_lineno)
+        self.assertTrue(
+            any(
+                isinstance(node, ast.Attribute)
+                and node.attr == "read_weekly_schedule_day"
+                for node in ast.walk(load_schedule_days)
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

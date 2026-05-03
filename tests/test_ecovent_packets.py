@@ -2,7 +2,7 @@
 
 import unittest
 
-from ecovent_test_helpers import Fan
+from ecovent_test_helpers import Fan, packet_with_payload
 
 
 class PacketBuilderTest(unittest.TestCase):
@@ -42,6 +42,23 @@ class PacketBuilderTest(unittest.TestCase):
         _, params, _ = calls[0]
         self.assertNotIn("0065", params)
         self.assertNotIn("0080", params)
+
+    def test_update_does_not_poll_weekly_schedule_setup(self):
+        fan = Fan("192.0.2.1")
+        self.assertTrue(
+            fan.parse_response(packet_with_payload([0xFE, 0x02, 0xB9, 0x11, 0x00]))
+        )
+        calls = []
+
+        def do_func(func, param, value="", retries=10):
+            calls.append((func, param, value))
+            return True
+
+        fan.do_func = do_func
+        self.assertTrue(fan.update())
+        _, params, _ = calls[0]
+        self.assertIn("0072", params)
+        self.assertNotIn("0077", params)
 
     def test_update_falls_back_to_individual_reads_after_bulk_failure(self):
         fan = Fan("192.0.2.1")

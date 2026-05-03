@@ -302,6 +302,8 @@ Version 1.2.7
 Version 1.2.8
 * Restore the visible weekly schedule switch and keep the schedule frontend file
   digest out of the Home Assistant event loop.
+* Stop polling the full weekly schedule setup while the schedule switch is off;
+  normal updates now read only the lightweight schedule enabled state.
 * Restore `alarm_status` as a Home Assistant `Device problem` binary sensor
   while keeping the enum alarm sensor for `no` / `warning` / `alarm` detail.
 * Expose manual speed as a visible configuration number so it can be adjusted

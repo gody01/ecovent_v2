@@ -210,8 +210,10 @@ class FanProtocolMixin:
 
     def update(self):
         request = ""
-        for param in self.params:
+        for param, definition in self.params.items():
             if param in self._write_only_params:
+                continue
+            if definition[0] == "weekly_schedule_setup":
                 continue
             request += hex(param).replace("0x", "").zfill(4)
         success = self._read_params(request)

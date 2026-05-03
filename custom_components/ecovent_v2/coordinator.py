@@ -93,9 +93,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
             _LOGGER.debug("EcoVentCoordinator: Starting quick data update...")
             await self.hass.async_add_executor_job(self._fan.quick_update)
 
-        if self._fan.supports_parameter("weekly_schedule_setup") and (
-            not self._weekly_schedule or self.updateCounter % 10 == 0
-        ):
+        if self._should_refresh_schedule_week():
             await self.hass.async_add_executor_job(self._load_schedule_week)
 
         if self._fan.supports_parameter("rtc_time") and self._fan.supports_parameter(
@@ -105,8 +103,16 @@ class EcoVentCoordinator(DataUpdateCoordinator):
 
     async def _async_post_init_setup(self) -> None:
         """Load slow one-off state after device discovery."""
-        if self._fan.supports_parameter("weekly_schedule_setup"):
+        if self._should_refresh_schedule_week():
             await self.hass.async_add_executor_job(self._load_schedule_week)
+
+    def _should_refresh_schedule_week(self) -> bool:
+        """Return whether full weekly schedule reads are useful right now."""
+        return (
+            self._fan.supports_parameter("weekly_schedule_setup")
+            and self._fan.weekly_schedule_state == "on"
+            and (not self._weekly_schedule or self.updateCounter % 10 == 0)
+        )
 
     def _load_schedule_week(self) -> None:
         """Read and cache the full weekly schedule from the device."""
@@ -187,6 +193,11 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                 )
 
         if days:
+            if not self._weekly_schedule and self._fan.supports_parameter(
+                "weekly_schedule_setup"
+            ):
+                await self.hass.async_add_executor_job(self._load_schedule_week)
+
             for day_payload in days:
                 day_label = str(day_payload["day"])
                 day = SCHEDULE_DAY_TO_INDEX[day_label]

@@ -310,3 +310,6 @@ Version 1.2.8
   setpoints on VENTO/TwinFresh, Breezy/Freshpoint, and Freshbox/Micra profiles.
 * Encode speed setpoint writes with the active protocol profile's percent scale,
   while keeping live fan percentage control Home Assistant-native.
+* Turn the unit on before applying Home Assistant airflow direction or heat
+  recovery changes, so Freshpoint/Breezy ventilation mode starts reliably from
+  an off state.

@@ -63,14 +63,40 @@ class FanDirectionTest(unittest.TestCase):
         tree = _fan_tree()
         current_direction = _class_method(tree, "VentoExpertFan", "current_direction")
         set_direction = _class_method(tree, "VentoExpertFan", "async_set_direction")
+        set_airflow_mode = _class_method(tree, "VentoExpertFan", "set_airflow_mode")
 
         current_constants = _string_constants(current_direction)
         set_constants = _string_constants(set_direction)
+        set_airflow_constants = _string_constants(set_airflow_mode)
 
         self.assertIn("air_supply", current_constants)
         self.assertIn("reverse", current_constants)
         self.assertIn("ventilation", set_constants)
         self.assertIn("air_supply", set_constants)
+        self.assertIn("state", set_airflow_constants)
+        self.assertIn("on", set_airflow_constants)
+        self.assertIn("airflow", set_airflow_constants)
+
+    def test_direction_and_oscillation_turn_on_before_airflow_change(self):
+        tree = _fan_tree()
+        set_direction = _class_method(tree, "VentoExpertFan", "async_set_direction")
+        oscillate = _class_method(tree, "VentoExpertFan", "async_oscillate")
+
+        for method in (set_direction, oscillate):
+            with self.subTest(method=method.name):
+                calls = [
+                    call
+                    for call in ast.walk(method)
+                    if isinstance(call, ast.Call)
+                    and isinstance(call.func, ast.Attribute)
+                    and call.func.attr == "async_add_executor_job"
+                    and len(call.args) >= 3
+                    and isinstance(call.args[0], ast.Attribute)
+                    and call.args[0].attr == "set_airflow_mode"
+                    and isinstance(call.args[-1], ast.Constant)
+                    and call.args[-1].value is True
+                ]
+                self.assertTrue(calls)
 
 
 if __name__ == "__main__":

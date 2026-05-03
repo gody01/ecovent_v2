@@ -278,6 +278,12 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         self._set_param_if_changed("speed", "manual")
         self._set_manual_percentage_if_changed(percentage)
 
+    def set_airflow_mode(self, airflow: str, turn_on: bool = True) -> None:
+        """Set airflow mode, optionally turning the fan on first."""
+        if turn_on:
+            self._set_param_if_changed("state", "on")
+        self._set_param_if_changed("airflow", airflow)
+
     async def async_set_percentage(self, percentage: int) -> None:
         """Set the speed of the fan, as a percentage."""
         await self.hass.async_add_executor_job(self.set_percentage, percentage, True)
@@ -287,15 +293,15 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         """Set the direction of the fan."""
         if direction == "forward":
             await self.hass.async_add_executor_job(
-                self._set_param_if_changed,
-                "airflow",
+                self.set_airflow_mode,
                 "ventilation",
+                True,
             )
         elif direction == "reverse":
             await self.hass.async_add_executor_job(
-                self._set_param_if_changed,
-                "airflow",
+                self.set_airflow_mode,
                 "air_supply",
+                True,
             )
         else:
             raise ValueError(f"Invalid direction: {direction}")
@@ -305,9 +311,9 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         """Set oscillation."""
         target_airflow = "heat_recovery" if oscillating else "ventilation"
         await self.hass.async_add_executor_job(
-            self._set_param_if_changed,
-            "airflow",
+            self.set_airflow_mode,
             target_airflow,
+            True,
         )
         await self.coordinator.async_refresh()
         # self.schedule_update_ha_state()

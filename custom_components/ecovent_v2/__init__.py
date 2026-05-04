@@ -64,6 +64,16 @@ def _async_migrate_entity_registry(
             registry.async_remove(entity_id)
             _LOGGER.info("Removed legacy EcoVent V2 binary sensor %s", entity_id)
 
+    stale_sensor_unique_ids = (
+        fan.id + "_rtc_date",
+        fan.id + "_rtc_time",
+    )
+    for unique_id in stale_sensor_unique_ids:
+        entity_id = registry.async_get_entity_id(Platform.SENSOR, DOMAIN, unique_id)
+        if entity_id is not None:
+            registry.async_remove(entity_id)
+            _LOGGER.info("Removed legacy EcoVent V2 sensor %s", entity_id)
+
     if not fan.supports_parameter("beeper"):
         for platform in (Platform.SENSOR, Platform.SELECT):
             beeper_entity_id = registry.async_get_entity_id(
@@ -73,9 +83,7 @@ def _async_migrate_entity_registry(
                 continue
 
             registry.async_remove(beeper_entity_id)
-            _LOGGER.info(
-                "Removed stale EcoVent V2 beeper entity %s", beeper_entity_id
-            )
+            _LOGGER.info("Removed stale EcoVent V2 beeper entity %s", beeper_entity_id)
 
     entity_id_migrations = {
         (Platform.SENSOR, fan.id + "_speed1"): f"sensor.{device_slug}_fan_1_speed",
@@ -155,7 +163,9 @@ def _async_migrate_entity_registry(
             if registry.async_get(entity_id) is None:
                 continue
             registry.async_remove(entity_id)
-            _LOGGER.info("Removed EcoVent V2 legacy schedule helper entity %s", entity_id)
+            _LOGGER.info(
+                "Removed EcoVent V2 legacy schedule helper entity %s", entity_id
+            )
 
 
 async def _async_migrate_statistics_metadata(

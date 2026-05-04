@@ -191,9 +191,22 @@ class FanProtocolMixin:
             if self.socket is not None:
                 self.socket.close()
 
-    def do_func(self, func, param, value="", retries=10):
-        _LOGGER.debug(f"Executing function {func} with param {param} and value {value}")
-        data = func + self.encode_params(param, value)
+    def send_command(self, command, param, value="", retries=10):
+        _LOGGER.debug(
+            "Executing command %s with param %s and value %s",
+            command,
+            param,
+            value,
+        )
+        return self.send_encoded_command(
+            command,
+            self.encode_params(param, value),
+            retries=retries,
+        )
+
+    def send_encoded_command(self, command, encoded_params, retries=10):
+        """Execute a protocol command with an already encoded parameter payload."""
+        data = command + encoded_params
         response = False
         i = 0
         while not response:
@@ -240,7 +253,7 @@ class FanProtocolMixin:
         return self._read_params(request)
 
     def _read_params(self, request):
-        if self._bulk_read_supported is not False and self.do_func(
+        if self._bulk_read_supported is not False and self.send_command(
             self.func["read"], request, retries=3
         ):
             self._bulk_read_supported = True
@@ -250,7 +263,7 @@ class FanProtocolMixin:
         success = False
         for i in range(0, len(request), 4):
             success = (
-                self.do_func(self.func["read"], request[i : i + 4], retries=1)
+                self.send_command(self.func["read"], request[i : i + 4], retries=1)
                 or success
             )
         return success
@@ -260,41 +273,48 @@ class FanProtocolMixin:
         # print ( "EcoventV2: " + " " + param + "/" + value , file = sys.stderr )
         if valpar[0] is not None:
             if valpar[1] is not None:
-                return self.do_func(
+                return self.send_command(
                     self.func["write_return"],
                     hex(valpar[0]).replace("0x", "").zfill(4),
                     hex(valpar[1]).replace("0x", "").zfill(2),
                 )
             else:
-                return self.do_func(
+                return self.send_command(
                     self.func["write_return"],
                     hex(valpar[0]).replace("0x", "").zfill(4),
                     value,
                 )
         return False
 
-    def set_params(self, values):
-        """Write several profile-mapped parameters in one command."""
+    def set_parameters(self, values):
+        """Write several profile-mapped parameters in one encoded command."""
         request = ""
         for param, value in values.items():
             valpar = self.get_params_values(param, value)
             if valpar[0] is None:
                 continue
 
-            request += hex(valpar[0]).replace("0x", "").zfill(4)
             if valpar[1] is not None:
-                request += hex(valpar[1]).replace("0x", "").zfill(2)
+                value = hex(valpar[1]).replace("0x", "").zfill(2)
             else:
-                request += value
+                value = str(value)
+            request += self.encode_params(
+                hex(valpar[0]).replace("0x", "").zfill(4),
+                value,
+            )
 
         if request:
-            self.do_func(self.func["write_return"], request)
+            self.send_encoded_command(self.func["write_return"], request)
+
+    set_params = set_parameters
 
     def get_param(self, param):
         idx = self.get_params_index(param)
         if idx is not None:
             #  _LOGGER.debug(f"Getting parameter {param} with index {idx}")
-            return self.do_func(self.func["read"], hex(idx).replace("0x", "").zfill(4))
+            return self.send_command(
+                self.func["read"], hex(idx).replace("0x", "").zfill(4)
+            )
         return False
 
     def read_weekly_schedule_record(self, day, period):
@@ -303,11 +323,13 @@ class FanProtocolMixin:
             return None
 
         if day < 1 or day > 7 or period < 1 or period > 4:
-            raise ValueError(f"Invalid weekly schedule slot: day={day}, period={period}")
+            raise ValueError(
+                f"Invalid weekly schedule slot: day={day}, period={period}"
+            )
 
         self._weekly_schedule_setup_record = None
         request_value = bytes([day, period]).hex()
-        if not self.do_func(self.func["read"], "0077", request_value):
+        if not self.send_command(self.func["read"], "0077", request_value):
             return None
         return self._weekly_schedule_setup_record
 
@@ -324,7 +346,9 @@ class FanProtocolMixin:
         """Write one weekly schedule period via 0x0077."""
         if not isinstance(record, WeeklyScheduleRecord):
             raise TypeError("record must be a WeeklyScheduleRecord")
-        return self.do_func(self.func["write_return"], "0077", record.to_hex_payload())
+        return self.send_command(
+            self.func["write_return"], "0077", record.to_hex_payload()
+        )
 
     def set_rtc_datetime(self, value: datetime):
         """Write the device RTC using local calendar/time rows."""
@@ -337,7 +361,7 @@ class FanProtocolMixin:
         date_hex = bytes(
             [value.day, value.isoweekday(), value.month, value.year % 100]
         ).hex()
-        self.set_params(
+        self.set_parameters(
             {
                 "rtc_time": time_hex,
                 "rtc_date": date_hex,

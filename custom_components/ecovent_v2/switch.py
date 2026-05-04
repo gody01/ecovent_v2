@@ -40,7 +40,7 @@ class SwitchSpec:
 SWITCH_SPECS = (
     SwitchSpec(
         "_humidity_sensor_state",
-        "Humidity sensor",
+        "Boost humidity",
         "humidity_sensor_state",
         SwitchDeviceClass.SWITCH,
         False,
@@ -51,7 +51,7 @@ SWITCH_SPECS = (
     ),
     SwitchSpec(
         "_relay_sensor_state",
-        "Relay sensor",
+        "Boost relay sensor",
         "relay_sensor_state",
         SwitchDeviceClass.SWITCH,
         False,
@@ -62,7 +62,7 @@ SWITCH_SPECS = (
     ),
     SwitchSpec(
         "_analogV_sensor_state",
-        "Analog voltage sensor",
+        "Boost analog voltage",
         "analogV_sensor_state",
         SwitchDeviceClass.SWITCH,
         False,
@@ -84,7 +84,7 @@ SWITCH_SPECS = (
     ),
     SwitchSpec(
         "_light_sensor_state",
-        "Light sensor",
+        "Trigger on light",
         "light_sensor_state",
         SwitchDeviceClass.SWITCH,
         False,
@@ -96,7 +96,7 @@ SWITCH_SPECS = (
     ),
     SwitchSpec(
         "_motion_sensor_state",
-        "Motion sensor",
+        "Trigger on motion",
         "motion_sensor_state",
         SwitchDeviceClass.SWITCH,
         False,
@@ -108,7 +108,7 @@ SWITCH_SPECS = (
     ),
     SwitchSpec(
         "_temperature_sensor_state",
-        "Temperature sensor",
+        "Trigger on temperature",
         "temperature_sensor_state",
         SwitchDeviceClass.SWITCH,
         False,
@@ -132,7 +132,7 @@ SWITCH_SPECS = (
     ),
     SwitchSpec(
         "_all_day_mode",
-        "All day mode",
+        "Mode all day",
         "all_day_mode",
         SwitchDeviceClass.SWITCH,
         False,
@@ -144,7 +144,7 @@ SWITCH_SPECS = (
     ),
     SwitchSpec(
         "_interval_ventilation_state",
-        "Interval ventilation",
+        "Mode interval ventilation",
         "interval_ventilation_state",
         SwitchDeviceClass.SWITCH,
         False,
@@ -156,7 +156,7 @@ SWITCH_SPECS = (
     ),
     SwitchSpec(
         "_silent_mode_state",
-        "Silent mode",
+        "Mode silent",
         "silent_mode_state",
         SwitchDeviceClass.SWITCH,
         False,
@@ -168,7 +168,7 @@ SWITCH_SPECS = (
     ),
     SwitchSpec(
         "_co2_sensor_state",
-        "CO2 sensor",
+        "Trigger on CO2",
         "co2_sensor_state",
         SwitchDeviceClass.SWITCH,
         False,
@@ -180,7 +180,7 @@ SWITCH_SPECS = (
     ),
     SwitchSpec(
         "_voc_sensor_state",
-        "VOC sensor",
+        "Trigger on VOC",
         "voc_sensor_state",
         SwitchDeviceClass.SWITCH,
         False,

@@ -24,7 +24,7 @@ def _class_method(tree, class_name, method_name):
 
 
 class Issue16RegressionTest(unittest.TestCase):
-    def test_weekly_schedule_polling_is_gated_by_enabled_state(self):
+    def test_weekly_schedule_polling_keeps_editor_cache_warm_when_disabled(self):
         source = COORDINATOR_PATH.read_text()
         tree = ast.parse(source)
         should_refresh = _class_method(
@@ -32,7 +32,9 @@ class Issue16RegressionTest(unittest.TestCase):
         )
         post_init = _class_method(tree, "EcoVentCoordinator", "_async_post_init_setup")
 
-        self.assertIn("weekly_schedule_state == \"on\"", source)
+        self.assertIn("not self._weekly_schedule", source)
+        self.assertIn('weekly_schedule_state == "on"', source)
+        self.assertIn("self.updateCounter % 10 == 0", source)
         self.assertTrue(
             any(
                 isinstance(node, ast.Attribute)
@@ -42,8 +44,7 @@ class Issue16RegressionTest(unittest.TestCase):
         )
         self.assertTrue(
             any(
-                isinstance(node, ast.Constant)
-                and node.value == "weekly_schedule_setup"
+                isinstance(node, ast.Constant) and node.value == "weekly_schedule_setup"
                 for node in ast.walk(should_refresh)
             )
         )
@@ -58,9 +59,7 @@ class Issue16RegressionTest(unittest.TestCase):
         )
 
         calls = [
-            node
-            for node in ast.walk(write_schedule)
-            if isinstance(node, ast.Call)
+            node for node in ast.walk(write_schedule) if isinstance(node, ast.Call)
         ]
         load_call_lineno = next(
             node.lineno

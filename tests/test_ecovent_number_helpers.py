@@ -49,7 +49,7 @@ class NumberHelperTest(unittest.TestCase):
         ]
 
         self.assertEqual(len(manual_specs), 1)
-        self.assertEqual(_constant_arg(manual_specs[0], 0), "Manual speed")
+        self.assertEqual(_constant_arg(manual_specs[0], 0), "Speed manual")
         self.assertIs(_constant_arg(manual_specs[0], 3), True)
         self.assertEqual(
             _keyword_value(manual_specs[0], "write_mode"),

@@ -171,7 +171,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         self._fan.set_param(name, target)
         return True
 
-    def _set_params_if_changed(self, targets: dict[str, Any]) -> bool:
+    def _set_parameters_if_changed(self, targets: dict[str, Any]) -> bool:
         """Write changed device parameters in one packet."""
         changed = {}
         for name, target in targets.items():
@@ -189,7 +189,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         if not changed:
             return False
 
-        self._fan.set_params(changed)
+        self._fan.set_parameters(changed)
         return True
 
     def _set_manual_percentage_if_changed(self, percentage: int) -> bool:
@@ -248,13 +248,38 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         extra_targets: dict[str, Any] | None = None,
     ) -> bool:
         """Apply one silent-mode control burst while keeping HA preset facade."""
+        changed = False
+        if turn_on and self._fan.state != "on":
+            # This protocol ignores an off -> on transition when it is batched
+            # with manual speed writes, so power on first and keep the follow-up
+            # batch for speed changes.
+            changed = self._set_param_if_changed("state", "on")
+            turn_on = False
+
         targets = self._silent_manual_targets(percentage, turn_on=turn_on)
         if extra_targets:
             targets.update(extra_targets)
 
-        changed = self._set_params_if_changed(targets)
+        changed = self._set_parameters_if_changed(targets) or changed
         self.coordinator.set_silent_preset_mode(preset_mode)
         return changed
+
+    def set_airflow_mode(self, airflow: str, turn_on: bool = True) -> None:
+        """Set airflow mode, optionally turning the fan on first."""
+        if self._silent_mode_controls_manual_speed:
+            percentage = self._fan.man_speed or DEFAULT_ON_PERCENTAGE
+            preset_mode = self.coordinator.silent_preset_mode or "manual"
+            self._set_silent_manual_percentage(
+                percentage,
+                turn_on=turn_on,
+                preset_mode=preset_mode,
+                extra_targets={"airflow": airflow},
+            )
+            return
+
+        if turn_on:
+            self._set_param_if_changed("state", "on")
+        self._set_param_if_changed("airflow", airflow)
 
     @property
     def current_direction(self) -> str | None:
@@ -316,6 +341,16 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             )
 
         if preset_mode is None and percentage is None:
+            if self._silent_mode_controls_manual_speed:
+                await self.hass.async_add_executor_job(
+                    self._set_silent_manual_percentage,
+                    self._silent_preset_percentage(
+                        self.coordinator.silent_preset_mode or "manual"
+                    ),
+                    preset_mode=self.coordinator.silent_preset_mode or "manual",
+                )
+                await self.coordinator.async_refresh()
+                return
             await self.hass.async_add_executor_job(
                 self._set_param_if_changed, "state", "on"
             )
@@ -372,10 +407,9 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             self._set_param_if_changed("state", "off")
             return
 
-        if turn_on:
-            self._set_param_if_changed("state", "on")
-
         if self._fan.uses_operating_mode_presets:
+            if turn_on:
+                self._set_param_if_changed("state", "on")
             self._fan.set_speed_setpoint_percent(percentage)
             return
 
@@ -386,6 +420,9 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
                 preset_mode="manual",
             )
             return
+
+        if turn_on:
+            self._set_param_if_changed("state", "on")
 
         self._set_param_if_changed("speed", "manual")
         self._set_manual_percentage_if_changed(percentage)
@@ -409,17 +446,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         else:
             raise ValueError(f"Invalid direction: {direction}")
 
-        if self._silent_mode_controls_manual_speed:
-            percentage = self._fan.man_speed or DEFAULT_ON_PERCENTAGE
-            preset_mode = self.coordinator.silent_preset_mode or "manual"
-            self._set_silent_manual_percentage(
-                percentage,
-                preset_mode=preset_mode,
-                extra_targets={"airflow": target_airflow},
-            )
-            return
-
-        self._set_param_if_changed("airflow", target_airflow)
+        self.set_airflow_mode(target_airflow, True)
 
     async def async_oscillate(self, oscillating: bool) -> None:
         """Set oscillation."""
@@ -430,17 +457,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
     def set_oscillating(self, oscillating: bool) -> None:
         """Set oscillation."""
         target_airflow = "heat_recovery" if oscillating else "ventilation"
-        if self._silent_mode_controls_manual_speed:
-            percentage = self._fan.man_speed or DEFAULT_ON_PERCENTAGE
-            preset_mode = self.coordinator.silent_preset_mode or "manual"
-            self._set_silent_manual_percentage(
-                percentage,
-                preset_mode=preset_mode,
-                extra_targets={"airflow": target_airflow},
-            )
-            return
-
-        self._set_param_if_changed("airflow", target_airflow)
+        self.set_airflow_mode(target_airflow, True)
 
     ###### Custom services
 

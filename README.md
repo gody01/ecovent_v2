@@ -81,6 +81,10 @@ External relabels and OEM names tracked as evidence or candidates:
   - optional configuration checkbox for VENTO/TwinFresh-style devices
   - keeps the device in manual speed mode and maps Home Assistant preset changes
     to manual speed percentages to avoid unnecessary confirmation beeps
+  - preserves device-side humidity, relay, and analog-voltage auto-boost trigger
+    settings while manual preset control is used, since those triggers may be
+    intentionally configured
+    above the configured thresholds
   - airflow/direction changes still use the device airflow command, but the
     integration batches the current manual speed state into the same write
 * Oscillating
@@ -324,3 +328,6 @@ Version 1.2.8
   setpoints on VENTO/TwinFresh, Breezy/Freshpoint, and Freshbox/Micra profiles.
 * Encode speed setpoint writes with the active protocol profile's percent scale,
   while keeping live fan percentage control Home Assistant-native.
+* Turn the unit on before applying Home Assistant airflow direction or heat
+  recovery changes, so Freshpoint/Breezy ventilation mode starts reliably from
+  an off state.

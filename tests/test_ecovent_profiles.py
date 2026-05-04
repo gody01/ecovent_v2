@@ -9,7 +9,9 @@ from ecovent_test_helpers import Fan, packet_with_payload
 class ProfileParseTest(unittest.TestCase):
     def test_parse_response_names_shared_oxxify_unit_type(self):
         fan = Fan("192.0.2.1")
-        self.assertTrue(fan.parse_response(packet_with_payload([0xFE, 0x02, 0xB9, 0x0E, 0x00])))
+        self.assertTrue(
+            fan.parse_response(packet_with_payload([0xFE, 0x02, 0xB9, 0x0E, 0x00]))
+        )
         self.assertEqual(fan.unit_type, Fan.device_models[0x0E00].display_name)
 
     def test_parse_response_names_breezy_freshpoint_relabels(self):
@@ -181,11 +183,11 @@ class ProfileParseTest(unittest.TestCase):
 
         calls = []
 
-        def fake_do_func(func, param, value="", retries=10):
+        def fake_send_command(func, param, value="", retries=10):
             calls.append((func, param, value, retries))
             return True
 
-        fan.do_func = fake_do_func
+        fan.send_command = fake_send_command
 
         self.assertTrue(fan.set_param("weekly_schedule_state", "on"))
         self.assertEqual(
@@ -236,11 +238,11 @@ class ProfileParseTest(unittest.TestCase):
 
         calls = []
 
-        def fake_do_func(func, param, value="", retries=10):
+        def fake_send_command(func, param, value="", retries=10):
             calls.append((func, param, value, retries))
             return True
 
-        fan.do_func = fake_do_func
+        fan.send_command = fake_send_command
 
         record = fan.read_weekly_schedule_record(1, 1)
         self.assertIsNone(record)
@@ -260,7 +262,9 @@ class ProfileParseTest(unittest.TestCase):
                 )
             )
         )
-        self.assertEqual(calls, [(fan.func["write_return"], "0077", "010202001e09", 10)])
+        self.assertEqual(
+            calls, [(fan.func["write_return"], "0077", "010202001e09", 10)]
+        )
 
     def test_vento_profile_supports_schedule_editor_and_rtc(self):
         fan = Fan("192.0.2.1")
@@ -280,7 +284,9 @@ class ProfileParseTest(unittest.TestCase):
             fan.parse_response(packet_with_payload([0xFE, 0x02, 0xB9, 0x03, 0x00]))
         )
 
-        self.assertTrue(fan.parse_response(packet_with_payload([0xFF, 0x03, 0x06, 0x03])))
+        self.assertTrue(
+            fan.parse_response(packet_with_payload([0xFF, 0x03, 0x06, 0x03]))
+        )
         self.assertEqual(fan.schedule_speed, "high")
         self.assertIsNone(fan.beeper)
         self.assertFalse(fan.supports_parameter("beeper"))
@@ -293,16 +299,16 @@ class ProfileParseTest(unittest.TestCase):
 
         calls = []
 
-        def fake_do_func(func, param, value="", retries=10):
-            calls.append((func, param, value, retries))
+        def fake_send_encoded_command(command, encoded_params, retries=10):
+            calls.append((command, encoded_params, retries))
             return True
 
-        fan.do_func = fake_do_func
+        fan.send_encoded_command = fake_send_encoded_command
 
         self.assertTrue(fan.set_rtc_datetime(datetime(2026, 4, 23, 19, 45, 30)))
         self.assertEqual(
             calls,
-            [(fan.func["write_return"], "006f1e2d1300701704041a", "", 10)],
+            [(fan.func["write_return"], "fe036f1e2d13fe04701704041a", 10)],
         )
 
     def test_vento_profile_keeps_byte_scaled_speed_values(self):

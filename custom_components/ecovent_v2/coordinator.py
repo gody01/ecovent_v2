@@ -109,10 +109,11 @@ class EcoVentCoordinator(DataUpdateCoordinator):
 
     def _should_refresh_schedule_week(self) -> bool:
         """Return whether full weekly schedule reads are useful right now."""
-        return (
-            self._fan.supports_parameter("weekly_schedule_setup")
-            and self._fan.weekly_schedule_state == "on"
-            and (not self._weekly_schedule or self.updateCounter % 10 == 0)
+        return self._fan.supports_parameter("weekly_schedule_setup") and (
+            not self._weekly_schedule
+            or (
+                self._fan.weekly_schedule_state == "on" and self.updateCounter % 10 == 0
+            )
         )
 
     def _load_schedule_week(self) -> None:
@@ -126,9 +127,9 @@ class EcoVentCoordinator(DataUpdateCoordinator):
 
     def _supports_device_clock_sync(self) -> bool:
         """Return whether this device exposes writable RTC date and time rows."""
-        return self._fan.supports_parameter("rtc_time") and self._fan.supports_parameter(
-            "rtc_date"
-        )
+        return self._fan.supports_parameter(
+            "rtc_time"
+        ) and self._fan.supports_parameter("rtc_date")
 
     async def _async_maybe_sync_clock(self) -> None:
         """Keep documented RTC-capable devices close to HA local time."""

@@ -63,8 +63,7 @@ class Issue49RegressionTest(unittest.TestCase):
         )
         self.assertTrue(
             any(
-                isinstance(node, ast.Attribute)
-                and node.attr == "now"
+                isinstance(node, ast.Attribute) and node.attr == "now"
                 for node in ast.walk(clock_now)
             )
         )
@@ -77,8 +76,7 @@ class Issue49RegressionTest(unittest.TestCase):
 
         self.assertTrue(
             any(
-                isinstance(node, ast.Name)
-                and node.id == "SERVICE_SYNC_DEVICE_CLOCK"
+                isinstance(node, ast.Name) and node.id == "SERVICE_SYNC_DEVICE_CLOCK"
                 for node in ast.walk(setup)
             )
         )

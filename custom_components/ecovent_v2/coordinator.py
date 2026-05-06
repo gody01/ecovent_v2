@@ -29,8 +29,8 @@ from homeassistant.util import dt as dt_util
 from .const import CONF_AUTO_CLOCK_SYNC, CONF_SILENT_MODE, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
-CLOCK_SYNC_DRIFT = timedelta(minutes=5)
-CLOCK_SYNC_RETRY_DELAY = timedelta(hours=12)
+CLOCK_SYNC_DRIFT = timedelta(minutes=1)
+CLOCK_SYNC_INTERVAL = timedelta(minutes=5)
 
 
 class EcoVentCoordinator(DataUpdateCoordinator):
@@ -60,6 +60,8 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         self._silent_mode = config.data.get(CONF_SILENT_MODE, False)
         self._silent_preset_mode: str | None = None
         self._last_clock_sync = None
+        self._last_clock_sync_check = None
+        self._fan.extra_write_parameters_callback = self._clock_sync_params_if_needed
         _LOGGER.debug(
             "EcoVentCoordinator initialized with update rate: %d", update_seconds
         )
@@ -136,26 +138,33 @@ class EcoVentCoordinator(DataUpdateCoordinator):
     async def _async_maybe_sync_clock(self) -> None:
         """Keep documented RTC-capable devices close to HA local time."""
         now = self._device_clock_now()
-        device_now = self._device_clock_datetime()
-        if device_now is not None:
-            drift = abs(self._local_wall_clock(now) - device_now)
-            if drift <= CLOCK_SYNC_DRIFT:
-                return
+        if not self._clock_sync_check_due(now):
+            return
+        self._last_clock_sync_check = now
 
-        if self._recently_tried_clock_sync(now):
+        if self._recently_synced_clock(now):
             return
 
-        if device_now is None:
-            _LOGGER.debug(
-                "EcoVentCoordinator: syncing device clock because RTC state is missing"
-            )
-        else:
-            _LOGGER.info(
-                "EcoVentCoordinator: syncing device clock for %s drift",
-                drift,
-            )
+        if not self._clock_sync_needed(now):
+            return
+
         await self.hass.async_add_executor_job(self._fan.set_rtc_datetime, now)
-        self._last_clock_sync = now
+        self._record_clock_sync(now)
+
+    def _clock_sync_params_if_needed(self) -> dict[str, str]:
+        """Return RTC rows to batch into an already noisy device write."""
+        if not self._auto_clock_sync or not self._supports_device_clock_sync():
+            return {}
+
+        now = self._device_clock_now()
+        if self._recently_synced_clock(now):
+            return {}
+
+        if not self._clock_sync_needed(now):
+            return {}
+
+        self._record_clock_sync(now)
+        return self._fan.rtc_datetime_params(now)
 
     def _device_clock_now(self):
         """Return the HA-local wall clock value the device RTC should store."""
@@ -187,10 +196,39 @@ class EcoVentCoordinator(DataUpdateCoordinator):
             value.second,
         )
 
-    def _recently_tried_clock_sync(self, now) -> bool:
-        """Throttle repeated RTC writes if the device keeps reporting drift."""
+    def _clock_sync_check_due(self, now) -> bool:
+        """Return whether the periodic RTC correction window is open."""
+        return self._last_clock_sync_check is None or (
+            now - self._last_clock_sync_check >= CLOCK_SYNC_INTERVAL
+        )
+
+    def _clock_sync_needed(self, now) -> bool:
+        """Return whether the cached RTC state is far enough away to write."""
+        device_now = self._device_clock_datetime()
+        if device_now is None:
+            _LOGGER.debug(
+                "EcoVentCoordinator: syncing device clock because RTC state is missing"
+            )
+            return True
+
+        drift = abs(self._local_wall_clock(now) - device_now)
+        if drift <= CLOCK_SYNC_DRIFT:
+            return False
+
+        _LOGGER.info(
+            "EcoVentCoordinator: syncing device clock for %s drift",
+            drift,
+        )
+        return True
+
+    def _record_clock_sync(self, now) -> None:
+        """Remember a clock write attempt from either periodic or batched sync."""
+        self._last_clock_sync = now
+
+    def _recently_synced_clock(self, now) -> bool:
+        """Avoid duplicate RTC writes before a fresh read confirms the new value."""
         return self._last_clock_sync is not None and (
-            now - self._last_clock_sync < CLOCK_SYNC_RETRY_DELAY
+            now - self._last_clock_sync < CLOCK_SYNC_INTERVAL
         )
 
     @property

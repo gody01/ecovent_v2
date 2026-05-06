@@ -299,7 +299,12 @@ class ProfileParseTest(unittest.TestCase):
 
         calls = []
 
-        def fake_send_encoded_command(command, encoded_params, retries=10):
+        def fake_send_encoded_command(
+            command,
+            encoded_params,
+            retries=10,
+            include_extra_write_parameters=True,
+        ):
             calls.append((command, encoded_params, retries))
             return True
 

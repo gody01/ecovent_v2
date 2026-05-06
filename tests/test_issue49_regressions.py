@@ -51,16 +51,15 @@ class Issue49RegressionTest(unittest.TestCase):
         tree = _tree(COORDINATOR_PATH)
         update_data = _class_method(tree, "EcoVentCoordinator", "_async_update_data")
         clock_now = _class_method(tree, "EcoVentCoordinator", "_device_clock_now")
-        maybe_sync = _class_method(
-            tree, "EcoVentCoordinator", "_async_maybe_sync_clock"
-        )
+        clock_needed = _class_method(tree, "EcoVentCoordinator", "_clock_sync_needed")
         source = COORDINATOR_PATH.read_text()
 
         self.assertIn("_auto_clock_sync", source)
         self.assertIn("CLOCK_SYNC_DRIFT", source)
-        self.assertIn("CLOCK_SYNC_RETRY_DELAY", source)
+        self.assertIn("CLOCK_SYNC_INTERVAL", source)
         self.assertIn("_device_clock_datetime", source)
         self.assertIn("_local_wall_clock", source)
+        self.assertIn("extra_write_parameters_callback", source)
         self.assertTrue(
             any(
                 isinstance(node, ast.Attribute)
@@ -77,7 +76,7 @@ class Issue49RegressionTest(unittest.TestCase):
         self.assertTrue(
             any(
                 isinstance(node, ast.Name) and node.id == "CLOCK_SYNC_DRIFT"
-                for node in ast.walk(maybe_sync)
+                for node in ast.walk(clock_needed)
             )
         )
         self.assertNotIn("replace(tzinfo=None)", source)
@@ -87,6 +86,10 @@ class Issue49RegressionTest(unittest.TestCase):
         maybe_sync = _class_method(
             tree, "EcoVentCoordinator", "_async_maybe_sync_clock"
         )
+        sync_params = _class_method(
+            tree, "EcoVentCoordinator", "_clock_sync_params_if_needed"
+        )
+        clock_needed = _class_method(tree, "EcoVentCoordinator", "_clock_sync_needed")
         device_clock = _class_method(
             tree, "EcoVentCoordinator", "_device_clock_datetime"
         )
@@ -95,7 +98,7 @@ class Issue49RegressionTest(unittest.TestCase):
             any(
                 isinstance(node, ast.Attribute)
                 and node.attr == "_device_clock_datetime"
-                for node in ast.walk(maybe_sync)
+                for node in ast.walk(clock_needed)
             )
         )
         self.assertTrue(
@@ -104,14 +107,22 @@ class Issue49RegressionTest(unittest.TestCase):
                 for node in ast.walk(device_clock)
             )
         )
-        self.assertEqual(
-            [
-                node.attr
-                for node in ast.walk(maybe_sync)
-                if isinstance(node, ast.Attribute)
-                and node.attr in {"set_rtc_datetime", "_recently_tried_clock_sync"}
-            ],
-            ["_recently_tried_clock_sync", "set_rtc_datetime"],
+        maybe_sync_source = ast.get_source_segment(
+            COORDINATOR_PATH.read_text(), maybe_sync
+        )
+        self.assertLess(
+            maybe_sync_source.index("_clock_sync_check_due"),
+            maybe_sync_source.index("_clock_sync_needed"),
+        )
+        self.assertLess(
+            maybe_sync_source.index("_recently_synced_clock"),
+            maybe_sync_source.index("set_rtc_datetime"),
+        )
+        self.assertTrue(
+            any(
+                isinstance(node, ast.Attribute) and node.attr == "rtc_datetime_params"
+                for node in ast.walk(sync_params)
+            )
         )
 
     def test_manual_clock_sync_service_is_registered(self):

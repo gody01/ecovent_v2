@@ -1,5 +1,6 @@
 """Regression tests for EcoVent packet building and writes."""
 
+from datetime import datetime
 import unittest
 
 from ecovent_test_helpers import Fan, packet_with_payload
@@ -134,7 +135,9 @@ class PacketBuilderTest(unittest.TestCase):
         fan = Fan("192.0.2.1")
         calls = []
 
-        def send_encoded_command(func, encoded_params, retries=10):
+        def send_encoded_command(
+            func, encoded_params, retries=10, include_extra_write_parameters=True
+        ):
             calls.append((func, encoded_params))
             return True
 
@@ -157,12 +160,55 @@ class PacketBuilderTest(unittest.TestCase):
             ],
         )
 
+    def test_opportunistic_clock_sync_is_batched_into_existing_writes(self):
+        fan = Fan("192.0.2.1")
+        calls = []
+        fan.extra_write_parameters_callback = lambda: {
+            "rtc_time": "1e2d13",
+            "rtc_date": "1704041a",
+        }
+
+        def send(data):
+            calls.append(data)
+            return True
+
+        fan.send = send
+        fan.receive = lambda: packet_with_payload([])
+
+        self.assertTrue(fan.set_param("state", "on"))
+
+        self.assertEqual(len(calls), 1)
+        self.assertIn("030101fe036f1e2d13fe04701704041a", calls[0])
+
+    def test_explicit_clock_sync_does_not_reappend_opportunistic_clock_rows(self):
+        fan = Fan("192.0.2.1")
+        calls = []
+        fan.extra_write_parameters_callback = lambda: {
+            "rtc_time": "000000",
+            "rtc_date": "01010101",
+        }
+
+        def send(data):
+            calls.append(data)
+            return True
+
+        fan.send = send
+        fan.receive = lambda: packet_with_payload([])
+
+        self.assertTrue(fan.set_rtc_datetime(datetime(2026, 4, 23, 19, 45, 30)))
+
+        self.assertEqual(len(calls), 1)
+        self.assertIn("03fe036f1e2d13fe04701704041a", calls[0])
+        self.assertNotIn("000000", calls[0])
+
     def test_extract_fan_preset_writes_one_operating_mode_packet(self):
         fan = Fan("192.0.2.1")
         fan.unit_type = "0600"
         calls = []
 
-        def send_encoded_command(func, encoded_params, retries=10):
+        def send_encoded_command(
+            func, encoded_params, retries=10, include_extra_write_parameters=True
+        ):
             calls.append((func, encoded_params))
             return True
 

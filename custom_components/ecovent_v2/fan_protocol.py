@@ -191,7 +191,14 @@ class FanProtocolMixin:
             if self.socket is not None:
                 self.socket.close()
 
-    def send_command(self, command, param, value="", retries=10):
+    def send_command(
+        self,
+        command,
+        param,
+        value="",
+        retries=10,
+        include_extra_write_parameters=True,
+    ):
         _LOGGER.debug(
             "Executing command %s with param %s and value %s",
             command,
@@ -202,10 +209,20 @@ class FanProtocolMixin:
             command,
             self.encode_params(param, value),
             retries=retries,
+            include_extra_write_parameters=include_extra_write_parameters,
         )
 
-    def send_encoded_command(self, command, encoded_params, retries=10):
+    def send_encoded_command(
+        self,
+        command,
+        encoded_params,
+        retries=10,
+        include_extra_write_parameters=True,
+    ):
         """Execute a protocol command with an already encoded parameter payload."""
+        if include_extra_write_parameters:
+            encoded_params += self._extra_write_parameters(command, encoded_params)
+
         data = command + encoded_params
         response = False
         i = 0
@@ -286,8 +303,8 @@ class FanProtocolMixin:
                 )
         return False
 
-    def set_parameters(self, values):
-        """Write several profile-mapped parameters in one encoded command."""
+    def _encode_parameter_values(self, values):
+        """Encode profile-mapped parameter values for one command payload."""
         request = ""
         for param, value in values.items():
             valpar = self.get_params_values(param, value)
@@ -302,11 +319,32 @@ class FanProtocolMixin:
                 hex(valpar[0]).replace("0x", "").zfill(4),
                 value,
             )
+        return request
+
+    def set_parameters(self, values, include_extra_write_parameters=True):
+        """Write several profile-mapped parameters in one encoded command."""
+        request = self._encode_parameter_values(values)
 
         if request:
-            self.send_encoded_command(self.func["write_return"], request)
+            return self.send_encoded_command(
+                self.func["write_return"],
+                request,
+                include_extra_write_parameters=include_extra_write_parameters,
+            )
+        return False
 
     set_params = set_parameters
+
+    def _extra_write_parameters(self, command, encoded_params):
+        """Return encoded opportunistic parameters for write commands."""
+        if command != self.func["write_return"] or not encoded_params:
+            return ""
+
+        callback = getattr(self, "extra_write_parameters_callback", None)
+        if callback is None:
+            return ""
+
+        return self._encode_parameter_values(callback())
 
     def get_param(self, param):
         idx = self.get_params_index(param)
@@ -357,14 +395,16 @@ class FanProtocolMixin:
         ):
             return False
 
-        time_hex = bytes([value.second, value.minute, value.hour]).hex()
-        date_hex = bytes(
-            [value.day, value.isoweekday(), value.month, value.year % 100]
-        ).hex()
-        self.set_parameters(
-            {
-                "rtc_time": time_hex,
-                "rtc_date": date_hex,
-            }
+        return self.set_parameters(
+            self.rtc_datetime_params(value),
+            include_extra_write_parameters=False,
         )
-        return True
+
+    def rtc_datetime_params(self, value: datetime):
+        """Return RTC write rows for the device's local calendar/time format."""
+        return {
+            "rtc_time": bytes([value.second, value.minute, value.hour]).hex(),
+            "rtc_date": bytes(
+                [value.day, value.isoweekday(), value.month, value.year % 100]
+            ).hex(),
+        }

@@ -93,6 +93,17 @@ class FanDirectionTest(unittest.TestCase):
                 ]
                 self.assertTrue(calls)
 
+    def test_airflow_mode_turns_on_even_when_airflow_is_unchanged(self):
+        tree = _fan_tree()
+        source = FAN_PATH.read_text()
+        set_airflow_mode = _class_method(tree, "VentoExpertFan", "set_airflow_mode")
+        set_airflow_source = ast.get_source_segment(source, set_airflow_mode)
+
+        self.assertLess(
+            set_airflow_source.index('_set_param_if_changed("state", "on")'),
+            set_airflow_source.index('_set_param_if_changed("airflow", airflow)'),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

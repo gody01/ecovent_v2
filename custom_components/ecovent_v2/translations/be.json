@@ -14,7 +14,9 @@
                     "ip_address": "IP-адрас",
                     "password": "Пароль",
                     "port": "Порт",
-                    "name": "Назва"
+                    "name": "Назва",
+                    "auto_clock_sync": "Аўтаматычна сінхранізаваць гадзіннік прылады",
+                    "silent_mode": "Ціхі рэжым"
                 }
             }
         }
@@ -27,6 +29,10 @@
         "reset_alarms": {
             "name": "Скінуць аварыі",
             "description": "Скідвае актыўныя аварыі."
+        },
+        "sync_device_clock": {
+            "name": "Сінхранізаваць гадзіннік прылады",
+            "description": "Усталёўвае гадзіннік прылады паводле лакальнага часу Home Assistant."
         }
     },
     "entity": {
@@ -97,11 +103,11 @@
                             "speed_4": "Хуткасць 4",
                             "speed_5": "Хуткасць 5",
                             "all_day": "Увесь дзень",
-                            "humidity_trigger": "Аўта па вільготнасці",
-                            "humidity_manual": "Вільготнасць уручную",
-                            "temperature_trigger": "Тэмпература",
-                            "motion_trigger": "Рух",
-                            "external_switch_trigger": "Вонкавы ўваход",
+                            "humidity_trigger": "Фарсаж па вільготнасці",
+                            "humidity_manual": "Фарсаж па вільготнасці (уручную)",
+                            "temperature_trigger": "Фарсаж па тэмпературы",
+                            "motion_trigger": "Фарсаж па руху",
+                            "external_switch_trigger": "Фарсаж па вонкавым уваходзе",
                             "interval_ventilation": "Інтэрвальная вентыляцыя",
                             "silent": "Ціхі",
                             "boost": "Фарсаж",

@@ -1,8 +1,9 @@
 """Regression tests for EcoVent packet building and writes."""
 
+from datetime import datetime
 import unittest
 
-from ecovent_test_helpers import Fan
+from ecovent_test_helpers import Fan, packet_with_payload
 
 
 class PacketBuilderTest(unittest.TestCase):
@@ -33,26 +34,43 @@ class PacketBuilderTest(unittest.TestCase):
         fan = Fan("192.0.2.1")
         calls = []
 
-        def do_func(func, param, value="", retries=10):
+        def send_command(func, param, value="", retries=10):
             calls.append((func, param, value))
             return True
 
-        fan.do_func = do_func
+        fan.send_command = send_command
         self.assertTrue(fan.update())
         _, params, _ = calls[0]
         self.assertNotIn("0065", params)
         self.assertNotIn("0080", params)
 
+    def test_update_does_not_poll_weekly_schedule_setup(self):
+        fan = Fan("192.0.2.1")
+        self.assertTrue(
+            fan.parse_response(packet_with_payload([0xFE, 0x02, 0xB9, 0x11, 0x00]))
+        )
+        calls = []
+
+        def send_command(func, param, value="", retries=10):
+            calls.append((func, param, value))
+            return True
+
+        fan.send_command = send_command
+        self.assertTrue(fan.update())
+        _, params, _ = calls[0]
+        self.assertIn("0072", params)
+        self.assertNotIn("0077", params)
+
     def test_update_falls_back_to_individual_reads_after_bulk_failure(self):
         fan = Fan("192.0.2.1")
         calls = []
 
-        def do_func(func, param, value="", retries=10):
+        def send_command(func, param, value="", retries=10):
             calls.append((param, retries))
             return len(param) == 4 and param == "0001"
 
         fan.params = {0x0001: ["state", fan.states], 0x0002: ["speed", fan.speeds]}
-        fan.do_func = do_func
+        fan.send_command = send_command
 
         self.assertTrue(fan.update())
         self.assertEqual(calls, [("00010002", 3), ("0001", 1), ("0002", 1)])
@@ -62,11 +80,11 @@ class PacketBuilderTest(unittest.TestCase):
         fan = Fan("192.0.2.1")
         calls = []
 
-        def do_func(func, param, value="", retries=10):
+        def send_command(func, param, value="", retries=10):
             calls.append((param, retries))
             return True
 
-        fan.do_func = do_func
+        fan.send_command = send_command
 
         self.assertTrue(fan.update())
         self.assertIn("0025", calls[0][0])
@@ -76,11 +94,11 @@ class PacketBuilderTest(unittest.TestCase):
         fan.unit_type = "0600"
         calls = []
 
-        def do_func(func, param, value="", retries=10):
+        def send_command(func, param, value="", retries=10):
             calls.append((param, retries))
             return True
 
-        fan.do_func = do_func
+        fan.send_command = send_command
 
         self.assertTrue(fan.update())
         params, retries = calls[0]
@@ -96,11 +114,11 @@ class PacketBuilderTest(unittest.TestCase):
         fan.unit_type = "0600"
         calls = []
 
-        def do_func(func, param, value="", retries=10):
+        def send_command(func, param, value="", retries=10):
             calls.append((param, value))
             return True
 
-        fan.do_func = do_func
+        fan.send_command = send_command
         fan.set_speed_setpoint_percent(45)
 
         self.assertEqual(
@@ -113,26 +131,97 @@ class PacketBuilderTest(unittest.TestCase):
             ],
         )
 
+    def test_manual_speed_and_airflow_can_be_batched_in_one_write(self):
+        fan = Fan("192.0.2.1")
+        calls = []
+
+        def send_encoded_command(
+            func, encoded_params, retries=10, include_extra_write_parameters=True
+        ):
+            calls.append((func, encoded_params))
+            return True
+
+        fan.send_encoded_command = send_encoded_command
+        fan.set_parameters(
+            {
+                "speed": "manual",
+                "man_speed": "73",
+                "airflow": "air_supply",
+            }
+        )
+
+        self.assertEqual(
+            calls,
+            [
+                (
+                    fan.func["write_return"],
+                    "02ff4473b702",
+                )
+            ],
+        )
+
+    def test_opportunistic_clock_sync_is_batched_into_existing_writes(self):
+        fan = Fan("192.0.2.1")
+        calls = []
+        fan.extra_write_parameters_callback = lambda: {
+            "rtc_time": "1e2d13",
+            "rtc_date": "1704041a",
+        }
+
+        def send(data):
+            calls.append(data)
+            return True
+
+        fan.send = send
+        fan.receive = lambda: packet_with_payload([])
+
+        self.assertTrue(fan.set_param("state", "on"))
+
+        self.assertEqual(len(calls), 1)
+        self.assertIn("030101fe036f1e2d13fe04701704041a", calls[0])
+
+    def test_explicit_clock_sync_does_not_reappend_opportunistic_clock_rows(self):
+        fan = Fan("192.0.2.1")
+        calls = []
+        fan.extra_write_parameters_callback = lambda: {
+            "rtc_time": "000000",
+            "rtc_date": "01010101",
+        }
+
+        def send(data):
+            calls.append(data)
+            return True
+
+        fan.send = send
+        fan.receive = lambda: packet_with_payload([])
+
+        self.assertTrue(fan.set_rtc_datetime(datetime(2026, 4, 23, 19, 45, 30)))
+
+        self.assertEqual(len(calls), 1)
+        self.assertIn("03fe036f1e2d13fe04701704041a", calls[0])
+        self.assertNotIn("000000", calls[0])
+
     def test_extract_fan_preset_writes_one_operating_mode_packet(self):
         fan = Fan("192.0.2.1")
         fan.unit_type = "0600"
         calls = []
 
-        def do_func(func, param, value="", retries=10):
-            calls.append((func, param, value))
+        def send_encoded_command(
+            func, encoded_params, retries=10, include_extra_write_parameters=True
+        ):
+            calls.append((func, encoded_params))
             return True
 
-        fan.do_func = do_func
+        fan.send_encoded_command = send_encoded_command
         fan.set_operating_mode_preset("silent")
 
         self.assertEqual(len(calls), 1)
-        func, params, value = calls[0]
+        func, params = calls[0]
         self.assertEqual(func, fan.func["write_return"])
-        self.assertEqual(value, "")
-        self.assertIn("001e01", params)
-        self.assertIn("000300", params)
-        self.assertIn("000f00", params)
-        self.assertIn("000500", params)
+        self.assertIn("1e01", params)
+        self.assertIn("0300", params)
+        self.assertIn("0f00", params)
+        self.assertIn("0500", params)
 
     def test_extract_fan_boost_invert_value_stays_in_declared_options(self):
         fan = Fan("192.0.2.1")

@@ -33,9 +33,16 @@ class ParseRobustnessTest(unittest.TestCase):
 
     def test_parse_response_keeps_unknown_enum_values(self):
         fan = Fan("192.0.2.1")
-        self.assertTrue(fan.parse_response(packet_with_payload([0x02, 0x99, 0xB7, 0x44])))
+        self.assertTrue(
+            fan.parse_response(packet_with_payload([0x02, 0x99, 0xB7, 0x44]))
+        )
         self.assertEqual(fan.speed, "Unknown speed 153")
         self.assertEqual(fan.airflow, "Unknown airflow 68")
+
+    def test_airflow_enum_three_is_not_exposed_as_placeholder_text(self):
+        fan = Fan("192.0.2.1")
+        fan.airflow = "03"
+        self.assertEqual(fan.airflow, "Unknown airflow 3")
 
     def test_beeper_unknown_enum_value_is_stable_sensor_state(self):
         fan = Fan("192.0.2.1")
@@ -88,6 +95,8 @@ class ParseRobustnessTest(unittest.TestCase):
 
     def test_parse_response_skips_no_value_parameter_markers(self):
         fan = Fan("192.0.2.1")
-        self.assertTrue(fan.parse_response(packet_with_payload([0xFD, 0x65, 0x01, 0x01])))
+        self.assertTrue(
+            fan.parse_response(packet_with_payload([0xFD, 0x65, 0x01, 0x01]))
+        )
         self.assertEqual(fan.unknown_params, {})
         self.assertEqual(fan.state, "on")

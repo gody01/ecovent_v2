@@ -6,10 +6,7 @@ import unittest
 
 
 FAN_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "custom_components"
-    / "ecovent_v2"
-    / "fan.py"
+    Path(__file__).resolve().parents[1] / "custom_components" / "ecovent_v2" / "fan.py"
 )
 
 
@@ -54,7 +51,7 @@ class FanDirectionTest(unittest.TestCase):
     def test_advertised_directions_match_home_assistant_service_values(self):
         tree = _fan_tree()
         directions = _constant_assignment(tree, "DIRECTIONS")
-        set_direction = _class_method(tree, "VentoExpertFan", "async_set_direction")
+        set_direction = _class_method(tree, "VentoExpertFan", "set_direction")
 
         self.assertEqual(directions, ["forward", "reverse"])
         self.assertTrue(set(directions).issubset(_string_constants(set_direction)))
@@ -62,15 +59,50 @@ class FanDirectionTest(unittest.TestCase):
     def test_protocol_airflow_values_stay_internal_to_direction_mapping(self):
         tree = _fan_tree()
         current_direction = _class_method(tree, "VentoExpertFan", "current_direction")
-        set_direction = _class_method(tree, "VentoExpertFan", "async_set_direction")
+        set_direction = _class_method(tree, "VentoExpertFan", "set_direction")
+        set_airflow_mode = _class_method(tree, "VentoExpertFan", "set_airflow_mode")
 
         current_constants = _string_constants(current_direction)
         set_constants = _string_constants(set_direction)
+        set_airflow_constants = _string_constants(set_airflow_mode)
 
         self.assertIn("air_supply", current_constants)
         self.assertIn("reverse", current_constants)
         self.assertIn("ventilation", set_constants)
         self.assertIn("air_supply", set_constants)
+        self.assertIn("state", set_airflow_constants)
+        self.assertIn("on", set_airflow_constants)
+        self.assertIn("airflow", set_airflow_constants)
+
+    def test_direction_and_oscillation_turn_on_before_airflow_change(self):
+        tree = _fan_tree()
+        set_direction = _class_method(tree, "VentoExpertFan", "set_direction")
+        oscillate = _class_method(tree, "VentoExpertFan", "set_oscillating")
+
+        for method in (set_direction, oscillate):
+            with self.subTest(method=method.name):
+                calls = [
+                    call
+                    for call in ast.walk(method)
+                    if isinstance(call, ast.Call)
+                    and isinstance(call.func, ast.Attribute)
+                    and call.func.attr == "set_airflow_mode"
+                    and len(call.args) >= 2
+                    and isinstance(call.args[-1], ast.Constant)
+                    and call.args[-1].value is True
+                ]
+                self.assertTrue(calls)
+
+    def test_airflow_mode_turns_on_even_when_airflow_is_unchanged(self):
+        tree = _fan_tree()
+        source = FAN_PATH.read_text()
+        set_airflow_mode = _class_method(tree, "VentoExpertFan", "set_airflow_mode")
+        set_airflow_source = ast.get_source_segment(source, set_airflow_mode)
+
+        self.assertLess(
+            set_airflow_source.index('_set_param_if_changed("state", "on")'),
+            set_airflow_source.index('_set_param_if_changed("airflow", airflow)'),
+        )
 
 
 if __name__ == "__main__":

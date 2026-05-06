@@ -1,7 +1,7 @@
 """VentoUpdateCoordinator class."""
 
 # from __future__ import annotations
-from datetime import timedelta
+from datetime import datetime, timedelta
 import logging
 
 from .ecoventv2 import Fan
@@ -26,9 +26,11 @@ from homeassistant.helpers.update_coordinator import (
 )
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN
+from .const import CONF_AUTO_CLOCK_SYNC, CONF_SILENT_MODE, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+CLOCK_SYNC_DRIFT = timedelta(minutes=1)
+CLOCK_SYNC_INTERVAL = timedelta(minutes=5)
 
 
 class EcoVentCoordinator(DataUpdateCoordinator):
@@ -54,7 +56,12 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         self.updateCounter = 0
         self._schedule_day = 1
         self._weekly_schedule: dict[int, dict[int, WeeklyScheduleRecord]] = {}
+        self._auto_clock_sync = config.data.get(CONF_AUTO_CLOCK_SYNC, True)
+        self._silent_mode = config.data.get(CONF_SILENT_MODE, False)
+        self._silent_preset_mode: str | None = None
         self._last_clock_sync = None
+        self._last_clock_sync_check = None
+        self._fan.extra_write_parameters_callback = self._clock_sync_params_if_needed
         _LOGGER.debug(
             "EcoVentCoordinator initialized with update rate: %d", update_seconds
         )
@@ -93,40 +100,150 @@ class EcoVentCoordinator(DataUpdateCoordinator):
             _LOGGER.debug("EcoVentCoordinator: Starting quick data update...")
             await self.hass.async_add_executor_job(self._fan.quick_update)
 
-        if self._fan.supports_parameter("weekly_schedule_setup") and (
-            not self._weekly_schedule or self.updateCounter % 10 == 0
-        ):
+        if self._should_refresh_schedule_week():
             await self.hass.async_add_executor_job(self._load_schedule_week)
 
-        if self._fan.supports_parameter("rtc_time") and self._fan.supports_parameter(
-            "rtc_date"
-        ):
+        if self._auto_clock_sync and self._supports_device_clock_sync():
             await self._async_maybe_sync_clock()
 
     async def _async_post_init_setup(self) -> None:
         """Load slow one-off state after device discovery."""
-        if self._fan.supports_parameter("weekly_schedule_setup"):
+        if self._should_refresh_schedule_week():
             await self.hass.async_add_executor_job(self._load_schedule_week)
+
+    def _should_refresh_schedule_week(self) -> bool:
+        """Return whether full weekly schedule reads are useful right now."""
+        return self._fan.supports_parameter("weekly_schedule_setup") and (
+            not self._weekly_schedule
+            or (
+                self._fan.weekly_schedule_state == "on" and self.updateCounter % 10 == 0
+            )
+        )
 
     def _load_schedule_week(self) -> None:
         """Read and cache the full weekly schedule from the device."""
-        self._weekly_schedule = {
-            day: self._fan.read_weekly_schedule_day(day) for day in range(1, 8)
-        }
+        self._load_schedule_days(range(1, 8))
+
+    def _load_schedule_days(self, days) -> None:
+        """Read and cache selected weekly schedule days from the device."""
+        for day in sorted(set(days)):
+            self._weekly_schedule[day] = self._fan.read_weekly_schedule_day(day)
+
+    def _supports_device_clock_sync(self) -> bool:
+        """Return whether this device exposes writable RTC date and time rows."""
+        return self._fan.supports_parameter(
+            "rtc_time"
+        ) and self._fan.supports_parameter("rtc_date")
 
     async def _async_maybe_sync_clock(self) -> None:
         """Keep documented RTC-capable devices close to HA local time."""
-        now = dt_util.now()
-        if self._last_clock_sync is not None and (
-            now - self._last_clock_sync < timedelta(hours=12)
-        ):
+        now = self._device_clock_now()
+        if not self._clock_sync_check_due(now):
+            return
+        self._last_clock_sync_check = now
+
+        if self._recently_synced_clock(now):
             return
 
-        await self.hass.async_add_executor_job(
-            self._fan.set_rtc_datetime,
-            now.replace(tzinfo=None),
+        if not self._clock_sync_needed(now):
+            return
+
+        await self.hass.async_add_executor_job(self._fan.set_rtc_datetime, now)
+        self._record_clock_sync(now)
+
+    def _clock_sync_params_if_needed(self) -> dict[str, str]:
+        """Return RTC rows to batch into an already noisy device write."""
+        if not self._auto_clock_sync or not self._supports_device_clock_sync():
+            return {}
+
+        now = self._device_clock_now()
+        if self._recently_synced_clock(now):
+            return {}
+
+        if not self._clock_sync_needed(now):
+            return {}
+
+        self._record_clock_sync(now)
+        return self._fan.rtc_datetime_params(now)
+
+    def _device_clock_now(self):
+        """Return the HA-local wall clock value the device RTC should store."""
+        return dt_util.now()
+
+    def _device_clock_datetime(self) -> datetime | None:
+        """Return the device RTC as a naive local wall-clock datetime."""
+        if self._fan.rtc_date is None or self._fan.rtc_time is None:
+            return None
+
+        try:
+            return datetime.fromisoformat(f"{self._fan.rtc_date}T{self._fan.rtc_time}")
+        except ValueError:
+            _LOGGER.debug(
+                "EcoVentCoordinator: cannot parse device RTC date/time: %s %s",
+                self._fan.rtc_date,
+                self._fan.rtc_time,
+            )
+            return None
+
+    def _local_wall_clock(self, value) -> datetime:
+        """Drop timezone metadata after converting to HA's local wall-clock fields."""
+        return datetime(
+            value.year,
+            value.month,
+            value.day,
+            value.hour,
+            value.minute,
+            value.second,
         )
+
+    def _clock_sync_check_due(self, now) -> bool:
+        """Return whether the periodic RTC correction window is open."""
+        return self._last_clock_sync_check is None or (
+            now - self._last_clock_sync_check >= CLOCK_SYNC_INTERVAL
+        )
+
+    def _clock_sync_needed(self, now) -> bool:
+        """Return whether the cached RTC state is far enough away to write."""
+        device_now = self._device_clock_datetime()
+        if device_now is None:
+            _LOGGER.debug(
+                "EcoVentCoordinator: syncing device clock because RTC state is missing"
+            )
+            return True
+
+        drift = abs(self._local_wall_clock(now) - device_now)
+        if drift <= CLOCK_SYNC_DRIFT:
+            return False
+
+        _LOGGER.info(
+            "EcoVentCoordinator: syncing device clock for %s drift",
+            drift,
+        )
+        return True
+
+    def _record_clock_sync(self, now) -> None:
+        """Remember a clock write attempt from either periodic or batched sync."""
         self._last_clock_sync = now
+
+    def _recently_synced_clock(self, now) -> bool:
+        """Avoid duplicate RTC writes before a fresh read confirms the new value."""
+        return self._last_clock_sync is not None and (
+            now - self._last_clock_sync < CLOCK_SYNC_INTERVAL
+        )
+
+    @property
+    def silent_mode_enabled(self) -> bool:
+        """Return whether HA should avoid beeping fan mode writes."""
+        return self._silent_mode
+
+    @property
+    def silent_preset_mode(self) -> str | None:
+        """Return the virtual preset shown while silent mode keeps manual speed."""
+        return self._silent_preset_mode
+
+    def set_silent_preset_mode(self, preset_mode: str | None) -> None:
+        """Remember the HA-facing preset when the device stays in manual mode."""
+        self._silent_preset_mode = preset_mode
 
     @property
     def schedule_day_option(self) -> str:
@@ -187,9 +304,19 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                 )
 
         if days:
+            day_payloads = []
             for day_payload in days:
                 day_label = str(day_payload["day"])
                 day = SCHEDULE_DAY_TO_INDEX[day_label]
+                day_payloads.append((day_label, day, day_payload))
+
+            if self._fan.supports_parameter("weekly_schedule_setup"):
+                await self.hass.async_add_executor_job(
+                    self._load_schedule_days,
+                    [day for _, day, _ in day_payloads],
+                )
+
+            for day_label, day, day_payload in day_payloads:
                 current_records = self.schedule_day_records(day)
                 records_to_write = changed_schedule_records(
                     day,
@@ -213,9 +340,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
 
     async def async_sync_device_clock(self) -> None:
         """Synchronize the device RTC with HA local time immediately."""
-        await self.hass.async_add_executor_job(
-            self._fan.set_rtc_datetime,
-            dt_util.now().replace(tzinfo=None),
-        )
-        self._last_clock_sync = dt_util.now()
+        now = self._device_clock_now()
+        await self.hass.async_add_executor_job(self._fan.set_rtc_datetime, now)
+        self._last_clock_sync = now
         await self.async_refresh()

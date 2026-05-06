@@ -14,7 +14,9 @@
                     "ip_address": "Host",
                     "password": "Hasło",
                     "port": "Port",
-                    "name": "Nazwa"
+                    "name": "Nazwa",
+                    "auto_clock_sync": "Automatycznie synchronizuj zegar urządzenia",
+                    "silent_mode": "Tryb cichy"
                 }
             }
         }
@@ -27,6 +29,10 @@
         "reset_alarms": {
             "name": "Reset alarmów",
             "description": "Resetuje aktywne alarmy."
+        },
+        "sync_device_clock": {
+            "name": "Synchronizuj zegar urządzenia",
+            "description": "Ustawia zegar urządzenia na lokalny czas Home Assistant."
         }
     },
     "entity": {
@@ -97,11 +103,11 @@
                             "speed_4": "Prędkość 4",
                             "speed_5": "Prędkość 5",
                             "all_day": "Cały dzień",
-                            "humidity_trigger": "Automatyczna wilgotność",
-                            "humidity_manual": "Wilgotność ręcznie",
-                            "temperature_trigger": "Temperatura",
-                            "motion_trigger": "Ruch",
-                            "external_switch_trigger": "Wejście zewnętrzne",
+                            "humidity_trigger": "Boost z wilgotności",
+                            "humidity_manual": "Boost z wilgotności (ręcznie)",
+                            "temperature_trigger": "Boost z temperatury",
+                            "motion_trigger": "Boost z ruchu",
+                            "external_switch_trigger": "Boost z wejścia zewnętrznego",
                             "interval_ventilation": "Wentylacja okresowa",
                             "silent": "Cichy",
                             "boost": "Boost",

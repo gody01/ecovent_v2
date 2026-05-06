@@ -41,7 +41,7 @@ class TransportTest(unittest.TestCase):
         fan = Fan("192.0.2.1")
         self.assertFalse(fan.receive())
 
-    def test_do_func_retries_invalid_packet_before_success(self):
+    def test_send_command_retries_invalid_packet_before_success(self):
         fan = Fan("192.0.2.1")
         good_packet = packet_with_payload([0x01, 0x01])
         bad_packet = good_packet[:-1] + bytes([good_packet[-1] ^ 0xFF])
@@ -57,7 +57,7 @@ class TransportTest(unittest.TestCase):
         fan.send = send
         fan.receive = receive
 
-        self.assertTrue(fan.do_func(fan.func["read"], "0001"))
+        self.assertTrue(fan.send_command(fan.func["read"], "0001"))
         self.assertEqual(len(sent), 2)
         self.assertEqual(fan.state, "on")
 

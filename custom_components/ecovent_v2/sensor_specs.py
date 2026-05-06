@@ -9,6 +9,7 @@ from homeassistant.components.sensor import (
 from homeassistant.const import PERCENTAGE, REVOLUTIONS_PER_MINUTE, EntityCategory
 from homeassistant.const import UnitOfTemperature
 
+
 @dataclass(frozen=True)
 class SensorSpec:
     """Sensor description guarded by protocol parameters and capabilities."""
@@ -129,7 +130,7 @@ SENSOR_SPECS = (
     ),
     SensorSpec(
         "_speed",
-        "Fan speed",
+        "Speed fan",
         "fan1_speed",
         REVOLUTIONS_PER_MINUTE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -139,7 +140,7 @@ SENSOR_SPECS = (
     ),
     SensorSpec(
         "_speed1",
-        "Fan 1 speed",
+        "Speed fan 1",
         "fan1_speed",
         REVOLUTIONS_PER_MINUTE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -149,7 +150,7 @@ SENSOR_SPECS = (
     ),
     SensorSpec(
         "_speed2",
-        "Fan 2 speed",
+        "Speed fan 2",
         "fan2_speed",
         REVOLUTIONS_PER_MINUTE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -238,22 +239,13 @@ SENSOR_SPECS = (
         translation_key="alarm_status",
     ),
     SensorSpec(
-        "_rtc_time",
-        "Device clock time",
-        "rtc_time",
+        "_rtc_timestamp",
+        "RTC timestamp",
+        "rtc_timestamp",
         entity_category=EntityCategory.DIAGNOSTIC,
         enable_by_default=False,
-        icon="mdi:clock-outline",
-        required_params=("rtc_time",),
-    ),
-    SensorSpec(
-        "_rtc_date",
-        "Device clock date",
-        "rtc_date",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        enable_by_default=False,
-        icon="mdi:calendar-month-outline",
-        required_params=("rtc_date",),
+        icon="mdi:calendar-clock",
+        required_params=("rtc_date", "rtc_time"),
     ),
     SensorSpec(
         "_alarm_list",
@@ -300,7 +292,7 @@ SENSOR_SPECS = (
     ),
     SensorSpec(
         "_schedule_speed",
-        "Schedule speed",
+        "Weekly schedule speed",
         "schedule_speed",
         device_class=SensorDeviceClass.ENUM,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -364,7 +356,7 @@ SENSOR_SPECS = (
     ),
     SensorSpec(
         "_night_mode_timer",
-        "Night mode timer",
+        "Timer night mode",
         "night_mode_timer",
         "h",
         SensorDeviceClass.DURATION,
@@ -377,7 +369,7 @@ SENSOR_SPECS = (
     ),
     SensorSpec(
         "_party_mode_timer",
-        "Party mode timer",
+        "Timer party mode",
         "party_mode_timer",
         "h",
         SensorDeviceClass.DURATION,
@@ -390,7 +382,7 @@ SENSOR_SPECS = (
     ),
     SensorSpec(
         "_analogv",
-        "Analog voltage",
+        "Boost analog voltage level",
         "analogv",
         entity_category=EntityCategory.DIAGNOSTIC,
         enable_by_default=False,
@@ -400,7 +392,7 @@ SENSOR_SPECS = (
     ),
     SensorSpec(
         "_machine_hours",
-        "Machine hours",
+        "Runtime machine hours",
         "machine_hours",
         "h",
         SensorDeviceClass.DURATION,

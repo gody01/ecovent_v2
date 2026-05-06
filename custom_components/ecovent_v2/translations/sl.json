@@ -14,7 +14,9 @@
                     "ip_address": "IP",
                     "password": "Geslo",
                     "port": "Vrata",
-                    "name": "Naziv"
+                    "name": "Naziv",
+                    "auto_clock_sync": "Samodejno sinhroniziraj uro naprave",
+                    "silent_mode": "Tihi način"
                 }
             }
         }
@@ -27,6 +29,10 @@
         "reset_alarms": {
             "name": "Ponastavi alarme",
             "description": "Ponastavi aktivne alarme."
+        },
+        "sync_device_clock": {
+            "name": "Sinhroniziraj uro naprave",
+            "description": "Nastavi uro naprave na lokalni čas Home Assistant."
         }
     },
     "entity": {
@@ -97,11 +103,11 @@
                             "speed_4": "Hitrost 4",
                             "speed_5": "Hitrost 5",
                             "all_day": "Ves dan",
-                            "humidity_trigger": "Samodejna vlažnost",
-                            "humidity_manual": "Vlažnost ročno",
-                            "temperature_trigger": "Temperatura",
-                            "motion_trigger": "Gibanje",
-                            "external_switch_trigger": "Zunanji vhod",
+                            "humidity_trigger": "Boost ob vlagi",
+                            "humidity_manual": "Boost ob vlagi (ročno)",
+                            "temperature_trigger": "Boost ob temperaturi",
+                            "motion_trigger": "Boost ob gibanju",
+                            "external_switch_trigger": "Boost ob zunanjem vhodu",
                             "interval_ventilation": "Intervalno prezračevanje",
                             "silent": "Tiho",
                             "boost": "Boost",

@@ -273,13 +273,11 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         """Get timer status."""
         return self._fan.timer_status
 
-    def rtc_time(self):
-        """Get the device clock time."""
-        return self._fan.rtc_time
-
-    def rtc_date(self):
-        """Get the device clock date."""
-        return self._fan.rtc_date
+    def rtc_timestamp(self):
+        """Get the device RTC date and time as one timestamp string."""
+        if self._fan.rtc_date is None or self._fan.rtc_time is None:
+            return None
+        return f"{self._fan.rtc_date}T{self._fan.rtc_time}"
 
     def alarm_status(self):
         """Get alarm status."""
@@ -413,7 +411,7 @@ class WeeklyScheduleSummarySensor(CoordinatorEntity, SensorEntity):
         coordinator: EcoVentCoordinator = hass.data[DOMAIN][config.entry_id]
         super().__init__(coordinator)
         self._fan: Fan = coordinator._fan
-        self._attr_name = "Schedule"
+        self._attr_name = "Weekly schedule summary"
         self._attr_unique_id = self._fan.id + "_schedule"
         self._attr_icon = "mdi:calendar-clock"
         self._attr_device_info = DeviceInfo(

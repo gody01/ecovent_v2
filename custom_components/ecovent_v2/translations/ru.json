@@ -14,7 +14,9 @@
                     "ip_address": "IP-адрес",
                     "password": "Пароль",
                     "port": "Порт",
-                    "name": "Название"
+                    "name": "Название",
+                    "auto_clock_sync": "Автоматически синхронизировать часы устройства",
+                    "silent_mode": "Тихий режим"
                 }
             }
         }
@@ -27,6 +29,10 @@
         "reset_alarms": {
             "name": "Сбросить аварии",
             "description": "Сбрасывает активные аварии."
+        },
+        "sync_device_clock": {
+            "name": "Синхронизировать часы устройства",
+            "description": "Устанавливает часы устройства по локальному времени Home Assistant."
         }
     },
     "entity": {
@@ -97,11 +103,11 @@
                             "speed_4": "Скорость 4",
                             "speed_5": "Скорость 5",
                             "all_day": "Весь день",
-                            "humidity_trigger": "Авто по влажности",
-                            "humidity_manual": "Влажность вручную",
-                            "temperature_trigger": "Температура",
-                            "motion_trigger": "Движение",
-                            "external_switch_trigger": "Внешний вход",
+                            "humidity_trigger": "Форсаж по влажности",
+                            "humidity_manual": "Форсаж по влажности (вручную)",
+                            "temperature_trigger": "Форсаж по температуре",
+                            "motion_trigger": "Форсаж по движению",
+                            "external_switch_trigger": "Форсаж по внешнему входу",
                             "interval_ventilation": "Интервальная вентиляция",
                             "silent": "Тихий",
                             "boost": "Форсаж",

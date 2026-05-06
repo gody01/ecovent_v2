@@ -51,9 +51,16 @@ class Issue49RegressionTest(unittest.TestCase):
         tree = _tree(COORDINATOR_PATH)
         update_data = _class_method(tree, "EcoVentCoordinator", "_async_update_data")
         clock_now = _class_method(tree, "EcoVentCoordinator", "_device_clock_now")
+        maybe_sync = _class_method(
+            tree, "EcoVentCoordinator", "_async_maybe_sync_clock"
+        )
         source = COORDINATOR_PATH.read_text()
 
         self.assertIn("_auto_clock_sync", source)
+        self.assertIn("CLOCK_SYNC_DRIFT", source)
+        self.assertIn("CLOCK_SYNC_RETRY_DELAY", source)
+        self.assertIn("_device_clock_datetime", source)
+        self.assertIn("_local_wall_clock", source)
         self.assertTrue(
             any(
                 isinstance(node, ast.Attribute)
@@ -67,7 +74,45 @@ class Issue49RegressionTest(unittest.TestCase):
                 for node in ast.walk(clock_now)
             )
         )
+        self.assertTrue(
+            any(
+                isinstance(node, ast.Name) and node.id == "CLOCK_SYNC_DRIFT"
+                for node in ast.walk(maybe_sync)
+            )
+        )
         self.assertNotIn("replace(tzinfo=None)", source)
+
+    def test_periodic_clock_sync_compares_existing_rtc_before_writing(self):
+        tree = _tree(COORDINATOR_PATH)
+        maybe_sync = _class_method(
+            tree, "EcoVentCoordinator", "_async_maybe_sync_clock"
+        )
+        device_clock = _class_method(
+            tree, "EcoVentCoordinator", "_device_clock_datetime"
+        )
+
+        self.assertTrue(
+            any(
+                isinstance(node, ast.Attribute)
+                and node.attr == "_device_clock_datetime"
+                for node in ast.walk(maybe_sync)
+            )
+        )
+        self.assertTrue(
+            any(
+                isinstance(node, ast.Attribute) and node.attr == "fromisoformat"
+                for node in ast.walk(device_clock)
+            )
+        )
+        self.assertEqual(
+            [
+                node.attr
+                for node in ast.walk(maybe_sync)
+                if isinstance(node, ast.Attribute)
+                and node.attr in {"set_rtc_datetime", "_recently_tried_clock_sync"}
+            ],
+            ["_recently_tried_clock_sync", "set_rtc_datetime"],
+        )
 
     def test_manual_clock_sync_service_is_registered(self):
         tree = _tree(FAN_PATH)

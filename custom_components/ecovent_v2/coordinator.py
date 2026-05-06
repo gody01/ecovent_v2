@@ -1,7 +1,7 @@
 """VentoUpdateCoordinator class."""
 
 # from __future__ import annotations
-from datetime import timedelta
+from datetime import datetime, timedelta
 import logging
 
 from .ecoventv2 import Fan
@@ -29,6 +29,8 @@ from homeassistant.util import dt as dt_util
 from .const import CONF_AUTO_CLOCK_SYNC, CONF_SILENT_MODE, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+CLOCK_SYNC_DRIFT = timedelta(minutes=5)
+CLOCK_SYNC_RETRY_DELAY = timedelta(hours=12)
 
 
 class EcoVentCoordinator(DataUpdateCoordinator):
@@ -134,17 +136,62 @@ class EcoVentCoordinator(DataUpdateCoordinator):
     async def _async_maybe_sync_clock(self) -> None:
         """Keep documented RTC-capable devices close to HA local time."""
         now = self._device_clock_now()
-        if self._last_clock_sync is not None and (
-            now - self._last_clock_sync < timedelta(hours=12)
-        ):
+        device_now = self._device_clock_datetime()
+        if device_now is not None:
+            drift = abs(self._local_wall_clock(now) - device_now)
+            if drift <= CLOCK_SYNC_DRIFT:
+                return
+
+        if self._recently_tried_clock_sync(now):
             return
 
+        if device_now is None:
+            _LOGGER.debug(
+                "EcoVentCoordinator: syncing device clock because RTC state is missing"
+            )
+        else:
+            _LOGGER.info(
+                "EcoVentCoordinator: syncing device clock for %s drift",
+                drift,
+            )
         await self.hass.async_add_executor_job(self._fan.set_rtc_datetime, now)
         self._last_clock_sync = now
 
     def _device_clock_now(self):
         """Return the HA-local wall clock value the device RTC should store."""
         return dt_util.now()
+
+    def _device_clock_datetime(self) -> datetime | None:
+        """Return the device RTC as a naive local wall-clock datetime."""
+        if self._fan.rtc_date is None or self._fan.rtc_time is None:
+            return None
+
+        try:
+            return datetime.fromisoformat(f"{self._fan.rtc_date}T{self._fan.rtc_time}")
+        except ValueError:
+            _LOGGER.debug(
+                "EcoVentCoordinator: cannot parse device RTC date/time: %s %s",
+                self._fan.rtc_date,
+                self._fan.rtc_time,
+            )
+            return None
+
+    def _local_wall_clock(self, value) -> datetime:
+        """Drop timezone metadata after converting to HA's local wall-clock fields."""
+        return datetime(
+            value.year,
+            value.month,
+            value.day,
+            value.hour,
+            value.minute,
+            value.second,
+        )
+
+    def _recently_tried_clock_sync(self, now) -> bool:
+        """Throttle repeated RTC writes if the device keeps reporting drift."""
+        return self._last_clock_sync is not None and (
+            now - self._last_clock_sync < CLOCK_SYNC_RETRY_DELAY
+        )
 
     @property
     def silent_mode_enabled(self) -> bool:

@@ -242,6 +242,28 @@ class Issue35RegressionTest(unittest.TestCase):
                 self.assertNotIn("Влажность вручную", states.values())
                 self.assertTrue(states["humidity_trigger"].startswith(("Boost", "Ф")))
 
+    def test_config_flow_translations_cover_reconfigure_form(self):
+        translation_paths = [STRINGS_PATH, *TRANSLATIONS_PATH.glob("*.json")]
+        expected_fields = {
+            "ip_address",
+            "port",
+            "password",
+            "name",
+            "update_interval",
+            "auto_clock_sync",
+            "silent_mode",
+        }
+
+        for path in translation_paths:
+            with self.subTest(path=path.name):
+                steps = json.loads(path.read_text())["config"]["step"]
+
+                for step in ("user", "reconfigure"):
+                    labels = steps[step]["data"]
+                    self.assertTrue(expected_fields <= labels.keys())
+                    for key in expected_fields:
+                        self.assertNotEqual(labels[key], key)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -11,12 +11,24 @@
         "step": {
             "user": {
                 "data": {
-                    "ip_address": "ip_address",
+                    "ip_address": "IP address",
                     "name": "Name",
                     "password": "Password",
                     "port": "Port",
-                    "auto_clock_sync": "Automatically sync device clock",
-                    "silent_mode": "Silent mode"
+                    "update_interval": "Update interval",
+                    "auto_clock_sync": "Sync device clock automatically",
+                    "silent_mode": "Use silent manual-speed mode"
+                }
+            },
+            "reconfigure": {
+                "data": {
+                    "ip_address": "IP address",
+                    "name": "Name",
+                    "password": "Password",
+                    "port": "Port",
+                    "update_interval": "Update interval",
+                    "auto_clock_sync": "Sync device clock automatically",
+                    "silent_mode": "Use silent manual-speed mode"
                 }
             }
         }

@@ -15,8 +15,20 @@
                     "password": "Hasło",
                     "port": "Port",
                     "name": "Nazwa",
+                    "update_interval": "Interwał aktualizacji",
                     "auto_clock_sync": "Automatycznie synchronizuj zegar urządzenia",
-                    "silent_mode": "Tryb cichy"
+                    "silent_mode": "Cichy tryb ręcznej prędkości"
+                }
+            },
+            "reconfigure": {
+                "data": {
+                    "ip_address": "Host",
+                    "password": "Hasło",
+                    "port": "Port",
+                    "name": "Nazwa",
+                    "update_interval": "Interwał aktualizacji",
+                    "auto_clock_sync": "Automatycznie synchronizuj zegar urządzenia",
+                    "silent_mode": "Cichy tryb ręcznej prędkości"
                 }
             }
         }

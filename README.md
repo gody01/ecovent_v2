@@ -347,6 +347,8 @@ Version 1.2.9
   an off state.
 * Relabel entities and preset translations into sort-friendly `Boost`, `Speed`,
   `Mode`, `Trigger`, `Airflow`, and `Weekly schedule` groups.
+* Add human-readable labels for the setup and reconfigure form fields, including
+  update interval, automatic clock sync, and silent manual-speed mode.
 * Replace separate RTC date/time diagnostic entity specs with one
   `RTC timestamp` sensor and remove stale legacy RTC date/time registry entries
   during setup migration.

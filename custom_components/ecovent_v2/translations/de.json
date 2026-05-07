@@ -15,8 +15,20 @@
                     "password": "Passwort",
                     "port": "Port",
                     "name": "Name",
+                    "update_interval": "Aktualisierungsintervall",
                     "auto_clock_sync": "Geräteuhr automatisch synchronisieren",
-                    "silent_mode": "Leiser Modus"
+                    "silent_mode": "Leiser manueller Geschwindigkeitsmodus"
+                }
+            },
+            "reconfigure": {
+                "data": {
+                    "ip_address": "IP-Adresse",
+                    "password": "Passwort",
+                    "port": "Port",
+                    "name": "Name",
+                    "update_interval": "Aktualisierungsintervall",
+                    "auto_clock_sync": "Geräteuhr automatisch synchronisieren",
+                    "silent_mode": "Leiser manueller Geschwindigkeitsmodus"
                 }
             }
         }

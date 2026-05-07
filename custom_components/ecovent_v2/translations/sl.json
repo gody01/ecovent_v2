@@ -15,8 +15,20 @@
                     "password": "Geslo",
                     "port": "Vrata",
                     "name": "Naziv",
+                    "update_interval": "Interval posodabljanja",
                     "auto_clock_sync": "Samodejno sinhroniziraj uro naprave",
-                    "silent_mode": "Tihi način"
+                    "silent_mode": "Tihi način ročne hitrosti"
+                }
+            },
+            "reconfigure": {
+                "data": {
+                    "ip_address": "IP",
+                    "password": "Geslo",
+                    "port": "Vrata",
+                    "name": "Naziv",
+                    "update_interval": "Interval posodabljanja",
+                    "auto_clock_sync": "Samodejno sinhroniziraj uro naprave",
+                    "silent_mode": "Tihi način ročne hitrosti"
                 }
             }
         }

@@ -75,7 +75,7 @@ sound_emitter_states = {0: "off", 1: "on", 2: "toggle"}
 
 boost_statuses = {0: "off", 1: "on", 2: "delay"}
 
-airflows = {0: "ventilation", 1: "heat_recovery", 2: "air_supply", 3: "something"}
+airflows = {0: "ventilation", 1: "heat_recovery", 2: "air_supply"}
 
 alarms = {0: "no", 1: "alarm", 2: "warning"}
 

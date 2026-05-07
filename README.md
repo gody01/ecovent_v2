@@ -77,6 +77,16 @@ External relabels and OEM names tracked as evidence or candidates:
   - high
   - manual
 * In manual mode speed percentage
+* Silent mode
+  - optional configuration checkbox for VENTO/TwinFresh-style devices
+  - keeps the device in manual speed mode and maps Home Assistant preset changes
+    to manual speed percentages to avoid unnecessary confirmation beeps
+  - preserves device-side humidity, relay, and analog-voltage auto-boost trigger
+    settings while manual preset control is used, since those triggers may be
+    intentionally configured
+    above the configured thresholds
+  - airflow/direction changes still use the device airflow command, but the
+    integration batches the current manual speed state into the same write
 * Oscillating
   - When on, Fans are in 'heat_recovery' airflow
 * Direction
@@ -85,6 +95,13 @@ External relabels and OEM names tracked as evidence or candidates:
 * Weekly schedule support on devices exposing `0x0072` / `0x0077`
   - one visible schedule entity for the weekly schedule
   - open the schedule entity's more-info dialog to edit the weekly schedule
+* Device clock synchronization
+  - automatic sync is enabled by default and can be disabled in reconfigure
+  - periodic sync checks every five minutes and writes only when the device
+    clock differs from Home Assistant local time by more than a minute
+  - device writes that would already beep also batch the RTC rows when the
+    cached clock has drifted, avoiding a separate clock-only beep
+  - the `sync_device_clock` fan service can be used for manual or automated sync
 
 # Changelog
 version 0.0.5:
@@ -310,3 +327,30 @@ Version 1.2.8
   setpoints on VENTO/TwinFresh, Breezy/Freshpoint, and Freshbox/Micra profiles.
 * Encode speed setpoint writes with the active protocol profile's percent scale,
   while keeping live fan percentage control Home Assistant-native.
+
+Version 1.2.9
+* Stop polling the full weekly schedule setup while the schedule switch is off;
+  normal updates now read only the lightweight schedule enabled state.
+* Refresh edited schedule days from the device before diffing and saving.
+* Add optional silent manual-speed mode for VENTO/TwinFresh-style devices:
+  Home Assistant presets are mapped to manual speed writes, while humidity,
+  relay, and analog-voltage boost triggers are preserved.
+* Encode batched multi-parameter writes through the same protocol path as single
+  parameter writes, so silent/manual speed and RTC batches send the intended
+  rows.
+* Make device clock synchronization configurable and quieter: HA local time is
+  used, periodic correction only writes for drift over a minute, RTC rows are
+  batched into already-noisy writes when possible, and the manual
+  `sync_device_clock` service remains available.
+* Turn the unit on before applying Home Assistant airflow direction or heat
+  recovery changes, so Freshpoint/Breezy ventilation mode starts reliably from
+  an off state.
+* Relabel entities and preset translations into sort-friendly `Boost`, `Speed`,
+  `Mode`, `Trigger`, `Airflow`, and `Weekly schedule` groups.
+* Add human-readable labels for the setup and reconfigure form fields, including
+  update interval, automatic clock sync, and silent manual-speed mode.
+* Replace separate RTC date/time diagnostic entity specs with one
+  `RTC timestamp` sensor and remove stale legacy RTC date/time registry entries
+  during setup migration.
+* Stop exposing the old `Airflow: something` placeholder for protocol airflow
+  enum value `3`; unknown airflow values now use `Unknown airflow <value>`.

@@ -85,56 +85,56 @@ SELECT_SPECS = (
     ),
     SelectSpec(
         "_humidity_sensor_state",
-        "Humidity sensor mode",
+        "Boost mode on humidity",
         "humidity_sensor_state",
         "mdi:water-percent-alert",
         ("arc_environment",),
     ),
     SelectSpec(
         "_air_quality_sensor_state",
-        "Air quality sensor mode",
+        "Trigger mode on air quality",
         "air_quality_sensor_state",
         "mdi:air-filter",
         ("arc_environment",),
     ),
     SelectSpec(
         "_humidity_airflow",
-        "Humidity airflow",
+        "Boost airflow on humidity",
         "humidity_airflow",
         "mdi:water-percent",
         ("arc_environment",),
     ),
     SelectSpec(
         "_motion_light_airflow",
-        "Motion/light airflow",
+        "Airflow on motion/light",
         "motion_light_airflow",
         "mdi:motion-sensor",
         ("arc_environment",),
     ),
     SelectSpec(
         "_air_quality_airflow",
-        "Air quality airflow",
+        "Airflow on air quality",
         "air_quality_airflow",
         "mdi:air-filter",
         ("arc_environment",),
     ),
     SelectSpec(
         "_interval_ventilation_airflow",
-        "Interval ventilation airflow",
+        "Airflow for interval ventilation",
         "interval_ventilation_airflow",
         "mdi:fan-auto",
         ("arc_environment",),
     ),
     SelectSpec(
         "_all_day_airflow",
-        "All day airflow",
+        "Airflow for all day",
         "all_day_airflow",
         "mdi:hours-24",
         ("arc_environment",),
     ),
     SelectSpec(
         "_temperature_airflow",
-        "Temperature airflow",
+        "Airflow on temperature",
         "temperature_airflow",
         "mdi:thermometer",
         ("arc_environment",),
@@ -200,5 +200,7 @@ class VentoSelect(CoordinatorEntity, SelectEntity):
         if option not in self.options:
             raise ValueError(f"Invalid {self._method} option: {option}")
 
-        await self.hass.async_add_executor_job(self._fan.set_param, self._method, option)
+        await self.hass.async_add_executor_job(
+            self._fan.set_param, self._method, option
+        )
         await self.coordinator.async_refresh()

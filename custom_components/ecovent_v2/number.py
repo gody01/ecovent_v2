@@ -45,7 +45,7 @@ class NumberSpec:
 
 NUMBER_SPECS = (
     NumberSpec(
-        "Manual speed",
+        "Speed manual",
         "man_speed",
         "mdi:fan",
         True,
@@ -56,7 +56,7 @@ NUMBER_SPECS = (
         write_mode="manual_speed_percent",
     ),
     NumberSpec(
-        "Low supply speed",
+        "Speed 1 supply low",
         "supply_speed_low",
         "mdi:fan-speed-1",
         False,
@@ -68,7 +68,7 @@ NUMBER_SPECS = (
         write_mode="speed_percent",
     ),
     NumberSpec(
-        "Low exhaust speed",
+        "Speed 1 exhaust low",
         "exhaust_speed_low",
         "mdi:fan-speed-1",
         False,
@@ -80,7 +80,7 @@ NUMBER_SPECS = (
         write_mode="speed_percent",
     ),
     NumberSpec(
-        "Medium supply speed",
+        "Speed 2 supply medium",
         "supply_speed_medium",
         "mdi:fan-speed-2",
         False,
@@ -92,7 +92,7 @@ NUMBER_SPECS = (
         write_mode="speed_percent",
     ),
     NumberSpec(
-        "Medium exhaust speed",
+        "Speed 2 exhaust medium",
         "exhaust_speed_medium",
         "mdi:fan-speed-2",
         False,
@@ -104,7 +104,7 @@ NUMBER_SPECS = (
         write_mode="speed_percent",
     ),
     NumberSpec(
-        "High supply speed",
+        "Speed 3 supply high",
         "supply_speed_high",
         "mdi:fan-speed-3",
         False,
@@ -116,7 +116,7 @@ NUMBER_SPECS = (
         write_mode="speed_percent",
     ),
     NumberSpec(
-        "High exhaust speed",
+        "Speed 3 exhaust high",
         "exhaust_speed_high",
         "mdi:fan-speed-3",
         False,
@@ -128,7 +128,7 @@ NUMBER_SPECS = (
         write_mode="speed_percent",
     ),
     NumberSpec(
-        "Speed 1 supply speed",
+        "Speed 1 supply",
         "supply_speed_low",
         "mdi:fan-speed-1",
         False,
@@ -140,7 +140,7 @@ NUMBER_SPECS = (
         write_mode="speed_percent",
     ),
     NumberSpec(
-        "Speed 1 exhaust speed",
+        "Speed 1 exhaust",
         "exhaust_speed_low",
         "mdi:fan-speed-1",
         False,
@@ -152,7 +152,7 @@ NUMBER_SPECS = (
         write_mode="speed_percent",
     ),
     NumberSpec(
-        "Speed 2 supply speed",
+        "Speed 2 supply",
         "supply_speed_medium",
         "mdi:fan-speed-2",
         False,
@@ -164,7 +164,7 @@ NUMBER_SPECS = (
         write_mode="speed_percent",
     ),
     NumberSpec(
-        "Speed 2 exhaust speed",
+        "Speed 2 exhaust",
         "exhaust_speed_medium",
         "mdi:fan-speed-2",
         False,
@@ -176,7 +176,7 @@ NUMBER_SPECS = (
         write_mode="speed_percent",
     ),
     NumberSpec(
-        "Speed 3 supply speed",
+        "Speed 3 supply",
         "supply_speed_high",
         "mdi:fan-speed-3",
         False,
@@ -188,7 +188,7 @@ NUMBER_SPECS = (
         write_mode="speed_percent",
     ),
     NumberSpec(
-        "Speed 3 exhaust speed",
+        "Speed 3 exhaust",
         "exhaust_speed_high",
         "mdi:fan-speed-3",
         False,
@@ -200,7 +200,7 @@ NUMBER_SPECS = (
         write_mode="speed_percent",
     ),
     NumberSpec(
-        "Speed 4 supply speed",
+        "Speed 4 supply",
         "supply_speed_4",
         "mdi:fan-plus",
         False,
@@ -212,7 +212,7 @@ NUMBER_SPECS = (
         write_mode="speed_percent",
     ),
     NumberSpec(
-        "Speed 4 exhaust speed",
+        "Speed 4 exhaust",
         "exhaust_speed_4",
         "mdi:fan-plus",
         False,
@@ -224,7 +224,7 @@ NUMBER_SPECS = (
         write_mode="speed_percent",
     ),
     NumberSpec(
-        "Speed 5 supply speed",
+        "Speed 5 supply",
         "supply_speed_5",
         "mdi:fan-plus",
         False,
@@ -236,7 +236,7 @@ NUMBER_SPECS = (
         write_mode="speed_percent",
     ),
     NumberSpec(
-        "Speed 5 exhaust speed",
+        "Speed 5 exhaust",
         "exhaust_speed_5",
         "mdi:fan-plus",
         False,
@@ -248,7 +248,7 @@ NUMBER_SPECS = (
         write_mode="speed_percent",
     ),
     NumberSpec(
-        "Humidity threshold",
+        "Boost humidity threshold",
         "humidity_treshold",
         "mdi:water-percent",
         False,
@@ -258,7 +258,7 @@ NUMBER_SPECS = (
         unit_of_measurement=PERCENTAGE,
     ),
     NumberSpec(
-        "Temperature threshold",
+        "Boost temperature threshold",
         "temperature_treshold",
         "mdi:thermometer",
         False,
@@ -269,7 +269,7 @@ NUMBER_SPECS = (
         required_capabilities=("temperature",),
     ),
     NumberSpec(
-        "Temperature threshold",
+        "Boost temperature threshold",
         "temperature_treshold",
         "mdi:thermometer",
         False,
@@ -280,7 +280,7 @@ NUMBER_SPECS = (
         required_capabilities=("arc_environment",),
     ),
     NumberSpec(
-        "Max speed setpoint",
+        "Speed setpoint max",
         "max_speed_setpoint",
         "mdi:fan-speed-3",
         False,
@@ -291,7 +291,7 @@ NUMBER_SPECS = (
         required_capabilities=("speed_setpoints",),
     ),
     NumberSpec(
-        "Silent speed setpoint",
+        "Speed setpoint silent",
         "silent_speed_setpoint",
         "mdi:fan-speed-1",
         False,
@@ -302,7 +302,7 @@ NUMBER_SPECS = (
         required_capabilities=("speed_setpoints",),
     ),
     NumberSpec(
-        "Interval ventilation speed setpoint",
+        "Speed setpoint interval ventilation",
         "interval_ventilation_speed_setpoint",
         "mdi:fan-auto",
         False,
@@ -313,7 +313,7 @@ NUMBER_SPECS = (
         required_capabilities=("speed_setpoints",),
     ),
     NumberSpec(
-        "Analog voltage threshold",
+        "Boost analog voltage threshold",
         "analogV_treshold",
         "mdi:flash-triangle-outline",
         False,
@@ -347,7 +347,7 @@ NUMBER_SPECS = (
         value_bytes=2,
     ),
     NumberSpec(
-        "CO2 threshold",
+        "Threshold on CO2",
         "co2_treshold",
         "mdi:molecule-co2",
         False,
@@ -359,7 +359,7 @@ NUMBER_SPECS = (
         value_bytes=2,
     ),
     NumberSpec(
-        "VOC threshold",
+        "Threshold on VOC",
         "voc_treshold",
         "mdi:air-filter",
         False,
@@ -371,7 +371,7 @@ NUMBER_SPECS = (
         value_bytes=2,
     ),
     NumberSpec(
-        "Air quality threshold",
+        "Threshold on air quality",
         "air_quality_treshold",
         "mdi:air-filter",
         False,

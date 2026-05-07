@@ -43,7 +43,7 @@ class BinarySensorSpec:
 BINARY_SENSOR_SPECS = (
     BinarySensorSpec(
         "_relay_status",
-        "Relay status",
+        "Boost relay sensor active",
         "relay_status",
         False,
         "mdi:electric-switch",
@@ -68,14 +68,14 @@ BINARY_SENSOR_SPECS = (
     ),
     BinarySensorSpec(
         "_cloud_server_state",
-        "Cloud server",
+        "Cloud server permission",
         "cloud_server_state",
         False,
         "mdi:cloud-check-outline",
     ),
     BinarySensorSpec(
         "_humidity_status",
-        "Humidity status",
+        "Boost humidity active",
         "humidity_status",
         False,
         "mdi:water-alert-outline",
@@ -91,7 +91,7 @@ BINARY_SENSOR_SPECS = (
     ),
     BinarySensorSpec(
         "_light_status",
-        "Light status",
+        "Trigger active on light",
         "light_status",
         False,
         "mdi:brightness-5",
@@ -99,7 +99,7 @@ BINARY_SENSOR_SPECS = (
     ),
     BinarySensorSpec(
         "_motion_status",
-        "Motion status",
+        "Trigger active on motion",
         "motion_status",
         False,
         "mdi:motion-sensor",
@@ -107,7 +107,7 @@ BINARY_SENSOR_SPECS = (
     ),
     BinarySensorSpec(
         "_temperature_status",
-        "Temperature status",
+        "Trigger active on temperature",
         "temperature_status",
         False,
         "mdi:thermometer-alert",
@@ -115,7 +115,7 @@ BINARY_SENSOR_SPECS = (
     ),
     BinarySensorSpec(
         "_interval_ventilation_status",
-        "Interval ventilation status",
+        "Mode interval ventilation active",
         "interval_ventilation_status",
         False,
         "mdi:fan-auto",
@@ -123,7 +123,7 @@ BINARY_SENSOR_SPECS = (
     ),
     BinarySensorSpec(
         "_silent_mode_status",
-        "Silent mode status",
+        "Mode silent active",
         "silent_mode_status",
         False,
         "mdi:volume-off",
@@ -131,7 +131,7 @@ BINARY_SENSOR_SPECS = (
     ),
     BinarySensorSpec(
         "_analogV_status",
-        "Analog voltage status",
+        "Boost analog voltage active",
         "analogV_status",
         False,
         "mdi:flash-alert-outline",

@@ -319,13 +319,6 @@ Version 1.2.7
 Version 1.2.8
 * Restore the visible weekly schedule switch and keep the schedule frontend file
   digest out of the Home Assistant event loop.
-* Stop polling the full weekly schedule setup while the schedule switch is off;
-  normal updates now read only the lightweight schedule enabled state.
-* Refresh edited schedule days from the device before saving, and make device
-  clock synchronization explicit: automatic sync is configurable, uses HA local
-  time, batches RTC rows into already-noisy writes when possible, runs periodic
-  correction only for clock drift over a minute, and the manual
-  `sync_device_clock` service remains available.
 * Restore `alarm_status` as a Home Assistant `Device problem` binary sensor
   while keeping the enum alarm sensor for `no` / `warning` / `alarm` detail.
 * Expose manual speed as a visible configuration number so it can be adjusted
@@ -334,6 +327,28 @@ Version 1.2.8
   setpoints on VENTO/TwinFresh, Breezy/Freshpoint, and Freshbox/Micra profiles.
 * Encode speed setpoint writes with the active protocol profile's percent scale,
   while keeping live fan percentage control Home Assistant-native.
+
+Version 1.2.9
+* Stop polling the full weekly schedule setup while the schedule switch is off;
+  normal updates now read only the lightweight schedule enabled state.
+* Refresh edited schedule days from the device before diffing and saving.
+* Add optional silent manual-speed mode for VENTO/TwinFresh-style devices:
+  Home Assistant presets are mapped to manual speed writes, while humidity,
+  relay, and analog-voltage boost triggers are preserved.
+* Encode batched multi-parameter writes through the same protocol path as single
+  parameter writes, so silent/manual speed and RTC batches send the intended
+  rows.
+* Make device clock synchronization configurable and quieter: HA local time is
+  used, periodic correction only writes for drift over a minute, RTC rows are
+  batched into already-noisy writes when possible, and the manual
+  `sync_device_clock` service remains available.
 * Turn the unit on before applying Home Assistant airflow direction or heat
   recovery changes, so Freshpoint/Breezy ventilation mode starts reliably from
   an off state.
+* Relabel entities and preset translations into sort-friendly `Boost`, `Speed`,
+  `Mode`, `Trigger`, `Airflow`, and `Weekly schedule` groups.
+* Replace separate RTC date/time diagnostic entity specs with one
+  `RTC timestamp` sensor and remove stale legacy RTC date/time registry entries
+  during setup migration.
+* Stop exposing the old `Airflow: something` placeholder for protocol airflow
+  enum value `3`; unknown airflow values now use `Unknown airflow <value>`.

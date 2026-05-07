@@ -16,6 +16,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import EcoVentCoordinator
 from .ecoventv2 import Fan
+from .entity_naming import StableObjectIdMixin, clean_object_id_suffix
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -161,7 +162,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class VentoSelect(CoordinatorEntity, SelectEntity):
+class VentoSelect(StableObjectIdMixin, CoordinatorEntity, SelectEntity):
     """Writable EcoVent enum select entity."""
 
     _attr_has_entity_name = True
@@ -180,6 +181,7 @@ class VentoSelect(CoordinatorEntity, SelectEntity):
         self._method = spec.method
         self._attr_name = spec.name
         self._attr_unique_id = self._fan.id + spec.key
+        self._ecovent_object_id_suffix = clean_object_id_suffix(spec.method)
         self._attr_icon = spec.icon
         self._attr_entity_category = spec.entity_category
         self._attr_entity_registry_enabled_default = spec.enable_by_default

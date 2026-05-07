@@ -20,6 +20,7 @@ from homeassistant.util import slugify
 
 from .const import CONF_AUTO_CLOCK_SYNC, DOMAIN, UPDATE_INTERVAL
 from .coordinator import EcoVentCoordinator
+from .entity_naming import stable_entity_id
 from .frontend import async_register_frontend
 
 _LOGGER = logging.getLogger(__name__)
@@ -42,6 +43,83 @@ _STATISTICS_UNIT_MIGRATIONS = {
     "filter_change_in": "h",
     "machine_hours": "h",
 }
+
+
+def _entity_id_has_legacy_device_id(entity_id: str, fan_id: str | None) -> bool:
+    """Return whether an entity id still carries the old device-id suffix.
+
+    Legacy EcoVent entity ids were generated from device names like
+    ``Ventilator 5``. Only rewrite those one-shot legacy ids; if a user has
+    already renamed an entity id manually, do not keep forcing our preferred id
+    on every integration reload.
+    """
+    if fan_id is None:
+        return False
+
+    legacy_slug = slugify(fan_id)
+    if not legacy_slug:
+        return False
+
+    object_id = entity_id.split(".", 1)[-1]
+    object_tokens = object_id.split("_")
+    legacy_tokens = legacy_slug.split("_")
+    token_count = len(legacy_tokens)
+    return any(
+        object_tokens[index : index + token_count] == legacy_tokens
+        for index in range(0, len(object_tokens) - token_count + 1)
+    )
+
+
+def _entity_id_matches_generated_suffix(
+    entity_id: str,
+    fan_name: str,
+    fan_id: str | None,
+    suffixes: tuple[str, ...],
+) -> bool:
+    """Return whether an entity id matches a known integration-generated name.
+
+    EcoVent ids went through several naming schemes before the stable suffixes:
+    raw keys, friendly-label slugs, typo-preserving parameter names, and old
+    ``*_set`` number names. Migrate those known generated variants, but still
+    leave unrelated user-customized ids alone.
+    """
+    object_id = entity_id.split(".", 1)[-1]
+    device_slug = slugify(fan_name)
+    legacy_device_match = _entity_id_has_legacy_device_id(entity_id, fan_id)
+
+    for suffix in {slugify(suffix) for suffix in suffixes}:
+        if object_id == suffix:
+            return True
+
+        if not object_id.endswith(f"_{suffix}"):
+            continue
+
+        prefix = object_id[: -(len(suffix) + 1)]
+        if prefix == device_slug or legacy_device_match:
+            return True
+
+    return False
+
+
+def _known_generated_unique_ids(
+    fan_name: str,
+    fan_id: str | None,
+    suffixes: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Return known unique ids emitted by older EcoVent naming schemes."""
+    prefixes = (fan_name,)
+    if fan_id:
+        prefixes = (fan_name, f"{fan_name} {fan_id}", fan_id)
+
+    unique_ids: list[str] = []
+    for suffix in suffixes:
+        suffix_variants = (suffix, f"_{suffix}")
+        for suffix_variant in suffix_variants:
+            unique_ids.append(suffix_variant)
+            for prefix in prefixes:
+                unique_ids.append(f"{prefix}{suffix_variant}")
+
+    return tuple(dict.fromkeys(unique_ids))
 
 
 def _async_migrate_entity_registry(
@@ -86,49 +164,172 @@ def _async_migrate_entity_registry(
             _LOGGER.info("Removed stale EcoVent V2 beeper entity %s", beeper_entity_id)
 
     entity_id_migrations = {
-        (Platform.SENSOR, fan.id + "_speed1"): f"sensor.{device_slug}_fan_1_speed",
-        (Platform.SENSOR, fan.id + "_speed2"): f"sensor.{device_slug}_fan_2_speed",
+        (Platform.SENSOR, fan.id + "_speed1"): (
+            stable_entity_id(Platform.SENSOR, fan.name, "fan1_speed"),
+            ("fan1_speed", "fan_1_speed", "speed1", "fan_speed"),
+        ),
+        (Platform.SENSOR, fan.id + "_speed2"): (
+            stable_entity_id(Platform.SENSOR, fan.name, "fan2_speed"),
+            ("fan2_speed", "fan_2_speed", "speed2"),
+        ),
         (
             Platform.SENSOR,
             fan.id + "_filter_change_in",
-        ): f"sensor.{device_slug}_filter_change_in",
+        ): (
+            stable_entity_id(Platform.SENSOR, fan.name, "filter_change_in"),
+            ("filter_change_in", "filter_remaining", "filter_timer_countdown"),
+        ),
+        (
+            Platform.SENSOR,
+            fan.id + "_analogv",
+        ): (
+            stable_entity_id(Platform.SENSOR, fan.name, "analogv"),
+            ("analogv", "analogV", "analog_v", "analog_voltage"),
+        ),
+        (
+            Platform.BINARY_SENSOR,
+            fan.id + "_analogV_status",
+        ): (
+            stable_entity_id(Platform.BINARY_SENSOR, fan.name, "analogV_status"),
+            (
+                "analogV_status",
+                "analogv_status",
+                "analog_v_status",
+                "analog_voltage_status",
+            ),
+        ),
         (
             Platform.SWITCH,
             fan.id + "_humidity_sensor_state",
-        ): f"switch.{device_slug}_humidity_sensor",
+        ): (
+            stable_entity_id(Platform.SWITCH, fan.name, "humidity_sensor_state"),
+            ("humidity_sensor_state", "humidity_sensor"),
+        ),
         (
             Platform.SWITCH,
             fan.id + "_relay_sensor_state",
-        ): f"switch.{device_slug}_relay_sensor",
+        ): (
+            stable_entity_id(Platform.SWITCH, fan.name, "relay_sensor_state"),
+            ("relay_sensor_state", "relay_sensor"),
+        ),
         (
             Platform.SWITCH,
             fan.id + "_analogV_sensor_state",
-        ): f"switch.{device_slug}_analog_voltage_sensor",
+        ): (
+            stable_entity_id(Platform.SWITCH, fan.name, "analogV_sensor_state"),
+            (
+                "analogV_sensor_state",
+                "analogv_sensor_state",
+                "analog_voltage_sensor_state",
+                "analogV_sensor",
+                "analogv_sensor",
+                "analog_voltage_sensor",
+            ),
+        ),
         (
             Platform.NUMBER,
             fan.id + "humidity_treshold",
-        ): f"number.{device_slug}_humidity_threshold",
+        ): (
+            stable_entity_id(Platform.NUMBER, fan.name, "humidity_treshold"),
+            (
+                "humidity_treshold",
+                "humidity_threshold",
+                "humidity_threshold_set",
+            ),
+        ),
         (
             Platform.NUMBER,
             fan.id + "analogV_treshold",
-        ): f"number.{device_slug}_analog_voltage_threshold",
+        ): (
+            stable_entity_id(Platform.NUMBER, fan.name, "analogV_treshold"),
+            (
+                "analogV_treshold",
+                "analogv_treshold",
+                "analogV_treshold_set",
+                "analogv_treshold_set",
+                "analog_v_treshold",
+                "analog_v_treshold_set",
+                "analog_voltage_treshold",
+                "analogV_threshold",
+                "analogv_threshold",
+                "analogV_threshold_set",
+                "analogv_threshold_set",
+                "analog_v_threshold",
+                "analog_v_threshold_set",
+                "analog_voltage_threshold",
+            ),
+        ),
     }
-    for (domain, unique_id), new_entity_id in entity_id_migrations.items():
-        entity_id = registry.async_get_entity_id(domain, DOMAIN, unique_id)
-        if entity_id is None or entity_id == new_entity_id:
-            continue
+    for (domain, target_unique_id), (
+        new_entity_id,
+        generated_suffixes,
+    ) in entity_id_migrations.items():
+        unique_ids = (
+            target_unique_id,
+            *_known_generated_unique_ids(fan.name, fan.id, generated_suffixes),
+        )
+        seen_entity_ids: set[str] = set()
 
-        existing = registry.async_get(new_entity_id)
-        if existing is not None and existing.unique_id != unique_id:
-            _LOGGER.debug(
-                "Skipping EcoVent V2 entity id migration for %s: %s already exists",
+        for unique_id in unique_ids:
+            entity_id = registry.async_get_entity_id(domain, DOMAIN, unique_id)
+            if entity_id is None or entity_id in seen_entity_ids:
+                continue
+            seen_entity_ids.add(entity_id)
+
+            has_generated_entity_id = _entity_id_matches_generated_suffix(
                 entity_id,
-                new_entity_id,
+                fan.name,
+                fan.id,
+                generated_suffixes,
             )
-            continue
+            has_legacy_unique_id = unique_id != target_unique_id
+            if not has_generated_entity_id and not has_legacy_unique_id:
+                _LOGGER.debug(
+                    "Skipping EcoVent V2 entity id migration for %s: user-customized "
+                    "entity ids are preserved",
+                    entity_id,
+                )
+                continue
 
-        registry.async_update_entity(entity_id, new_entity_id=new_entity_id)
-        _LOGGER.info("Migrated EcoVent V2 entity id %s to %s", entity_id, new_entity_id)
+            update_kwargs: dict[str, str] = {}
+            if has_generated_entity_id and entity_id != new_entity_id:
+                existing = registry.async_get(new_entity_id)
+                if existing is not None and existing.entity_id != entity_id:
+                    _LOGGER.debug(
+                        "Skipping EcoVent V2 entity id migration for %s: %s already "
+                        "exists",
+                        entity_id,
+                        new_entity_id,
+                    )
+                else:
+                    update_kwargs["new_entity_id"] = new_entity_id
+
+            if has_legacy_unique_id:
+                conflict_entity_id = registry.async_get_entity_id(
+                    domain,
+                    DOMAIN,
+                    target_unique_id,
+                )
+                if conflict_entity_id is not None and conflict_entity_id != entity_id:
+                    _LOGGER.debug(
+                        "Skipping EcoVent V2 unique id migration for %s: %s is "
+                        "already used by %s",
+                        entity_id,
+                        target_unique_id,
+                        conflict_entity_id,
+                    )
+                else:
+                    update_kwargs["new_unique_id"] = target_unique_id
+
+            if not update_kwargs:
+                continue
+
+            registry.async_update_entity(entity_id, **update_kwargs)
+            _LOGGER.info(
+                "Migrated EcoVent V2 registry entry %s with %s",
+                entity_id,
+                update_kwargs,
+            )
 
     if fan.supports_parameter("weekly_schedule_setup"):
         schedule_switch_entity_id = registry.async_get_entity_id(

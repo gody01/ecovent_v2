@@ -59,6 +59,10 @@ class Issue49RegressionTest(unittest.TestCase):
         self.assertIn("CLOCK_SYNC_INTERVAL", source)
         self.assertIn("_device_clock_datetime", source)
         self.assertIn("_local_wall_clock", source)
+        self.assertIn("_host_clock_synchronized", source)
+        self.assertIn("dt_synchronized", source)
+        self.assertIn("get_host_info", source)
+        self.assertIn("is_hassio", source)
         self.assertIn("extra_write_parameters_callback", source)
         self.assertTrue(
             any(
@@ -119,6 +123,10 @@ class Issue49RegressionTest(unittest.TestCase):
         )
         self.assertLess(
             maybe_sync_source.index("_recently_synced_clock"),
+            maybe_sync_source.index("_host_clock_synchronized"),
+        )
+        self.assertLess(
+            maybe_sync_source.index("_host_clock_synchronized"),
             maybe_sync_source.index("_refresh_device_clock_state"),
         )
         self.assertLess(

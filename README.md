@@ -99,6 +99,8 @@ External relabels and OEM names tracked as evidence or candidates:
   - automatic sync is enabled by default and can be disabled in reconfigure
   - periodic sync checks every five minutes and writes only when the device
     clock differs from Home Assistant local time by more than a minute
+  - on Home Assistant OS/Supervised installs, automatic clock writes require
+    Supervisor to report the host clock as NTP synchronized
   - Home Assistant startup discovery stays read-only and defers standalone
     clock correction, so restarting HA does not make every fan beep
   - standalone periodic correction rereads the device RTC immediately before
@@ -380,3 +382,9 @@ Version 1.2.12
   work or refreshing the device, so repeated automations do not trigger extra
   EcoVent commands when the fan is already off, already at the requested
   preset, or already at the requested percentage.
+
+Version 1.2.13
+* On Home Assistant OS/Supervised installs, automatic device clock writes now
+  require Supervisor to report the host clock as NTP synchronized. Core and
+  container installs keep the previous behavior because no Supervisor clock
+  quality signal is available there.

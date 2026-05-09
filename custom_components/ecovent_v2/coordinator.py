@@ -26,6 +26,16 @@ from homeassistant.helpers.update_coordinator import (
 )
 from homeassistant.util import dt as dt_util
 
+try:
+    from homeassistant.components.hassio.coordinator import get_host_info
+    from homeassistant.helpers.hassio import is_hassio
+except ImportError:
+    get_host_info = None
+
+    def is_hassio(hass):
+        """Return false when HA has no Supervisor helper available."""
+        return False
+
 from .const import CONF_AUTO_CLOCK_SYNC, CONF_SILENT_MODE, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -158,6 +168,13 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         if self._recently_synced_clock(now):
             return
 
+        if not self._host_clock_synchronized():
+            _LOGGER.debug(
+                "EcoVentCoordinator: skipping standalone clock sync because "
+                "Home Assistant host time is not NTP synchronized"
+            )
+            return
+
         clock_read = await self.hass.async_add_executor_job(
             self._refresh_device_clock_state
         )
@@ -190,9 +207,26 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         date_read = self._fan.get_param("rtc_date")
         return time_read and date_read
 
+    def _host_clock_synchronized(self) -> bool:
+        """Return whether HA has a trustworthy host clock signal."""
+        if not is_hassio(self.hass):
+            return True
+
+        if get_host_info is None:
+            return False
+
+        host_info = get_host_info(self.hass)
+        if host_info is None:
+            return False
+
+        return host_info.get("dt_synchronized") is True
+
     def _clock_sync_params_if_needed(self) -> dict[str, str]:
         """Return RTC rows to batch into an already noisy device write."""
         if not self._auto_clock_sync or not self._supports_device_clock_sync():
+            return {}
+
+        if not self._host_clock_synchronized():
             return {}
 
         now = self._device_clock_now()

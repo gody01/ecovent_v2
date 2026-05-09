@@ -125,6 +125,23 @@ class Issue49RegressionTest(unittest.TestCase):
             )
         )
 
+    def test_startup_discovery_defers_standalone_clock_sync(self):
+        tree = _tree(COORDINATOR_PATH)
+        update_data = _class_method(tree, "EcoVentCoordinator", "_async_update_data")
+        defer_startup = _class_method(
+            tree, "EcoVentCoordinator", "_defer_startup_clock_sync"
+        )
+        source = COORDINATOR_PATH.read_text()
+        update_source = ast.get_source_segment(source, update_data)
+        defer_source = ast.get_source_segment(source, defer_startup)
+
+        self.assertLess(
+            update_source.index("_async_post_init_setup"),
+            update_source.index("_defer_startup_clock_sync"),
+        )
+        self.assertIn("_last_clock_sync_check", defer_source)
+        self.assertNotIn("set_rtc_datetime", defer_source)
+
     def test_manual_clock_sync_service_is_registered(self):
         tree = _tree(FAN_PATH)
         setup = _module_function(tree, "async_setup_entry")

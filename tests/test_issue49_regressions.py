@@ -86,6 +86,9 @@ class Issue49RegressionTest(unittest.TestCase):
         maybe_sync = _class_method(
             tree, "EcoVentCoordinator", "_async_maybe_sync_clock"
         )
+        refresh_clock = _class_method(
+            tree, "EcoVentCoordinator", "_refresh_device_clock_state"
+        )
         sync_params = _class_method(
             tree, "EcoVentCoordinator", "_clock_sync_params_if_needed"
         )
@@ -116,8 +119,21 @@ class Issue49RegressionTest(unittest.TestCase):
         )
         self.assertLess(
             maybe_sync_source.index("_recently_synced_clock"),
+            maybe_sync_source.index("_refresh_device_clock_state"),
+        )
+        self.assertLess(
+            maybe_sync_source.index("_refresh_device_clock_state"),
+            maybe_sync_source.index("_clock_sync_needed"),
+        )
+        self.assertLess(
+            maybe_sync_source.index("_device_clock_datetime"),
             maybe_sync_source.index("set_rtc_datetime"),
         )
+        refresh_source = ast.get_source_segment(
+            COORDINATOR_PATH.read_text(), refresh_clock
+        )
+        self.assertIn('"rtc_time"', refresh_source)
+        self.assertIn('"rtc_date"', refresh_source)
         self.assertTrue(
             any(
                 isinstance(node, ast.Attribute) and node.attr == "rtc_datetime_params"

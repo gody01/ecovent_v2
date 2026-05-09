@@ -158,11 +158,37 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         if self._recently_synced_clock(now):
             return
 
+        clock_read = await self.hass.async_add_executor_job(
+            self._refresh_device_clock_state
+        )
+        if not clock_read:
+            _LOGGER.debug(
+                "EcoVentCoordinator: skipping standalone clock sync because "
+                "fresh RTC read failed for %s",
+                self._fan.name,
+            )
+            return
+
+        now = self._device_clock_now()
+        if self._device_clock_datetime() is None:
+            _LOGGER.debug(
+                "EcoVentCoordinator: skipping standalone clock sync because "
+                "fresh RTC state is unavailable for %s",
+                self._fan.name,
+            )
+            return
+
         if not self._clock_sync_needed(now):
             return
 
         await self.hass.async_add_executor_job(self._fan.set_rtc_datetime, now)
         self._record_clock_sync(now)
+
+    def _refresh_device_clock_state(self) -> bool:
+        """Read RTC rows before a standalone clock correction write."""
+        time_read = self._fan.get_param("rtc_time")
+        date_read = self._fan.get_param("rtc_date")
+        return time_read and date_read
 
     def _clock_sync_params_if_needed(self) -> dict[str, str]:
         """Return RTC rows to batch into an already noisy device write."""

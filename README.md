@@ -101,6 +101,8 @@ External relabels and OEM names tracked as evidence or candidates:
     clock differs from Home Assistant local time by more than a minute
   - Home Assistant startup discovery stays read-only and defers standalone
     clock correction, so restarting HA does not make every fan beep
+  - standalone periodic correction rereads the device RTC immediately before
+    writing, and skips the write if the fresh RTC state is unavailable
   - device writes that would already beep also batch the RTC rows when the
     cached clock has drifted, avoiding a separate clock-only beep
   - the `sync_device_clock` fan service can be used for manual or automated sync
@@ -342,8 +344,9 @@ Version 1.2.9
   rows.
 * Make device clock synchronization configurable and quieter: HA local time is
   used, periodic correction only writes for drift over a minute, RTC rows are
-  batched into already-noisy writes when possible, startup discovery defers
-  standalone clock correction, and the manual
+  reread before standalone correction, RTC rows are batched into already-noisy
+  writes when possible, startup discovery defers standalone clock correction,
+  and the manual
   `sync_device_clock` service remains available.
 * Turn the unit on before applying Home Assistant airflow direction or heat
   recovery changes, so Freshpoint/Breezy ventilation mode starts reliably from

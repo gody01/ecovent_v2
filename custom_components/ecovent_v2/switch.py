@@ -16,6 +16,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import EcoVentCoordinator
+from .entity_naming import StableObjectIdMixin, clean_object_id_suffix
 import logging
 
 _LOGGER = logging.getLogger(__name__)
@@ -248,7 +249,7 @@ async def async_setup_entry(
     )
 
 
-class VentoSwitch(CoordinatorEntity, SwitchEntity):
+class VentoSwitch(StableObjectIdMixin, CoordinatorEntity, SwitchEntity):
     """Class for Vento Fan Switches."""
 
     _attr_has_entity_name = True
@@ -276,6 +277,7 @@ class VentoSwitch(CoordinatorEntity, SwitchEntity):
         self._attr_entity_category = entity_category
         self._attr_name = name
         self._attr_unique_id = self._fan.id + key
+        self._ecovent_object_id_suffix = clean_object_id_suffix(method)
         self._attr_entity_registry_enabled_default = enable_by_default
         self._method = getattr(self, method)
         #  self._attribute2 = getattr(self._fan, method)  crazy cannot be done here, only works for binary sensor.

@@ -18,6 +18,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import EcoVentCoordinator
+from .entity_naming import StableObjectIdMixin, clean_object_id_suffix
 from .number_helpers import encode_raw_number, encode_speed_percent
 
 _LOGGER = logging.getLogger(__name__)
@@ -432,7 +433,7 @@ async def async_setup_entry(
     )
 
 
-class VentoNumber(CoordinatorEntity, NumberEntity):
+class VentoNumber(StableObjectIdMixin, CoordinatorEntity, NumberEntity):
     """Representation of a Vento Number entity."""
 
     _attr_has_entity_name = True
@@ -473,6 +474,7 @@ class VentoNumber(CoordinatorEntity, NumberEntity):
         self._attr_native_unit_of_measurement = unit_of_measurement
         self._attr_name = name
         self._attr_unique_id = self._fan.id + method
+        self._ecovent_object_id_suffix = clean_object_id_suffix(method)
         self._attr_native_value = getattr(self._fan, method)
         self._func = method
         self._value_bytes = value_bytes

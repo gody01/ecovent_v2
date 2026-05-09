@@ -13,10 +13,11 @@ FAN_PATH = COMPONENT_PATH / "fan.py"
 CONFIG_FLOW_PATH = COMPONENT_PATH / "config_flow.py"
 FRONTEND_PATH = COMPONENT_PATH / "frontend.py"
 INIT_PATH = COMPONENT_PATH / "__init__.py"
+NUMBER_PATH = COMPONENT_PATH / "number.py"
+SENSOR_PATH = COMPONENT_PATH / "sensor.py"
 SWITCH_PATH = COMPONENT_PATH / "switch.py"
 SELECT_PATH = COMPONENT_PATH / "select.py"
 BINARY_SENSOR_PATH = COMPONENT_PATH / "binary_sensor.py"
-NUMBER_PATH = COMPONENT_PATH / "number.py"
 SENSOR_SPECS_PATH = COMPONENT_PATH / "sensor_specs.py"
 STRINGS_PATH = COMPONENT_PATH / "strings.json"
 TRANSLATIONS_PATH = COMPONENT_PATH / "translations"
@@ -126,7 +127,53 @@ class Issue35RegressionTest(unittest.TestCase):
         init_source = INIT_PATH.read_text()
 
         self.assertIn('fan.id + "_speed1"', init_source)
-        self.assertIn('f"sensor.{device_slug}_fan_1_speed"', init_source)
+        self.assertIn("stable_entity_id(", init_source)
+        self.assertIn('"fan1_speed"', init_source)
+
+    def test_entity_id_migration_preserves_user_custom_ids(self):
+        init_source = INIT_PATH.read_text()
+
+        self.assertIn("_entity_id_matches_generated_suffix(", init_source)
+        self.assertIn("user-customized", init_source)
+        self.assertIn('object_tokens = object_id.split("_")', init_source)
+        self.assertIn("prefix == device_slug or legacy_device_match", init_source)
+        self.assertIn("_known_generated_unique_ids(", init_source)
+        self.assertIn('"new_unique_id"', init_source)
+        self.assertIn("has_legacy_unique_id", init_source)
+
+    def test_entity_id_migration_and_new_entities_share_suffixes(self):
+        init_source = INIT_PATH.read_text()
+
+        self.assertIn('"analogV_treshold"', init_source)
+        self.assertIn('"analogV_sensor_state"', init_source)
+        self.assertGreaterEqual(init_source.count("stable_entity_id("), 8)
+        self.assertIn('"analogv_treshold"', init_source)
+        self.assertIn('"analogv"', init_source)
+        self.assertIn('"analogV_status"', init_source)
+        self.assertIn('"analogV_treshold_set"', init_source)
+        self.assertIn('"analog_v_threshold"', init_source)
+        self.assertIn('"analog_voltage_status"', init_source)
+        self.assertIn('"analog_voltage_threshold"', init_source)
+        self.assertIn('"analogv_sensor_state"', init_source)
+        self.assertIn('"analog_voltage_sensor"', init_source)
+        self.assertIn('"humidity_threshold_set"', init_source)
+        self.assertIn('"fan_1_speed"', init_source)
+        self.assertIn('f"{fan_name} {fan_id}"', init_source)
+
+        for path in (
+            NUMBER_PATH,
+            SWITCH_PATH,
+            SENSOR_PATH,
+            SELECT_PATH,
+            BINARY_SENSOR_PATH,
+        ):
+            source = path.read_text()
+
+            self.assertIn("StableObjectIdMixin", source, path.name)
+            self.assertIn("clean_object_id_suffix", source, path.name)
+
+        naming_source = (COMPONENT_PATH / "entity_naming.py").read_text()
+        self.assertIn('f"{slugify(device_name)}_', naming_source)
 
     def test_alarm_status_keeps_problem_binary_sensor(self):
         binary_sensor_source = BINARY_SENSOR_PATH.read_text()

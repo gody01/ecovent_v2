@@ -354,3 +354,12 @@ Version 1.2.9
   during setup migration.
 * Stop exposing the old `Airflow: something` placeholder for protocol airflow
   enum value `3`; unknown airflow values now use `Unknown airflow <value>`.
+
+Version 1.2.10
+* Preserve user-customized entity ids during legacy entity id migration, while
+  still repairing known intermediate integration-generated names so regenerated
+  names survive integration reloads and Home Assistant restarts, including
+  analog voltage sensor/status variants.
+* Use the same stable object-id suffixes for newly created entities and legacy
+  migrations, keeping readable UI labels without changing entity ids just
+  because labels gained clearer prefixes.

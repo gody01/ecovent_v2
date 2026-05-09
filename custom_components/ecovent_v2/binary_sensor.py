@@ -21,6 +21,7 @@ from homeassistant.helpers.update_coordinator import (
 
 from .const import DOMAIN
 from .coordinator import EcoVentCoordinator
+from .entity_naming import StableObjectIdMixin, clean_object_id_suffix
 import logging
 
 _LOGGER = logging.getLogger(__name__)
@@ -168,7 +169,9 @@ async def async_setup_entry(
     )
 
 
-class VentoBinarySensor(CoordinatorEntity, BinarySensorEntity):  # CoordinatorEntity
+class VentoBinarySensor(
+    StableObjectIdMixin, CoordinatorEntity, BinarySensorEntity
+):  # CoordinatorEntity
     """Vento Binary Sensor class."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
@@ -192,6 +195,7 @@ class VentoBinarySensor(CoordinatorEntity, BinarySensorEntity):  # CoordinatorEn
         super().__init__(coordinator)
         self._fan: Fan = coordinator._fan
         self._attr_unique_id = self._fan.id + key
+        self._ecovent_object_id_suffix = clean_object_id_suffix(method)
         self._attr_name = name
         self._state = None
         self._attr_device_class = device_class

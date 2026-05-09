@@ -22,6 +22,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import EcoVentCoordinator
+from .entity_naming import StableObjectIdMixin, clean_object_id_suffix
 from .schedule_helpers import SCHEDULE_DAY_OPTIONS, SCHEDULE_SPEED_OPTIONS
 from .sensor_helpers import enum_options_with_value
 from .sensor_specs import SENSOR_SPECS
@@ -129,7 +130,7 @@ async def async_setup_entry(
 
 
 # VentoSensor class
-class VentoSensor(CoordinatorEntity, SensorEntity):
+class VentoSensor(StableObjectIdMixin, CoordinatorEntity, SensorEntity):
     """Class for Vento Fan Sensors."""
 
     _attr_has_entity_name = True
@@ -163,6 +164,7 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         self._attr_entity_category = entity_category
         self._attr_name = name
         self._attr_unique_id = self._fan.id + key
+        self._ecovent_object_id_suffix = clean_object_id_suffix(method)
         self._attr_entity_registry_enabled_default = enable_by_default
         self._method = getattr(self, method)
         self._attr_icon = icon
@@ -400,7 +402,7 @@ class VentoSensor(CoordinatorEntity, SensorEntity):
         return self._fan.current_wifi_ip
 
 
-class WeeklyScheduleSummarySensor(CoordinatorEntity, SensorEntity):
+class WeeklyScheduleSummarySensor(StableObjectIdMixin, CoordinatorEntity, SensorEntity):
     """Single visible entity exposing the full weekly schedule summary."""
 
     _attr_has_entity_name = True
@@ -413,6 +415,7 @@ class WeeklyScheduleSummarySensor(CoordinatorEntity, SensorEntity):
         self._fan: Fan = coordinator._fan
         self._attr_name = "Weekly schedule summary"
         self._attr_unique_id = self._fan.id + "_schedule"
+        self._ecovent_object_id_suffix = clean_object_id_suffix("weekly_schedule")
         self._attr_icon = "mdi:calendar-clock"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._fan.id)},

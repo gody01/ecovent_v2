@@ -109,6 +109,20 @@ class Issue35RegressionTest(unittest.TestCase):
             )
         )
 
+    def test_executor_jobs_do_not_use_keyword_arguments(self):
+        tree = _tree(FAN_PATH)
+
+        executor_calls_with_keywords = [
+            call.lineno
+            for call in ast.walk(tree)
+            if isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Attribute)
+            and call.func.attr == "async_add_executor_job"
+            and call.keywords
+        ]
+
+        self.assertEqual(executor_calls_with_keywords, [])
+
     def test_weekly_schedule_switch_stays_visible(self):
         switch_source = SWITCH_PATH.read_text()
         init_source = INIT_PATH.read_text()

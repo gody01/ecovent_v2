@@ -369,3 +369,8 @@ Version 1.2.10
 * Use the same stable object-id suffixes for newly created entities and legacy
   migrations, keeping readable UI labels without changing entity ids just
   because labels gained clearer prefixes.
+
+Version 1.2.11
+* Fix Home Assistant fan `turn_on` calls without an explicit speed or preset in
+  silent manual-speed mode, so `preset_mode` is not passed as an unsupported
+  executor keyword argument.

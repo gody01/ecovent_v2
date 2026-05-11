@@ -279,6 +279,10 @@ class Issue35RegressionTest(unittest.TestCase):
         self.assertIn("silent_preset_mode", fan_source)
         self.assertIn("_set_silent_manual_percentage", fan_source)
         self.assertIn("_set_parameters_if_changed", fan_source)
+        self.assertIn("entering_manual_mode = self._fan.speed != \"manual\"", fan_source)
+        self.assertIn("include_extra_write_parameters=entering_manual_mode", fan_source)
+        self.assertIn("audible_write_command_count", fan_source)
+        self.assertIn("steady-state silent manual speed update", fan_source)
         self.assertIn("This protocol ignores an off -> on transition", fan_source)
 
         silent_targets = _class_method(tree, "VentoExpertFan", "_silent_manual_targets")
@@ -291,6 +295,8 @@ class Issue35RegressionTest(unittest.TestCase):
         self.assertNotIn("humidity_sensor_state", silent_target_constants)
         self.assertNotIn("relay_sensor_state", silent_target_constants)
         self.assertNotIn("analogV_sensor_state", silent_target_constants)
+        self.assertIn("speed", silent_target_constants)
+        self.assertIn("man_speed", silent_target_constants)
         self.assertTrue(
             any(
                 isinstance(call, ast.Call)

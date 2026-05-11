@@ -388,9 +388,18 @@ Version 1.2.13
   require Supervisor to report the host clock as NTP synchronized. Core and
   container installs keep the previous behavior because no Supervisor clock
   quality signal is available there.
-
-Version 1.2.14
 * In silent manual-speed mode, treat an already-on fan with the requested manual
   speed as an unchanged preset even after Home Assistant restarts and loses the
   in-memory preset facade. The facade is restored in HA state without sending a
   duplicate device write.
+* Keep steady-state silent manual-speed changes to the only observed quiet
+  write: the manual speed register. Entering silent mode may still switch the
+  fan into manual mode once, and opportunistic RTC rows may be batched there
+  because that packet already writes an audible mode register.
+* Add an internal audible-write counter so tests can assert that silent-mode
+  paths do not leak device-acknowledged writes.
+* Guard the Home Assistant fan facade with behavior tests: silent preset and
+  percentage changes may only send the manual speed register while already in
+  manual mode. Explicit direction or heat-recovery/airflow commands still need
+  the device airflow register and are allowed as audible writes, without
+  opportunistic RTC rows while the fan is already in manual mode.

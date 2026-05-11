@@ -123,6 +123,69 @@ class Issue35RegressionTest(unittest.TestCase):
 
         self.assertEqual(executor_calls_with_keywords, [])
 
+    def test_unchanged_fan_services_return_before_executor_job(self):
+        tree = _tree(FAN_PATH)
+        source = FAN_PATH.read_text()
+
+        methods = [
+            ("async_turn_off", "self._fan.state == \"off\"", "async_add_executor_job"),
+            (
+                "async_set_preset_mode",
+                "self._is_preset_mode_unchanged(preset_mode)",
+                "async_add_executor_job",
+            ),
+            (
+                "async_set_percentage",
+                "percentage <= 0 and self._fan.state == \"off\"",
+                "async_add_executor_job",
+            ),
+        ]
+
+        for method_name, guard, executor in methods:
+            with self.subTest(method=method_name):
+                method = _class_method(tree, "VentoExpertFan", method_name)
+                method_source = ast.get_source_segment(source, method)
+
+                self.assertIn(guard, method_source)
+                self.assertLess(
+                    method_source.index(guard),
+                    method_source.index(executor),
+                )
+
+        set_preset = ast.get_source_segment(
+            source, _class_method(tree, "VentoExpertFan", "async_set_preset_mode")
+        )
+        set_percentage = ast.get_source_segment(
+            source, _class_method(tree, "VentoExpertFan", "async_set_percentage")
+        )
+
+        self.assertLess(
+            set_preset.index("set_silent_preset_mode(None)"),
+            set_preset.index("return"),
+        )
+        preset_guard = ast.get_source_segment(
+            source, _class_method(tree, "VentoExpertFan", "_is_preset_mode_unchanged")
+        )
+        self.assertIn("target_percentage = self._silent_preset_percentage(preset_mode)", preset_guard)
+        self.assertIn("self._fan.man_speed == max(2, target_percentage)", preset_guard)
+        self.assertIn("percentage > 0", set_percentage)
+        self.assertLess(
+            set_percentage.index("percentage <= 0 and self._fan.state == \"off\""),
+            set_percentage.index("return"),
+        )
+        self.assertLess(
+            set_percentage.index("percentage <= 0 and self._fan.state == \"off\""),
+            set_percentage.index('set_silent_preset_mode("manual")'),
+        )
+        self.assertLess(
+            set_percentage.index('set_silent_preset_mode("manual")'),
+            set_percentage.index("async_write_ha_state()"),
+        )
+        self.assertLess(
+            set_percentage.index("async_write_ha_state()"),
+            set_percentage.rindex("return"),
+        )
+
     def test_weekly_schedule_switch_stays_visible(self):
         switch_source = SWITCH_PATH.read_text()
         init_source = INIT_PATH.read_text()

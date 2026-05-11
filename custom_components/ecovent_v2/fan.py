@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import Any
 
 from homeassistant.components.fan import FanEntity, FanEntityFeature
@@ -343,11 +344,13 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         if preset_mode is None and percentage is None:
             if self._silent_mode_controls_manual_speed:
                 await self.hass.async_add_executor_job(
-                    self._set_silent_manual_percentage,
-                    self._silent_preset_percentage(
-                        self.coordinator.silent_preset_mode or "manual"
+                    partial(
+                        self._set_silent_manual_percentage,
+                        self._silent_preset_percentage(
+                            self.coordinator.silent_preset_mode or "manual"
+                        ),
+                        preset_mode=self.coordinator.silent_preset_mode or "manual",
                     ),
-                    preset_mode=self.coordinator.silent_preset_mode or "manual",
                 )
                 await self.coordinator.async_refresh()
                 return

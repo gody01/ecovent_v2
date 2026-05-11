@@ -374,3 +374,9 @@ Version 1.2.11
 * Fix Home Assistant fan `turn_on` calls without an explicit speed or preset in
   silent manual-speed mode, so `preset_mode` is not passed as an unsupported
   executor keyword argument.
+
+Version 1.2.12
+* Skip unchanged Home Assistant fan service calls before scheduling executor
+  work or refreshing the device, so repeated automations do not trigger extra
+  EcoVent commands when the fan is already off, already at the requested
+  preset, or already at the requested percentage.

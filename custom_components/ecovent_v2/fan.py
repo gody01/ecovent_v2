@@ -279,7 +279,6 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
                 self._fan.state == "on"
                 and self._fan.speed == "manual"
                 and self._fan.man_speed == max(2, target_percentage)
-                and self.coordinator.silent_preset_mode == preset_mode
             )
 
         return preset_mode == self.preset_mode
@@ -427,6 +426,9 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         if self._is_preset_mode_unchanged(preset_mode):
             if preset_mode == "off":
                 self.coordinator.set_silent_preset_mode(None)
+            elif self._silent_mode_controls_manual_speed:
+                self.coordinator.set_silent_preset_mode(preset_mode)
+                self.async_write_ha_state()
             _LOGGER.debug(
                 "Skipping unchanged preset command for %s: %s",
                 self._fan.name,

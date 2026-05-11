@@ -388,3 +388,9 @@ Version 1.2.13
   require Supervisor to report the host clock as NTP synchronized. Core and
   container installs keep the previous behavior because no Supervisor clock
   quality signal is available there.
+
+Version 1.2.14
+* In silent manual-speed mode, treat an already-on fan with the requested manual
+  speed as an unchanged preset even after Home Assistant restarts and loses the
+  in-memory preset facade. The facade is restored in HA state without sending a
+  duplicate device write.

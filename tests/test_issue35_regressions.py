@@ -168,6 +168,12 @@ class Issue35RegressionTest(unittest.TestCase):
         )
         self.assertIn("target_percentage = self._silent_preset_percentage(preset_mode)", preset_guard)
         self.assertIn("self._fan.man_speed == max(2, target_percentage)", preset_guard)
+        self.assertNotIn("self.coordinator.silent_preset_mode == preset_mode", preset_guard)
+        self.assertIn("set_silent_preset_mode(preset_mode)", set_preset)
+        self.assertLess(
+            set_preset.index("set_silent_preset_mode(preset_mode)"),
+            set_preset.index("return"),
+        )
         self.assertIn("percentage > 0", set_percentage)
         self.assertLess(
             set_percentage.index("percentage <= 0 and self._fan.state == \"off\""),

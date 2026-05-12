@@ -99,6 +99,8 @@ External relabels and OEM names tracked as evidence or candidates:
   - automatic sync is enabled by default and can be disabled in reconfigure
   - periodic sync checks every five minutes and writes only when the device
     clock differs from Home Assistant local time by more than a minute
+  - on Home Assistant OS/Supervised installs, automatic clock writes require
+    Supervisor to report the host clock as NTP synchronized
   - Home Assistant startup discovery stays read-only and defers standalone
     clock correction, so restarting HA does not make every fan beep
   - standalone periodic correction rereads the device RTC immediately before
@@ -380,3 +382,24 @@ Version 1.2.12
   work or refreshing the device, so repeated automations do not trigger extra
   EcoVent commands when the fan is already off, already at the requested
   preset, or already at the requested percentage.
+
+Version 1.2.13
+* On Home Assistant OS/Supervised installs, automatic device clock writes now
+  require Supervisor to report the host clock as NTP synchronized. Core and
+  container installs keep the previous behavior because no Supervisor clock
+  quality signal is available there.
+* In silent manual-speed mode, treat an already-on fan with the requested manual
+  speed as an unchanged preset even after Home Assistant restarts and loses the
+  in-memory preset facade. The facade is restored in HA state without sending a
+  duplicate device write.
+* Keep steady-state silent manual-speed changes to the only observed quiet
+  write: the manual speed register. Entering silent mode may still switch the
+  fan into manual mode once, and opportunistic RTC rows may be batched there
+  because that packet already writes an audible mode register.
+* Add an internal audible-write counter so tests can assert that silent-mode
+  paths do not leak device-acknowledged writes.
+* Guard the Home Assistant fan facade with behavior tests: silent preset and
+  percentage changes may only send the manual speed register while already in
+  manual mode. Explicit direction or heat-recovery/airflow commands still need
+  the device airflow register and are allowed as audible writes, without
+  opportunistic RTC rows while the fan is already in manual mode.

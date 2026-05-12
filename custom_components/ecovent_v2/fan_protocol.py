@@ -223,6 +223,9 @@ class FanProtocolMixin:
         if include_extra_write_parameters:
             encoded_params += self._extra_write_parameters(command, encoded_params)
 
+        if self._write_may_be_audible(command, encoded_params):
+            self.audible_write_command_count += 1
+
         data = command + encoded_params
         response = False
         i = 0
@@ -237,6 +240,22 @@ class FanProtocolMixin:
             if i >= retries:
                 # print ("EcoventV2: Timeout device: " + self._host + " bail out after " + str(i) + " retries" , file = sys.stderr )
                 return False
+
+    def _write_may_be_audible(self, command, encoded_params):
+        """Return whether a write is expected to make the device acknowledge.
+
+        Read commands do not beep, and the only known quiet write is a single
+        manual-speed register update (0x0044). Everything else is counted so
+        silent-mode tests can assert that no audible command leaked in.
+        """
+        if command != self.func["write_return"] or not encoded_params:
+            return False
+
+        return not self._is_manual_speed_only_write(encoded_params)
+
+    def _is_manual_speed_only_write(self, encoded_params):
+        """Return whether encoded params contain exactly one 0x0044 write."""
+        return len(encoded_params) == 4 and encoded_params[:2].lower() == "44"
 
     def update(self):
         request = ""

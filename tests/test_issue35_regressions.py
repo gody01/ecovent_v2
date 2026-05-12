@@ -168,6 +168,12 @@ class Issue35RegressionTest(unittest.TestCase):
         )
         self.assertIn("target_percentage = self._silent_preset_percentage(preset_mode)", preset_guard)
         self.assertIn("self._fan.man_speed == max(2, target_percentage)", preset_guard)
+        self.assertNotIn("self.coordinator.silent_preset_mode == preset_mode", preset_guard)
+        self.assertIn("set_silent_preset_mode(preset_mode)", set_preset)
+        self.assertLess(
+            set_preset.index("set_silent_preset_mode(preset_mode)"),
+            set_preset.index("return"),
+        )
         self.assertIn("percentage > 0", set_percentage)
         self.assertLess(
             set_percentage.index("percentage <= 0 and self._fan.state == \"off\""),
@@ -273,6 +279,10 @@ class Issue35RegressionTest(unittest.TestCase):
         self.assertIn("silent_preset_mode", fan_source)
         self.assertIn("_set_silent_manual_percentage", fan_source)
         self.assertIn("_set_parameters_if_changed", fan_source)
+        self.assertIn("entering_manual_mode = self._fan.speed != \"manual\"", fan_source)
+        self.assertIn("include_extra_write_parameters=entering_manual_mode", fan_source)
+        self.assertIn("audible_write_command_count", fan_source)
+        self.assertIn("steady-state silent manual speed update", fan_source)
         self.assertIn("This protocol ignores an off -> on transition", fan_source)
 
         silent_targets = _class_method(tree, "VentoExpertFan", "_silent_manual_targets")
@@ -285,6 +295,8 @@ class Issue35RegressionTest(unittest.TestCase):
         self.assertNotIn("humidity_sensor_state", silent_target_constants)
         self.assertNotIn("relay_sensor_state", silent_target_constants)
         self.assertNotIn("analogV_sensor_state", silent_target_constants)
+        self.assertIn("speed", silent_target_constants)
+        self.assertIn("man_speed", silent_target_constants)
         self.assertTrue(
             any(
                 isinstance(call, ast.Call)

@@ -172,7 +172,12 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         self._fan.set_param(name, target)
         return True
 
-    def _set_parameters_if_changed(self, targets: dict[str, Any]) -> bool:
+    def _set_parameters_if_changed(
+        self,
+        targets: dict[str, Any],
+        *,
+        include_extra_write_parameters: bool = True,
+    ) -> bool:
         """Write changed device parameters in one packet."""
         changed = {}
         for name, target in targets.items():
@@ -190,7 +195,10 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         if not changed:
             return False
 
-        self._fan.set_parameters(changed)
+        self._fan.set_parameters(
+            changed,
+            include_extra_write_parameters=include_extra_write_parameters,
+        )
         return True
 
     def _set_manual_percentage_if_changed(self, percentage: int) -> bool:
@@ -261,7 +269,23 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         if extra_targets:
             targets.update(extra_targets)
 
-        changed = self._set_parameters_if_changed(targets) or changed
+        entering_manual_mode = self._fan.speed != "manual"
+        if targets and not entering_manual_mode and not extra_targets:
+            audible_targets = set(targets) - {"man_speed"}
+            assert not audible_targets, (
+                "steady-state silent manual speed update would emit audible "
+                f"writes: {sorted(audible_targets)}"
+            )
+
+        audible_writes_before = self._fan.audible_write_command_count
+        changed = self._set_parameters_if_changed(
+            targets,
+            include_extra_write_parameters=entering_manual_mode,
+        ) or changed
+        if targets and not entering_manual_mode and not extra_targets:
+            assert (
+                self._fan.audible_write_command_count == audible_writes_before
+            ), "steady-state silent manual speed update emitted an audible write"
         self.coordinator.set_silent_preset_mode(preset_mode)
         return changed
 
@@ -279,7 +303,6 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
                 self._fan.state == "on"
                 and self._fan.speed == "manual"
                 and self._fan.man_speed == max(2, target_percentage)
-                and self.coordinator.silent_preset_mode == preset_mode
             )
 
         return preset_mode == self.preset_mode
@@ -427,6 +450,9 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         if self._is_preset_mode_unchanged(preset_mode):
             if preset_mode == "off":
                 self.coordinator.set_silent_preset_mode(None)
+            elif self._silent_mode_controls_manual_speed:
+                self.coordinator.set_silent_preset_mode(preset_mode)
+                self.async_write_ha_state()
             _LOGGER.debug(
                 "Skipping unchanged preset command for %s: %s",
                 self._fan.name,

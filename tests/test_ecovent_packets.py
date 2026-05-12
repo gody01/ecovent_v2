@@ -160,6 +160,54 @@ class PacketBuilderTest(unittest.TestCase):
             ],
         )
 
+    def test_manual_speed_only_write_is_counted_as_quiet(self):
+        fan = Fan("192.0.2.1")
+        calls = []
+
+        def send(data):
+            calls.append(data)
+            return True
+
+        fan.send = send
+        fan.receive = lambda: packet_with_payload([])
+
+        fan.set_man_speed_percent(73)
+
+        self.assertEqual(len(calls), 1)
+        self.assertIn("0344bb", calls[0])
+        self.assertEqual(fan.audible_write_command_count, 0)
+
+    def test_read_commands_do_not_increment_audible_write_count(self):
+        fan = Fan("192.0.2.1")
+        fan.send = lambda data: True
+        fan.receive = lambda: packet_with_payload([])
+
+        self.assertTrue(fan.get_param("state"))
+
+        self.assertEqual(fan.audible_write_command_count, 0)
+
+    def test_mode_write_increments_audible_write_count(self):
+        fan = Fan("192.0.2.1")
+        fan.send = lambda data: True
+        fan.receive = lambda: packet_with_payload([])
+
+        self.assertTrue(fan.set_param("state", "on"))
+
+        self.assertEqual(fan.audible_write_command_count, 1)
+
+    def test_clock_rows_make_manual_speed_batch_audible(self):
+        fan = Fan("192.0.2.1")
+        fan.extra_write_parameters_callback = lambda: {
+            "rtc_time": "1e2d13",
+            "rtc_date": "1704041a",
+        }
+        fan.send = lambda data: True
+        fan.receive = lambda: packet_with_payload([])
+
+        self.assertTrue(fan.set_parameters({"man_speed": "73"}))
+
+        self.assertEqual(fan.audible_write_command_count, 1)
+
     def test_opportunistic_clock_sync_is_batched_into_existing_writes(self):
         fan = Fan("192.0.2.1")
         calls = []

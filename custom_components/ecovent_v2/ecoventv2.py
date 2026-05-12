@@ -309,6 +309,7 @@ class Fan(
         self._unknown_params = {}
         self.socket = None
         self._bulk_read_supported = None
+        self.audible_write_command_count = 0
         self._profile_key = "vento"
         self._set_device_profile("vento")
 

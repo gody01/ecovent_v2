@@ -136,7 +136,7 @@ class Issue35RegressionTest(unittest.TestCase):
             ),
             (
                 "async_set_percentage",
-                "percentage <= 0 and self._fan.state == \"off\"",
+                "percentage <= 0",
                 "async_add_executor_job",
             ),
         ]
@@ -167,20 +167,27 @@ class Issue35RegressionTest(unittest.TestCase):
             source, _class_method(tree, "VentoExpertFan", "_is_preset_mode_unchanged")
         )
         self.assertIn("target_percentage = self._silent_preset_percentage(preset_mode)", preset_guard)
-        self.assertIn("self._fan.man_speed == max(2, target_percentage)", preset_guard)
+        self.assertIn(
+            "self._fan.man_speed == max(0, min(100, target_percentage))",
+            preset_guard,
+        )
         self.assertNotIn("self.coordinator.silent_preset_mode == preset_mode", preset_guard)
         self.assertIn("set_silent_preset_mode(preset_mode)", set_preset)
         self.assertLess(
             set_preset.index("set_silent_preset_mode(preset_mode)"),
             set_preset.index("return"),
         )
-        self.assertIn("percentage > 0", set_percentage)
+        self.assertIn("not self._fan.uses_operating_mode_presets", set_percentage)
+        self.assertIn(
+            "percentage > 0 or self._silent_mode_controls_manual_speed",
+            set_percentage,
+        )
         self.assertLess(
-            set_percentage.index("percentage <= 0 and self._fan.state == \"off\""),
+            set_percentage.index("percentage <= 0"),
             set_percentage.index("return"),
         )
         self.assertLess(
-            set_percentage.index("percentage <= 0 and self._fan.state == \"off\""),
+            set_percentage.index("percentage <= 0"),
             set_percentage.index('set_silent_preset_mode("manual")'),
         )
         self.assertLess(

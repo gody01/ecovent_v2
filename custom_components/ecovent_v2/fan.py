@@ -29,6 +29,16 @@ import logging
 _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_ON_PERCENTAGE = 5
+DEFAULT_PRESET_PERCENTAGES = {
+    "low": 33,
+    "medium": 66,
+    "high": 100,
+    "speed_1": 20,
+    "speed_2": 40,
+    "speed_3": 60,
+    "speed_4": 80,
+    "speed_5": 100,
+}
 SPEED_RANGE = (1, 3)  # off is not included
 
 DIRECTIONS = ["forward", "reverse"]
@@ -218,7 +228,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
     def _manual_speed_value(self, percentage: int) -> str:
         """Encode a manual speed percentage for a raw protocol batch write."""
         return encode_speed_percent(
-            max(2, percentage),
+            percentage,
             self._fan.device_profile.speed_percent_scale,
         )
 
@@ -234,18 +244,30 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             targets["state"] = "on"
         if self._fan.speed != "manual":
             targets["speed"] = "manual"
-        if percentage is not None and self._fan.man_speed != max(2, percentage):
-            targets["man_speed"] = self._manual_speed_value(percentage)
+        if percentage is not None:
+            target_percentage = max(0, min(100, percentage))
+            if self._fan.man_speed != target_percentage:
+                targets["man_speed"] = self._manual_speed_value(target_percentage)
         return targets
 
     def _silent_preset_percentage(self, preset_mode: str) -> int:
         """Map an HA-facing preset to the manual percentage sent to the fan."""
         if preset_mode == "manual":
-            return self._fan.man_speed or DEFAULT_ON_PERCENTAGE
+            if self._fan.man_speed is not None:
+                return self._fan.man_speed
+            return DEFAULT_ON_PERCENTAGE
 
-        preset_percentage = self._fan.preset_speed_percent(preset_mode)
+        preset_percentage = self._fan.preset_speed_percent(
+            preset_mode,
+            fallback_to_manual=False,
+        )
         if preset_percentage is None:
-            return self._fan.man_speed or DEFAULT_ON_PERCENTAGE
+            fallback_percentage = DEFAULT_PRESET_PERCENTAGES.get(preset_mode)
+            if fallback_percentage is not None:
+                return fallback_percentage
+            if self._fan.man_speed is not None:
+                return self._fan.man_speed
+            return DEFAULT_ON_PERCENTAGE
         return preset_percentage
 
     def _set_silent_manual_percentage(
@@ -302,7 +324,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             return (
                 self._fan.state == "on"
                 and self._fan.speed == "manual"
-                and self._fan.man_speed == max(2, target_percentage)
+                and self._fan.man_speed == max(0, min(100, target_percentage))
             )
 
         return preset_mode == self.preset_mode
@@ -310,7 +332,11 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
     def set_airflow_mode(self, airflow: str, turn_on: bool = True) -> None:
         """Set airflow mode, optionally turning the fan on first."""
         if self._silent_mode_controls_manual_speed:
-            percentage = self._fan.man_speed or DEFAULT_ON_PERCENTAGE
+            percentage = (
+                self._fan.man_speed
+                if self._fan.man_speed is not None
+                else DEFAULT_ON_PERCENTAGE
+            )
             preset_mode = self.coordinator.silent_preset_mode or "manual"
             self._set_silent_manual_percentage(
                 percentage,
@@ -466,6 +492,13 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
     def set_percentage(self, percentage: int, turn_on: bool = True) -> None:
         """Set the speed of the fan, as a percentage."""
         if percentage <= 0:
+            if self._silent_mode_controls_manual_speed:
+                self._set_silent_manual_percentage(
+                    0,
+                    turn_on=turn_on,
+                    preset_mode="manual",
+                )
+                return
             self._set_param_if_changed("state", "off")
             return
 
@@ -491,7 +524,11 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
 
     async def async_set_percentage(self, percentage: int) -> None:
         """Set the speed of the fan, as a percentage."""
-        if percentage <= 0 and self._fan.state == "off":
+        if (
+            percentage <= 0
+            and self._fan.state == "off"
+            and not self._silent_mode_controls_manual_speed
+        ):
             _LOGGER.debug(
                 "Skipping unchanged percentage command for %s: %s%%",
                 self._fan.name,
@@ -500,10 +537,10 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             return
 
         if (
-            percentage > 0
-            and not self._fan.uses_operating_mode_presets
+            not self._fan.uses_operating_mode_presets
             and self._fan.speed == "manual"
             and percentage == self.percentage
+            and (percentage > 0 or self._silent_mode_controls_manual_speed)
         ):
             if self._silent_mode_controls_manual_speed:
                 self.coordinator.set_silent_preset_mode("manual")

@@ -23,7 +23,7 @@ class FanControlsMixin:
             self.send_command(self.func["write_return"], request, value)
 
     def set_man_speed_percent(self, speed):
-        if speed >= 2 and speed <= 100:
+        if speed >= 0 and speed <= 100:
             request = "0044"
             if self.device_profile.speed_percent_scale == "percent":
                 value = speed

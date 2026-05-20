@@ -55,6 +55,7 @@ class NumberHelperTest(unittest.TestCase):
             _keyword_value(manual_specs[0], "write_mode"),
             "manual_speed_percent",
         )
+        self.assertEqual(_keyword_value(manual_specs[0], "native_min_value"), 0.0)
 
     def test_preset_speed_numbers_are_disabled_by_default(self):
         speed_specs = [

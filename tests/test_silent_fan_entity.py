@@ -146,6 +146,24 @@ class SilentFanEntityTest(unittest.TestCase):
         self.assertNotIn("02ff", calls[0])
         self.assertNotIn("fe036f", calls[0])
 
+    def test_silent_preset_uses_fallback_when_device_has_no_setpoints(self):
+        entity, fan, calls = _silent_entity(speed="manual", man_speed=63)
+        fan._supply_speed_low = None
+        fan._exhaust_speed_low = None
+        fan._supply_speed_medium = None
+        fan._exhaust_speed_medium = None
+        fan._supply_speed_high = None
+        fan._exhaust_speed_high = None
+
+        entity.set_preset_mode("medium")
+
+        self.assertEqual(fan.audible_write_command_count, 0)
+        self.assertEqual(len(calls), 1)
+        self.assertIn("0344a9", calls[0])
+        self.assertNotIn("02ff", calls[0])
+        self.assertNotIn("fe036f", calls[0])
+        self.assertEqual(entity.coordinator.silent_preset_mode, "medium")
+
     def test_entering_manual_percentage_allows_one_audible_mode_write(self):
         entity, fan, calls = _silent_entity(speed="high", man_speed=30)
 
@@ -165,6 +183,18 @@ class SilentFanEntityTest(unittest.TestCase):
         self.assertEqual(fan.audible_write_command_count, 0)
         self.assertEqual(len(calls), 1)
         self.assertIn("034480", calls[0])
+        self.assertNotIn("02ff", calls[0])
+        self.assertNotIn("fe036f", calls[0])
+        self.assertEqual(entity.coordinator.silent_preset_mode, "manual")
+
+    def test_steady_state_silent_zero_percentage_keeps_manual_mode_on(self):
+        entity, fan, calls = _silent_entity(speed="manual", man_speed=11)
+
+        entity.set_percentage(0)
+
+        self.assertEqual(fan.audible_write_command_count, 0)
+        self.assertEqual(len(calls), 1)
+        self.assertIn("034400", calls[0])
         self.assertNotIn("02ff", calls[0])
         self.assertNotIn("fe036f", calls[0])
         self.assertEqual(entity.coordinator.silent_preset_mode, "manual")

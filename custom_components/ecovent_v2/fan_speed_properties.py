@@ -94,7 +94,7 @@ class FanSpeedPropertiesMixin:
     def exhaust_speed_5(self, input):
         self._exhaust_speed_5 = self._preset_speed_percent(input)
 
-    def preset_speed_percent(self, preset):
+    def preset_speed_percent(self, preset, *, fallback_to_manual=True):
         if self.uses_operating_mode_presets:
             return self.max_speed_setpoint
 
@@ -110,7 +110,7 @@ class FanSpeedPropertiesMixin:
         }
         preset_speed = preset_speeds.get(preset)
         if preset_speed is None:
-            return self.man_speed
+            return self.man_speed if fallback_to_manual else None
 
         supply_speed, exhaust_speed = preset_speed
         if self.airflow == "air_supply" and supply_speed is not None:
@@ -123,7 +123,7 @@ class FanSpeedPropertiesMixin:
         ]
         if available_speeds:
             return int(sum(available_speeds) / len(available_speeds))
-        return self.man_speed
+        return self.man_speed if fallback_to_manual else None
 
     @property
     def man_speed(self):

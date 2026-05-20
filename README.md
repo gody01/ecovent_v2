@@ -403,3 +403,15 @@ Version 1.2.13
   manual mode. Explicit direction or heat-recovery/airflow commands still need
   the device airflow register and are allowed as audible writes, without
   opportunistic RTC rows while the fan is already in manual mode.
+
+Version 1.2.14
+* In silent manual-speed mode, map Home Assistant `percentage: 0` to an on,
+  manual, zero-speed state instead of turning the EcoVent unit off. This lets
+  quiet-home automations reduce airflow with the quiet manual-speed register
+  rather than using audible power or preset writes.
+* Allow the visible manual speed number to be set to `0%`, matching the silent
+  zero-speed control path.
+* In silent manual-speed mode, keep preset changes effective even when a device
+  does not report configurable preset speed setpoints, by falling back to
+  deterministic low/medium/high manual-speed percentages instead of reusing the
+  current manual speed.

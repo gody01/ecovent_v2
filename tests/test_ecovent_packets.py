@@ -177,6 +177,18 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertIn("0344bb", calls[0])
         self.assertEqual(fan.audible_write_command_count, 0)
 
+    def test_manual_speed_zero_write_reaches_device(self):
+        fan = Fan("192.0.2.1")
+        calls = []
+        fan.send = lambda data: calls.append(data) or True
+        fan.receive = lambda: packet_with_payload([])
+
+        fan.set_man_speed_percent(0)
+
+        self.assertEqual(len(calls), 1)
+        self.assertIn("034400", calls[0])
+        self.assertEqual(fan.audible_write_command_count, 0)
+
     def test_read_commands_do_not_increment_audible_write_count(self):
         fan = Fan("192.0.2.1")
         fan.send = lambda data: True

@@ -50,7 +50,7 @@ NUMBER_SPECS = (
         "man_speed",
         "mdi:fan",
         True,
-        native_min_value=2.0,
+        native_min_value=0.0,
         native_max_value=100.0,
         native_step=1,
         unit_of_measurement=PERCENTAGE,

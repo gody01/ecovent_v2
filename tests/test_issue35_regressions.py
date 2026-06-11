@@ -2,8 +2,13 @@
 
 from pathlib import Path
 import ast
+import asyncio
+import importlib.util
 import json
+import sys
+import types
 import unittest
+from unittest.mock import patch
 
 
 COMPONENT_PATH = (
@@ -21,6 +26,7 @@ BINARY_SENSOR_PATH = COMPONENT_PATH / "binary_sensor.py"
 SENSOR_SPECS_PATH = COMPONENT_PATH / "sensor_specs.py"
 STRINGS_PATH = COMPONENT_PATH / "strings.json"
 TRANSLATIONS_PATH = COMPONENT_PATH / "translations"
+FRONTEND_TEST_PACKAGE = "ecovent_v2_frontend_test"
 
 
 def _tree(path):
@@ -59,6 +65,83 @@ def _executor_calls(node, target_attr):
             yield call
 
 
+def _module(name, **attrs):
+    module = types.ModuleType(name)
+    for key, value in attrs.items():
+        setattr(module, key, value)
+    sys.modules[name] = module
+    return module
+
+
+def _install_frontend_stubs():
+    class StaticPathConfig:
+        def __init__(self, url_path, path, cache_headers=True):
+            self.url_path = url_path
+            self.path = path
+            self.cache_headers = cache_headers
+
+    _module("homeassistant")
+    _module("homeassistant.components")
+    _module(
+        "homeassistant.components.frontend",
+        add_extra_js_url=lambda hass, url: None,
+    )
+    _module(
+        "homeassistant.components.http",
+        StaticPathConfig=StaticPathConfig,
+    )
+    _module("homeassistant.core", HomeAssistant=object)
+
+
+def _load_frontend_module():
+    _install_frontend_stubs()
+
+    package = types.ModuleType(FRONTEND_TEST_PACKAGE)
+    package.__path__ = [str(COMPONENT_PATH)]
+    sys.modules[FRONTEND_TEST_PACKAGE] = package
+
+    module_name = f"{FRONTEND_TEST_PACKAGE}.frontend"
+    spec = importlib.util.spec_from_file_location(module_name, FRONTEND_PATH)
+    module = importlib.util.module_from_spec(spec)
+    module.__package__ = FRONTEND_TEST_PACKAGE
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+class _FakeFrontendHttp:
+    def __init__(self, failures=0):
+        self.calls = 0
+        self.active_calls = 0
+        self.max_active_calls = 0
+        self.failures = failures
+
+    async def async_register_static_paths(self, paths):
+        self.calls += 1
+        self.active_calls += 1
+        self.max_active_calls = max(self.max_active_calls, self.active_calls)
+        try:
+            await asyncio.sleep(0)
+            if self.failures:
+                self.failures -= 1
+                raise RuntimeError("static path registration failed")
+            await asyncio.sleep(0)
+        finally:
+            self.active_calls -= 1
+
+
+class _FakeFrontendHass:
+    def __init__(self, failures=0):
+        self.data = {}
+        self.http = _FakeFrontendHttp(failures=failures)
+        self.executor_calls = 0
+
+    async def async_add_executor_job(self, func, *args):
+        self.executor_calls += 1
+        await asyncio.sleep(0)
+        return func(*args)
+
+
 class Issue35RegressionTest(unittest.TestCase):
     def test_frontend_digest_file_io_runs_in_executor(self):
         tree = _tree(FRONTEND_PATH)
@@ -77,6 +160,43 @@ class Issue35RegressionTest(unittest.TestCase):
 
         self.assertEqual(read_bytes_calls, [])
         self.assertTrue(executor_calls)
+
+    def test_frontend_registration_serializes_concurrent_callers(self):
+        async def run_test():
+            frontend = _load_frontend_module()
+            hass = _FakeFrontendHass()
+            with patch.object(frontend, "add_extra_js_url") as add_extra_js_url:
+                await asyncio.gather(
+                    frontend.async_register_frontend(hass),
+                    frontend.async_register_frontend(hass),
+                )
+
+            self.assertEqual(hass.http.calls, 1)
+            self.assertEqual(hass.http.max_active_calls, 1)
+            self.assertEqual(hass.executor_calls, 1)
+            add_extra_js_url.assert_called_once()
+            self.assertTrue(hass.data[frontend._REGISTERED_KEY])
+
+        asyncio.run(run_test())
+
+    def test_frontend_registration_retries_after_failure(self):
+        async def run_test():
+            frontend = _load_frontend_module()
+            hass = _FakeFrontendHass(failures=1)
+            with patch.object(frontend, "add_extra_js_url") as add_extra_js_url:
+                with self.assertRaises(RuntimeError):
+                    await frontend.async_register_frontend(hass)
+
+                self.assertIsNot(hass.data.get(frontend._REGISTERED_KEY), True)
+
+                await frontend.async_register_frontend(hass)
+
+            self.assertEqual(hass.http.calls, 2)
+            self.assertEqual(hass.executor_calls, 1)
+            add_extra_js_url.assert_called_once()
+            self.assertTrue(hass.data[frontend._REGISTERED_KEY])
+
+        asyncio.run(run_test())
 
     def test_direct_speed_change_is_live_fan_control(self):
         tree = _tree(FAN_PATH)
@@ -369,6 +489,7 @@ class Issue35RegressionTest(unittest.TestCase):
         self.assertIn('"Trigger on motion"', switch_source)
         self.assertIn('"Airflow on motion/light"', select_source)
         self.assertIn('"Trigger mode on air quality"', select_source)
+        self.assertIn('"Timer mode"', select_source)
 
     def test_preset_translations_group_boost_modes(self):
         translation_paths = [STRINGS_PATH, *TRANSLATIONS_PATH.glob("*.json")]

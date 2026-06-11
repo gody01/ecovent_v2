@@ -195,6 +195,27 @@ class ProfileParseTest(unittest.TestCase):
             [(fan.func["write_return"], "0072", "01", 10)],
         )
 
+    def test_breezy_freshpoint_profile_can_write_timer_mode(self):
+        fan = Fan("192.0.2.1")
+        self.assertTrue(
+            fan.parse_response(packet_with_payload([0xFE, 0x02, 0xB9, 0x11, 0x00]))
+        )
+
+        calls = []
+
+        def fake_send_command(func, param, value="", retries=10):
+            calls.append((func, param, value, retries))
+            return True
+
+        fan.send_command = fake_send_command
+
+        self.assertEqual(fan.parameter_options("timer_mode"), ["off", "night", "party"])
+        self.assertTrue(fan.set_param("timer_mode", "night"))
+        self.assertEqual(
+            calls,
+            [(fan.func["write_return"], "0007", "01", 10)],
+        )
+
     def test_breezy_freshpoint_profile_reads_weekly_schedule_setup(self):
         fan = Fan("192.0.2.1")
         self.assertTrue(

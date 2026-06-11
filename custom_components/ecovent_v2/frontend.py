@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from hashlib import sha256
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from .const import DOMAIN
 
 _FRONTEND_URL_BASE = f"/api/{DOMAIN}/frontend"
 _DIALOG_JS = "ecovent-schedule-dialog.js"
+_LOCK_KEY = f"{DOMAIN}_frontend_registration_lock"
 _REGISTERED_KEY = f"{DOMAIN}_frontend_registered"
 
 
@@ -24,19 +26,25 @@ def _frontend_module_url(frontend_dir: Path) -> str:
 
 async def async_register_frontend(hass: HomeAssistant) -> None:
     """Expose and register the schedule dialog frontend once."""
-    if hass.data.get(_REGISTERED_KEY):
-        return
+    lock = hass.data.get(_LOCK_KEY)
+    if lock is None:
+        lock = asyncio.Lock()
+        hass.data[_LOCK_KEY] = lock
 
-    frontend_dir = Path(__file__).parent / "frontend"
-    await hass.http.async_register_static_paths(
-        [
-            StaticPathConfig(
-                f"{_FRONTEND_URL_BASE}/{_DIALOG_JS}",
-                str(frontend_dir / _DIALOG_JS),
-                cache_headers=False,
-            )
-        ]
-    )
-    module_url = await hass.async_add_executor_job(_frontend_module_url, frontend_dir)
-    add_extra_js_url(hass, module_url)
-    hass.data[_REGISTERED_KEY] = True
+    async with lock:
+        if hass.data.get(_REGISTERED_KEY):
+            return
+
+        frontend_dir = Path(__file__).parent / "frontend"
+        await hass.http.async_register_static_paths(
+            [
+                StaticPathConfig(
+                    f"{_FRONTEND_URL_BASE}/{_DIALOG_JS}",
+                    str(frontend_dir / _DIALOG_JS),
+                    cache_headers=False,
+                )
+            ]
+        )
+        module_url = await hass.async_add_executor_job(_frontend_module_url, frontend_dir)
+        add_extra_js_url(hass, module_url)
+        hass.data[_REGISTERED_KEY] = True

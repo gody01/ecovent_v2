@@ -45,6 +45,14 @@ SELECT_SPECS = (
         translation_key="beeper",
     ),
     SelectSpec(
+        "_timer_mode",
+        "Timer mode",
+        "timer_mode",
+        "mdi:timer-cog-outline",
+        ("timer_mode",),
+        translation_key="timer_mode",
+    ),
+    SelectSpec(
         "_screen_backlight_mode",
         "Screen backlight mode",
         "screen_backlight_mode",

@@ -77,6 +77,7 @@ External relabels and OEM names tracked as evidence or candidates:
   - high
   - manual
 * In manual mode speed percentage
+* Timer mode selection on devices exposing `0x0007`
 * Silent mode
   - optional configuration checkbox for VENTO/TwinFresh-style devices
   - keeps the device in manual speed mode and maps Home Assistant preset changes
@@ -253,14 +254,27 @@ Version 1.1.1
 Version 1.2.0
 
 * Merged @AndyNew2 pull request v1.2.0 Rework ecovent library #36
-** this is a massive rework of your integration:
-** moved your library into the integration to avoid confusions ;-)
-** There was a massive bug in the binary_sensor multiplying the update rate by 4 - 6. Therefore you had a real update rate around 10 seconds instead of the intended 1 minute ;-) This was on top of the double update before your last update ;-)
-** Added job executor to free HA timings. I checked UDP async IO but do not like it. Timeout handling is really difficult with it. Since we do the updates many less now, due to a few fixed, the overhead of an executor thread is fine. This allows now reenabling sleeps for retries. Works very well now.
-** Many bug fixes in the init and deinit code. Was no longer up to date for HA and would have created massive warnings soon. That is fixed now.
-** Few further fixes like not updating manual speed etc. Do not remember each of them, but there had been quite a lot of them.
-** Config flow has now update rate configurable and added reconfigure dialog. Set default update rate to 30 seconds (still is around 3x slower than before ;-))
-** Let me know, what you think about the changes. Runs a lot better than before. This unindented fast update created together with the fix of retries many HA issues. HA is not prepared to be blocked around 5 - 10 seconds...
+  * this is a massive rework of your integration:
+  * moved your library into the integration to avoid confusions ;-)
+  * There was a massive bug in the binary_sensor multiplying the update rate by
+    4 - 6. Therefore you had a real update rate around 10 seconds instead of the
+    intended 1 minute ;-) This was on top of the double update before your last
+    update ;-)
+  * Added job executor to free HA timings. I checked UDP async IO but do not
+    like it. Timeout handling is really difficult with it. Since we do the
+    updates many less now, due to a few fixed, the overhead of an executor
+    thread is fine. This allows now reenabling sleeps for retries. Works very
+    well now.
+  * Many bug fixes in the init and deinit code. Was no longer up to date for HA
+    and would have created massive warnings soon. That is fixed now.
+  * Few further fixes like not updating manual speed etc. Do not remember each
+    of them, but there had been quite a lot of them.
+  * Config flow has now update rate configurable and added reconfigure dialog.
+    Set default update rate to 30 seconds (still is around 3x slower than before
+    ;-))
+  * Let me know, what you think about the changes. Runs a lot better than
+    before. This unindented fast update created together with the fix of retries
+    many HA issues. HA is not prepared to be blocked around 5 - 10 seconds...
 
 Version 1.2.1
 * Merged @AndyNew2 pull request bugfix for initialization not using job executor and some config flow fixes #37
@@ -270,13 +284,13 @@ Version 1.2.2
 * fix for case, where HW returns unknown value for some statuses/states
 
 Version 1.2.3
-* Merge pull request #39 from AndyNew2/AndyNew2-Rework   
-** v1.2.3 bugfix and stability improvement
+* Merge pull request #39 from AndyNew2/AndyNew2-Rework
+  * v1.2.3 bugfix and stability improvement
 
 Version 1.2.4
 * Merge pull request #40 from AndyNew2
-** added weekly_schedule_state on request
-** Add weekly schedule state to VentoSwitch
+  * added weekly_schedule_state on request
+  * Add weekly schedule state to VentoSwitch
 
 Version 1.2.5
 * Clean up Home Assistant entity names and categories
@@ -415,3 +429,11 @@ Version 1.2.14
   does not report configurable preset speed setpoints, by falling back to
   deterministic low/medium/high manual-speed percentages instead of reusing the
   current manual speed.
+
+Version 1.2.15
+* Expose `timer_mode` as a writable select on devices that support the
+  documented `0x0007` timer mode parameter, allowing Home Assistant to select
+  Off, Night, or Party mode.
+* Guard schedule frontend registration before the first await, preventing
+  duplicate static route registration when multiple EcoVent config entries are
+  set up concurrently.

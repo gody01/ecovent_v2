@@ -19,7 +19,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import EcoVentCoordinator
 from .entity_naming import StableObjectIdMixin, clean_object_id_suffix
-from .number_helpers import encode_raw_number, encode_speed_percent
+from .number_helpers import encode_number_write_value, encode_speed_percent
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -480,6 +480,12 @@ class VentoNumber(StableObjectIdMixin, CoordinatorEntity, NumberEntity):
         self._value_bytes = value_bytes
         self._write_mode = write_mode
 
+        parameter_range = getattr(self._fan, "parameter_range", None)
+        if callable(parameter_range):
+            device_range = parameter_range(method)
+            if device_range is not None:
+                native_min_value, native_max_value = device_range
+
         if native_min_value is not None:
             self._attr_native_min_value = native_min_value
         if native_max_value is not None:
@@ -519,18 +525,24 @@ class VentoNumber(StableObjectIdMixin, CoordinatorEntity, NumberEntity):
             await self.coordinator.async_refresh()
             return
 
-        if self._write_mode == "speed_percent":
-            value_hex = encode_speed_percent(
+        if self._fan.supports_capability("a21_modbus"):
+            write_value = encode_number_write_value(
+                value, self._value_bytes, native_numeric=True
+            )
+        elif self._write_mode == "speed_percent":
+            write_value = encode_speed_percent(
                 value,
                 self._fan.device_profile.speed_percent_scale,
             )
         else:
-            value_hex = encode_raw_number(value, self._value_bytes)
+            write_value = encode_number_write_value(
+                value, self._value_bytes, native_numeric=False
+            )
 
         await self.hass.async_add_executor_job(
             self._fan.set_param,
             self._func,
-            value_hex,
+            write_value,
         )
         self.async_write_ha_state()
         await self.coordinator.async_refresh()

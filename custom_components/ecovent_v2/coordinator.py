@@ -4,7 +4,7 @@
 from datetime import datetime, timedelta
 import logging
 
-from .ecoventv2 import Fan
+from .device_factory import create_device
 from .schedule_helpers import (
     SCHEDULE_DAY_LABELS,
     SCHEDULE_DAY_OPTIONS,
@@ -14,15 +14,10 @@ from .schedule_helpers import (
 )
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    CONF_IP_ADDRESS,
-    CONF_NAME,
-    CONF_PASSWORD,
-    CONF_PORT,
-)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
+    UpdateFailed,
 )
 from homeassistant.util import dt as dt_util
 
@@ -35,6 +30,7 @@ except ImportError:
     def is_hassio(hass):
         """Return false when HA has no Supervisor helper available."""
         return False
+
 
 from .const import CONF_AUTO_CLOCK_SYNC, CONF_SILENT_MODE, DOMAIN
 
@@ -53,14 +49,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         update_seconds: int = 30,
     ) -> None:
         """Initialize global Vento data updater."""
-        self._fan = Fan(
-            config.data[CONF_IP_ADDRESS],
-            config.data[CONF_PASSWORD],
-            # config.data[CONF_DEVICE_ID],
-            "DEFAULT_DEVICEID",
-            config.data[CONF_NAME],
-            config.data[CONF_PORT],
-        )
+        self._fan = create_device(config.data, unique_id=config.unique_id)
         # self._fan.init_device()  is a blocking call cannot be done in constructur ...
         self.fan_initialized = False  # flag to indicate if the fan has been initialized
         self.updateCounter = 0
@@ -106,10 +95,17 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         if (self.updateCounter % 2 == 0) or (self.updateCounter < 4):
             # every 2nd update do a full update, otherwise a quick update to reduce load on the device
             _LOGGER.debug("EcoVentCoordinator: Starting full data update...")
-            await self.hass.async_add_executor_job(self._fan.update)
+            update_complete = await self.hass.async_add_executor_job(self._fan.update)
         else:
             _LOGGER.debug("EcoVentCoordinator: Starting quick data update...")
-            await self.hass.async_add_executor_job(self._fan.quick_update)
+            update_complete = await self.hass.async_add_executor_job(
+                self._fan.quick_update
+            )
+
+        if not update_complete:
+            raise UpdateFailed(
+                f"Incomplete protocol response from EcoVent device {self._fan.name}"
+            )
 
         if self._should_refresh_schedule_week():
             await self.hass.async_add_executor_job(self._load_schedule_week)

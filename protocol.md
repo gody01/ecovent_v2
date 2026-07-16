@@ -20,16 +20,35 @@ Source PDFs:
 - [TwinFresh Style Wi-Fi mini manual 19765](https://ventilation-system.com/download/twinfresh-style-wi-fi-mini-manual-19765.pdf)
 - [Breezy Eco manual 21433](https://ventilation-system.com/download/breezy-eco-manual-21433.pdf)
 - [Freshpoint manual 16999](https://blaubergventilatoren.net/download/freshpoint-manual-16999.pdf)
+- [Freshpoint 160/200-E (Pro) datasheet 9055](https://blaubergventilatoren.net/download/freshpoint-datasheet-9055.pdf)
+- [Freshpoint 160/200-E (Pro) user manual 9552](https://blaubergventilatoren.net/download/freshpoint-manual-9552.pdf)
 - [Freshbox 100 WiFi connection guide B73-9-1EN-01](https://blaubergventilatoren.net/download/freshbox-100-wifi-datasheet-7508.pdf)
 - [Micra 100 WiFi Smart Home connection guide V73-9-1EN-01](https://ventilation-system.com/download/micra-100-wifi-manual-19886.pdf)
 - [Arc Smart Smart House CO2 connection guide](https://ventilation-system.com/download/arc-smart-manual-21863.pdf)
 - [O2 Supreme Smart Home connection guide B255-1EN-01](https://blaubergventilatoren.net/download/o2-supreme-manual-15274.pdf)
 
+Cross-brand and candidate OEM research sources:
+
+- [ECONOPRIME DF 270 Connect product page](https://www.econology.fr/df-270-connect-econoprime-vmc-double-flux.html)
+- [ECONOPRIME DF 270 / DF 270 Connect manual](https://www.econology.fr/media/attachment/file_pdf/notice_utilisation_df_270_econoprime_v5.pdf)
+- [ECONOPRIME DF Connect / Blauberg Home application manual](https://www.econology.fr/media/attachment/file/n/o/notice_installateur-application_df_connect5_v3_5.pdf)
+- [ECONOPRIME A22 WiFi panel page](https://www.econology.fr/panneau-de-commande-a22-wifi-vmc-double-flux-df-connect-econoprime.html)
+- [ECONOPRIME Bora family page](https://www.econology.fr/bora-extracteur-d-air-double-flux-econoprime.html)
+- [ECONOPRIME Bora 160/200 manual](https://www.econology.fr/media/attachment/file_pdf/notice_utilisateur_bora.pdf)
+
+- [VENTS VUT 270 V5B EC A21 product page](https://ventilation-system.com/product/vut-270-v5b-ec-a21)
+- [VENTS VUT/VUE V5B EC datasheet 19690](https://ventilation-system.com/download/vut-v5b-ec-datasheet-19690.pdf)
+- [VENTS VUT/VUE V5(B) EC user manual V170-1EN-09](https://ventilation-system.com/download/vut-v5b-ec-manual-19693.pdf)
+- [A21 Modbus table V55-8-1EN-02](https://ventilation-system.com/download/vut-v5b-ec-manual-19669.pdf)
+- [A21 wireless control system manual V55-8EN-05](https://ventilation-system.com/download/vut-v5b-ec-manual-19670.pdf)
+
 ### Model lineage names
 
-These manuals describe one Blauberg Group / VENTS platform across sibling
+The confirmed Blauberg and VENTS manuals describe one platform across sibling
 brands, official family names, external relabels, and candidate OEM names.
 VENTS is treated as an official sibling brand, not as a Blauberg relabel.
+ECONOPRIME is tracked separately because its unit type and working VENTO profile
+are community-tested, while its physical OEM remains unconfirmed.
 
 The code keeps these layers separate:
 
@@ -42,7 +61,9 @@ The code keeps these layers separate:
 - `device_type`: native BGCP value from parameter `0x00B9`.
 - `parser_key`: byte-swapped integer used by this parser.
 - `evidence`: `official_group`, `official_listing`, `protocol_pdf`,
-  `community_tested`, `observed`, `app_by_blauberg`, or `candidate`.
+  `community_tested`, `observed`, `app_by_blauberg`, `documentary_match`, or
+  `candidate`. A `documentary_match` remains a candidate until its BGCP unit
+  type is captured or documented.
 
 Only concise primary names and explicit compatibility aliases are used for the
 parser-facing Home Assistant unit-type string. The structured `official_names`,
@@ -52,6 +73,7 @@ candidates are not shown as confirmed model names until a device reports
 
 | Unit type | Primary name | Official same-group names | External relabel/candidate notes |
 | -- | -- | -- | -- |
+| `0x0100` | ECONOPRIME DF270 Connect | ECONOPRIME DF270; ECONOPRIME DF270 Connect | A reported unit identifies as `256` and works with the `vento` profile. Detailed first-party product/manual/A22 evidence makes VENTS VUT 270 V5B EC A21 a `documentary_match`, but A21 publishes Modbus rather than a BGCP `0x00B9` bridge. |
 | `0x0200` | Blauberg Freshbox 100 WiFi / VENTS Micra 100 WiFi | Freshbox 100 WiFi/ERV/E/E2 variants; Vents Micra 100 WiFi/ERV/E/E2 variants | Dedicated `freshbox` AHU profile |
 | `0x0300` | Blauberg VENTO Expert / VENTS TwinFresh Expert | VENTO Expert A50/A85/A100 V.2; VENTO Expert A50 V.3; TwinFresh Expert RW1-50/85/100 V.2; TwinFresh Expert RW1-50 V.3 | SIKU RV 50, DUKA One S6W, RL 50RVW, and Winzel RW1-50 are tracked as relabels; Flexit Roomie One, DUKA One Pro 50, and NIBE DVC 10-50W remain candidates |
 | `0x0400` | Blauberg VENTO Expert Duo / VENTS TwinFresh Expert Duo | VENTO Expert DUO A30 V.2; TwinFresh Expert Duo RW1-30 V.2 | SIKU RV 30 DW, Flexit Roomie Dual, DUKA One S6BW, and RL 30DVW are tracked as relabel/candidate evidence |
@@ -59,9 +81,9 @@ candidates are not shown as confirmed model names until a device reports
 | `0x0600` | Blauberg Smart Wi-Fi / VENTS iFan Wi-Fi | Smart Wi-Fi; Smart IR Wi-Fi; Vents iFan Wi-Fi; Vents iFan Move Wi-Fi | Dedicated `extract_fan` profile |
 | `0x0D00` | VENTS Arc Smart / Blauberg O2 Supreme | Vents Arc Smart white/black; Blauberg O2 Supreme white/black | Dedicated `arc` profile |
 | `0x0E00` | VENTS TwinFresh Style Wi-Fi | TwinFresh Style Wi-Fi/Frost/mini | OXXIFY.smart 50 is kept as observed relabel evidence on this unit type; Oxxify.smart 30 and 50k remain candidates |
-| `0x1100` | VENTS Breezy 160 / Blauberg Freshpoint 160 | Breezy 160/E/Smart; Freshpoint 160 and package variants | Dedicated `breezy` profile |
+| `0x1100` | VENTS Breezy 160 / Blauberg Freshpoint 160 | Breezy 160/E/Smart; Freshpoint 160 and package variants | Dedicated `breezy` profile. ECONOPRIME Bora 160/Prime wall-length variants are documentary candidates, not parser aliases. |
 | `0x1400` | VENTS Breezy Eco 160 / Blauberg Freshpoint Eco 160 | Breezy Eco 160/E; Freshpoint Eco 160 and package variants | Dedicated `breezy` profile |
-| `0x1600` | VENTS Breezy 200 / Blauberg Freshpoint 200 | Breezy 200-E/Smart; Freshpoint 200 and package variants | Dedicated `breezy` profile |
+| `0x1600` | VENTS Breezy 200 / Blauberg Freshpoint 200 | Breezy 200-E/Smart; Freshpoint 200 and package variants | Dedicated `breezy` profile. ECONOPRIME Bora 200/Prime wall-length variants are documentary candidates, not parser aliases. |
 | `0x1800` | VENTS Breezy Eco 200 / Blauberg Freshpoint Eco 200 | Breezy Eco 200; Freshpoint Eco 200 | Dedicated `breezy` profile |
 | `0x1A00` | VENTO inHome old / TwinFresh Atmo old | VENTO inHome; TwinFresh Atmo | Same `vento` profile |
 | `0x1B00` | VENTO inHome 100 / TwinFresh Atmo 100 | VENTO inHome mini/W; TwinFresh Atmo mini/Wi-Fi | Same `vento` profile |
@@ -70,6 +92,70 @@ candidates are not shown as confirmed model names until a device reports
 No reviewed manufacturer PDF documents device type `7` / parser key `0x0700`.
 Rows such as `0x0007` in the source tables are timer/status parameters, not
 unit-type values.
+
+### ECONOPRIME / Econology catalogue research
+
+The live Econology sitemap, dated 2026-07-12 when reviewed, contains 240 URLs
+with `ECONOPRIME` in the product path. Most are filters, ducts, plenums,
+controllers, or other accessories. The public README indexes the distinct
+parent ventilation-unit names while keeping their protocol status separate.
+
+Issue #64 remains the only BGCP proof for the DF series: the reported
+`ECONOPRIME DF270 Connect` returned parameter `0x00B9` as integer `256`
+(`0x0100` in this parser), and the existing `vento` profile controlled fixed
+presets and manual speed with matching RPM feedback. That observation is enough
+to map `0x0100`; it does not automatically map other ECONOPRIME devices.
+
+The direct [DF 270 Connect product page](https://www.econology.fr/df-270-connect-econoprime-vmc-double-flux.html)
+and manual materially strengthen the physical OEM research. A cross-document
+comparison of ECONOPRIME DF27021 and VENTS VUT 270 V5B EC A21 found alignment
+on the 300 m³/h class, power/current/noise, EPP cabinet and duct dimensions,
+filter arrangement, heat exchanger, A21-style wiring, and optional A22 WiFi
+controller. The ECONOPRIME [A22 panel page](https://www.econology.fr/panneau-de-commande-a22-wifi-vmc-double-flux-df-connect-econoprime.html)
+also resembles the official VENTS A22 ecosystem. This makes the VENTS model a
+targeted `documentary_match`; neither manufacturer explicitly states the
+cross-brand relationship or documents a BGCP unit type for it.
+
+It is not a manufacturer-backed BGCP bridge. The official VENTS A21 documents
+publish Modbus RTU/TCP (Wi-Fi TCP port 502), and controller value `1` in input
+register `37` is not BGCP parameter `0x00B9`. The integration implements that
+A21 table as a separate transport and accepts it only after this read-only
+identity check. The reported `0x0100`/`vento` behavior remains the runtime
+evidence for the specific DF270 Connect device; it does not prove that DF270
+and VUT 270 are the same model.
+
+The A21 implementation covers the complete published address surface: coils
+`0..25`, discrete inputs `0..71`, input registers `0..53`, and holding
+registers `0..182`, including multi-register timers, firmware, RTC, engineering
+password encoding, and the seven-day schedule. Automatic polling excludes the
+three write-only action coils and the engineering password; both remain
+available through the typed protocol API. A controller that does not return
+`1` from input register `37` is rejected instead of being guessed from its
+marketing name.
+
+Two additional groups are worth targeted device captures:
+
+* `DF 180 Flat Connect` (`DFF18021`) and `DF 350 Connect` (`DF35021`) link the
+  same first-party DF Connect application guide, which explicitly names the
+  Blauberg Home app. No reviewed source gives either model a BGCP unit type.
+* A cross-document comparison of the ECONOPRIME [Bora manual](https://www.econology.fr/media/attachment/file_pdf/notice_utilisateur_bora.pdf)
+  and Blauberg Freshpoint manuals found the same 160/200 duct sizes,
+  440/550/700/1000 mm wall variants, performance tables, Pro/Prime VOC/CO2
+  sensor package, Wi-Fi provisioning (`FAN:` plus a 16-character ID, default
+  `11111111`), and application behavior. This suggests a potential
+  protocol-family lead; neither manufacturer identifies Bora as
+  Freshpoint/Breezy or documents Bora's `0x00B9`. Bora 160 and Bora 200 variants
+  are therefore candidates near `0x1100` and `0x1600`, respectively, and stay
+  outside the parser-facing display name.
+
+Other current ECONOPRIME product families are indexed for search but excluded
+from runtime mapping on current evidence:
+
+| Family | Reviewed names | Current protocol evidence |
+| -- | -- | -- |
+| A14 / A21 / Modbus | Zephyr 240 S/A14, Zephyr 240 S Connect/A21, Zephyr 270 V R/Connect R, Zephyr 550 V PH Connect R | A14/A21 controller variants or explicit Modbus RTU/TCP/IP; no BGCP unit type |
+| PremAIR / GatePass | URC 250, URHF 150/200, URHFCF 150/200, URH 350 | PremAIR application and GatePass bridge; no BGCP evidence |
+| Local/IR only in reviewed manuals | Zephyr 100 S, Airion 100/150 | no compatible local-network protocol documented |
 
 ### TwinFresh Style Wi-Fi / TwinFresh Atmo notes
 
@@ -127,6 +213,23 @@ names differ. They diverge from the base `vento` profile enough to use a
 dedicated `breezy` profile instead of enabling every row as a Vento feature:
 Breezy/Freshpoint adds CO2/VOC/screen/heater rows, while Vento has several
 sensor rows that these manuals do not document.
+
+The separate Freshpoint product datasheet and user manual cover both 160 and
+200 sizes, standard and Pro sensor packages, and L055/L07/L1 wall-length
+variants. Both standard and Pro units have relative-humidity and four built-in
+temperature sensors (outdoor, supply, exhaust inlet, and exhaust outlet). Only
+the Pro package has the tVOC/CO2eq air-quality sensor; `L07` describes the
+700 mm wall-length package, not a different sensor set.
+
+The Freshpoint Smart Home guide limits each packet to 256 bytes. Full profile
+polls contain more registers than one response can safely carry on every
+firmware. A valid but incomplete response previously counted as success and
+could leave omitted fields stale. The implementation therefore sends at most 12
+read parameters per bulk request, records every returned or explicitly
+unsupported (`0xFD`) parameter, and retries only omitted parameters
+individually. Quick polling also includes humidity plus all four temperature
+rows. The response parser keeps the current `0xFF` high-byte page until another
+page marker changes it, as required by the guide's packet example.
 
 Documented unit type values from parameter `0x00B9`:
 

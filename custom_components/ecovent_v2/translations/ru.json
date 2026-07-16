@@ -6,10 +6,23 @@
         "error": {
             "cannot_connect": "Не удалось подключиться.",
             "invalid_auth": "Неверные учётные данные.",
+            "unsupported_device": "Контроллер не подтвердил тип VENTS A21.",
             "unknown": "Неизвестная ошибка."
         },
         "step": {
             "user": {
+                "data": {
+                    "transport": "Тип подключения",
+                    "ip_address": "IP-адрес",
+                    "password": "Пароль",
+                    "port": "Порт",
+                    "name": "Название",
+                    "update_interval": "Интервал обновления",
+                    "auto_clock_sync": "Автоматически синхронизировать часы устройства",
+                    "silent_mode": "Тихий режим ручной скорости"
+                }
+            },
+            "bgcp": {
                 "data": {
                     "ip_address": "IP-адрес",
                     "password": "Пароль",
@@ -20,6 +33,30 @@
                     "silent_mode": "Тихий режим ручной скорости"
                 }
             },
+            "modbus_tcp": {
+                "data": {
+                    "ip_address": "IP-адрес",
+                    "port": "Порт",
+                    "unit_id": "ID устройства Modbus",
+                    "device_model": "Модель устройства",
+                    "name": "Название",
+                    "update_interval": "Интервал обновления",
+                    "auto_clock_sync": "Автоматически синхронизировать часы устройства"
+                }
+            },
+            "modbus_rtu": {
+                "data": {
+                    "serial_port": "Последовательный порт",
+                    "baudrate": "Скорость передачи",
+                    "parity": "Чётность",
+                    "stopbits": "Стоповые биты",
+                    "unit_id": "ID устройства Modbus",
+                    "device_model": "Модель устройства",
+                    "name": "Название",
+                    "update_interval": "Интервал обновления",
+                    "auto_clock_sync": "Автоматически синхронизировать часы устройства"
+                }
+            },
             "reconfigure": {
                 "data": {
                     "ip_address": "IP-адрес",
@@ -28,7 +65,13 @@
                     "name": "Название",
                     "update_interval": "Интервал обновления",
                     "auto_clock_sync": "Автоматически синхронизировать часы устройства",
-                    "silent_mode": "Тихий режим ручной скорости"
+                    "silent_mode": "Тихий режим ручной скорости",
+                    "unit_id": "ID устройства Modbus",
+                    "device_model": "Модель устройства",
+                    "serial_port": "Последовательный порт",
+                    "baudrate": "Скорость передачи",
+                    "parity": "Чётность",
+                    "stopbits": "Стоповые биты"
                 }
             }
         }

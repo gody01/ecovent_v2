@@ -7,6 +7,14 @@ from ecovent_test_helpers import Fan, packet_with_payload
 
 
 class ProfileParseTest(unittest.TestCase):
+    def test_parse_response_names_econoprime_df270_unit_type(self):
+        fan = Fan("192.0.2.1")
+        self.assertTrue(
+            fan.parse_response(packet_with_payload([0xFE, 0x02, 0xB9, 0x01, 0x00]))
+        )
+        self.assertEqual(fan.unit_type, Fan.device_models[0x0100].display_name)
+        self.assertEqual(fan.profile_key, "vento")
+
     def test_parse_response_names_shared_oxxify_unit_type(self):
         fan = Fan("192.0.2.1")
         self.assertTrue(

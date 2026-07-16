@@ -3,8 +3,12 @@
 try:
     from .protocol_metadata import (
         BREEZY_ECO_MANUAL_URL,
+        ECONOPRIME_BORA_MANUAL_URL,
+        ECONOPRIME_BORA_PRODUCT_URL,
         FRESHBOX_100_WIFI_MANUAL_URL,
+        FRESHPOINT_DATASHEET_URL,
         FRESHPOINT_MANUAL_URL,
+        FRESHPOINT_USER_MANUAL_URL,
         MICRA_100_WIFI_MANUAL_URL,
         SMART_WIFI_MANUAL_URL,
         TWINFRESH_STYLE_MANUAL_URL,
@@ -16,8 +20,12 @@ try:
 except ImportError:
     from protocol_metadata import (
         BREEZY_ECO_MANUAL_URL,
+        ECONOPRIME_BORA_MANUAL_URL,
+        ECONOPRIME_BORA_PRODUCT_URL,
         FRESHBOX_100_WIFI_MANUAL_URL,
+        FRESHPOINT_DATASHEET_URL,
         FRESHPOINT_MANUAL_URL,
+        FRESHPOINT_USER_MANUAL_URL,
         MICRA_100_WIFI_MANUAL_URL,
         SMART_WIFI_MANUAL_URL,
         TWINFRESH_STYLE_MANUAL_URL,
@@ -26,6 +34,11 @@ except ImportError:
         DeviceModel,
         MarketingName,
     )
+
+BORA_SOURCE_DOCUMENTS = (
+    ECONOPRIME_BORA_PRODUCT_URL,
+    ECONOPRIME_BORA_MANUAL_URL,
+)
 
 EXTRA_DEVICE_MODELS = {
     0x1100: DeviceModel(
@@ -48,6 +61,36 @@ EXTRA_DEVICE_MODELS = {
             MarketingName(
                 "Blauberg Ventilatoren",
                 "Freshpoint",
+                "Freshpoint 160-E",
+                "official_listing",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Freshpoint",
+                "Freshpoint 160-E L055",
+                "official_listing",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Freshpoint",
+                "Freshpoint 160-E L07",
+                "official_listing",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Freshpoint",
+                "Freshpoint 160-E L1",
+                "official_listing",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Freshpoint",
+                "Freshpoint 160-E Pro",
+                "official_listing",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Freshpoint",
                 "Freshpoint 160-E Pro L055",
                 "official_listing",
             ),
@@ -64,9 +107,33 @@ EXTRA_DEVICE_MODELS = {
                 "official_listing",
             ),
         ),
+        candidates=tuple(
+            MarketingName(
+                "ECONOPRIME",
+                "Bora 160",
+                model,
+                "documentary_match",
+                BORA_SOURCE_DOCUMENTS,
+            )
+            for model in (
+                "Bora 160",
+                "Bora 160 L440",
+                "Bora 160 L550",
+                "Bora 160 L700",
+                "Bora 160 L1000",
+                "Bora 160 Prime L440",
+                "Bora 160 Prime L550",
+                "Bora 160 Prime L700",
+                "Bora 160 Prime L1000",
+            )
+        ),
         source_documents=(
             BREEZY_ECO_MANUAL_URL,
+            FRESHPOINT_DATASHEET_URL,
+            FRESHPOINT_USER_MANUAL_URL,
             FRESHPOINT_MANUAL_URL,
+            ECONOPRIME_BORA_PRODUCT_URL,
+            ECONOPRIME_BORA_MANUAL_URL,
         ),
     ),
     0x1400: DeviceModel(
@@ -116,6 +183,36 @@ EXTRA_DEVICE_MODELS = {
             MarketingName(
                 "Blauberg Ventilatoren",
                 "Freshpoint",
+                "Freshpoint 200-E",
+                "official_listing",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Freshpoint",
+                "Freshpoint 200-E L055",
+                "official_listing",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Freshpoint",
+                "Freshpoint 200-E L07",
+                "official_listing",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Freshpoint",
+                "Freshpoint 200-E L1",
+                "official_listing",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Freshpoint",
+                "Freshpoint 200-E Pro",
+                "official_listing",
+            ),
+            MarketingName(
+                "Blauberg Ventilatoren",
+                "Freshpoint",
                 "Freshpoint 200-E Pro L055",
                 "official_listing",
             ),
@@ -132,9 +229,33 @@ EXTRA_DEVICE_MODELS = {
                 "official_listing",
             ),
         ),
+        candidates=tuple(
+            MarketingName(
+                "ECONOPRIME",
+                "Bora 200",
+                model,
+                "documentary_match",
+                BORA_SOURCE_DOCUMENTS,
+            )
+            for model in (
+                "Bora 200",
+                "Bora 200 L440",
+                "Bora 200 L550",
+                "Bora 200 L700",
+                "Bora 200 L1000",
+                "Bora 200 Prime L440",
+                "Bora 200 Prime L550",
+                "Bora 200 Prime L700",
+                "Bora 200 Prime L1000",
+            )
+        ),
         source_documents=(
             BREEZY_ECO_MANUAL_URL,
+            FRESHPOINT_DATASHEET_URL,
+            FRESHPOINT_USER_MANUAL_URL,
             FRESHPOINT_MANUAL_URL,
+            ECONOPRIME_BORA_PRODUCT_URL,
+            ECONOPRIME_BORA_MANUAL_URL,
         ),
     ),
     0x1800: DeviceModel(

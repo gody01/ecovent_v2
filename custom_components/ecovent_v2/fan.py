@@ -82,7 +82,12 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         self._attr_name = self._fan.name
         self._attr_icon = "mdi:fan"
         self._attr_translation_key = "vent"
-        self._attr_extra_state_attributes = {"ipv4_address": self._fan.current_wifi_ip}
+        transport = getattr(self._fan, "transport", "bgcp_udp")
+        self._attr_extra_state_attributes = {"transport": transport}
+        if self._fan.current_wifi_ip is not None:
+            self._attr_extra_state_attributes["ipv4_address"] = (
+                self._fan.current_wifi_ip
+            )
         self._attr_supported_features = FanEntityFeature(0)
         if self._fan.fan_preset_modes:
             self._attr_supported_features |= FanEntityFeature.PRESET_MODE
@@ -100,10 +105,18 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             identifiers={(DOMAIN, self._fan.id)},
             name=self._fan.name,
             model=self._fan.unit_type,
-            model_id=f"WIFI IP: {self._fan.current_wifi_ip}, {self._fan.wifi_assigned_ip}",
+            model_id=getattr(
+                self._fan,
+                "connection_description",
+                f"WIFI IP: {self._fan.current_wifi_ip}, {self._fan.wifi_assigned_ip}",
+            ),
             sw_version=self._fan.firmware,
-            manufacturer="Blauberg",
-            configuration_url=f"http://{self._fan.current_wifi_ip}",
+            manufacturer=getattr(self._fan, "manufacturer", "Blauberg"),
+            configuration_url=getattr(
+                self._fan,
+                "configuration_url",
+                f"http://{self._fan.current_wifi_ip}",
+            ),
         )
 
     @property
@@ -300,14 +313,17 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             )
 
         audible_writes_before = self._fan.audible_write_command_count
-        changed = self._set_parameters_if_changed(
-            targets,
-            include_extra_write_parameters=entering_manual_mode,
-        ) or changed
+        changed = (
+            self._set_parameters_if_changed(
+                targets,
+                include_extra_write_parameters=entering_manual_mode,
+            )
+            or changed
+        )
         if targets and not entering_manual_mode and not extra_targets:
-            assert (
-                self._fan.audible_write_command_count == audible_writes_before
-            ), "steady-state silent manual speed update emitted an audible write"
+            assert self._fan.audible_write_command_count == audible_writes_before, (
+                "steady-state silent manual speed update emitted an audible write"
+            )
         self.coordinator.set_silent_preset_mode(preset_mode)
         return changed
 

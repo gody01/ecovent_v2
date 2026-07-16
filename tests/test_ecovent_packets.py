@@ -4,6 +4,7 @@ from datetime import datetime
 import unittest
 
 from ecovent_test_helpers import Fan, packet_with_payload
+from fan_protocol import MAX_BULK_READ_PARAMS
 
 
 class PacketBuilderTest(unittest.TestCase):
@@ -40,7 +41,7 @@ class PacketBuilderTest(unittest.TestCase):
 
         fan.send_command = send_command
         self.assertTrue(fan.update())
-        _, params, _ = calls[0]
+        params = "".join(call[1] for call in calls)
         self.assertNotIn("0065", params)
         self.assertNotIn("0080", params)
 
@@ -57,9 +58,59 @@ class PacketBuilderTest(unittest.TestCase):
 
         fan.send_command = send_command
         self.assertTrue(fan.update())
-        _, params, _ = calls[0]
+        params = "".join(call[1] for call in calls)
         self.assertIn("0072", params)
         self.assertNotIn("0077", params)
+
+    def test_update_bounds_bulk_reads_to_protocol_safe_chunks(self):
+        fan = Fan("192.0.2.1")
+        calls = []
+        fan.params = {
+            param: ["state", fan.states]
+            for param in range(1, MAX_BULK_READ_PARAMS * 2 + 2)
+        }
+
+        def send_command(func, param, value="", retries=10):
+            calls.append((param, retries))
+            fan._last_response_param_ids = {
+                int(param[i : i + 4], 16) for i in range(0, len(param), 4)
+            }
+            return True
+
+        fan.send_command = send_command
+
+        self.assertTrue(fan.update())
+        self.assertEqual([len(param) // 4 for param, _ in calls], [12, 12, 1])
+        self.assertEqual(
+            "".join(param for param, _ in calls),
+            "".join(f"{param:04x}" for param in fan.params),
+        )
+
+    def test_update_retries_params_missing_from_valid_bulk_response(self):
+        fan = Fan("192.0.2.1")
+        calls = []
+        fan.params = {
+            0x0001: ["state", fan.states],
+            0x0002: ["speed", fan.speeds],
+            0x0025: ["humidity", None],
+        }
+
+        def send_command(func, param, value="", retries=10):
+            calls.append((param, retries))
+            if len(param) > 4:
+                fan._last_response_param_ids = {0x0001}
+            else:
+                fan._last_response_param_ids = {int(param, 16)}
+            return True
+
+        fan.send_command = send_command
+
+        self.assertTrue(fan.update())
+        self.assertEqual(
+            calls,
+            [("000100020025", 3), ("0002", 1), ("0025", 1)],
+        )
+        self.assertTrue(fan._bulk_read_supported)
 
     def test_update_falls_back_to_individual_reads_after_bulk_failure(self):
         fan = Fan("192.0.2.1")
@@ -67,7 +118,7 @@ class PacketBuilderTest(unittest.TestCase):
 
         def send_command(func, param, value="", retries=10):
             calls.append((param, retries))
-            return len(param) == 4 and param == "0001"
+            return len(param) == 4
 
         fan.params = {0x0001: ["state", fan.states], 0x0002: ["speed", fan.speeds]}
         fan.send_command = send_command
@@ -75,6 +126,23 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertTrue(fan.update())
         self.assertEqual(calls, [("00010002", 3), ("0001", 1), ("0002", 1)])
         self.assertFalse(fan._bulk_read_supported)
+
+    def test_update_fails_when_missing_param_retry_fails(self):
+        fan = Fan("192.0.2.1")
+        calls = []
+
+        def send_command(func, param, value="", retries=10):
+            calls.append((param, retries))
+            if len(param) > 4:
+                fan._last_response_param_ids = {0x0001}
+                return True
+            return False
+
+        fan.params = {0x0001: ["state", fan.states], 0x0002: ["speed", fan.speeds]}
+        fan.send_command = send_command
+
+        self.assertFalse(fan.update())
+        self.assertEqual(calls, [("00010002", 3), ("0002", 1)])
 
     def test_vento_update_reads_humidity_in_bulk_request(self):
         fan = Fan("192.0.2.1")
@@ -87,7 +155,23 @@ class PacketBuilderTest(unittest.TestCase):
         fan.send_command = send_command
 
         self.assertTrue(fan.update())
-        self.assertIn("0025", calls[0][0])
+        self.assertIn("0025", "".join(param for param, _ in calls))
+
+    def test_breezy_quick_update_reads_humidity_and_all_four_temperatures(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        calls = []
+
+        def send_command(func, param, value="", retries=10):
+            calls.append((param, retries))
+            return True
+
+        fan.send_command = send_command
+
+        self.assertTrue(fan.quick_update())
+        requested = "".join(param for param, _ in calls)
+        for param in ("001f", "0020", "0021", "0022", "0025"):
+            self.assertIn(param, requested.lower())
 
     def test_extract_fan_update_uses_profile_specific_parameters(self):
         fan = Fan("192.0.2.1")
@@ -101,8 +185,8 @@ class PacketBuilderTest(unittest.TestCase):
         fan.send_command = send_command
 
         self.assertTrue(fan.update())
-        params, retries = calls[0]
-        self.assertEqual(retries, 3)
+        params = "".join(param for param, _ in calls)
+        self.assertTrue(all(retries == 3 for _, retries in calls))
         self.assertIn("002e", params)
         self.assertIn("0031", params)
         self.assertIn("00b9", params)

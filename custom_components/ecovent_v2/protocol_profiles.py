@@ -57,7 +57,9 @@ DEVICE_PROFILES = {
         key="breezy",
         params_name="breezy_params",
         write_params_name="breezy_write_params",
-        quick_update_request="0007000B00250027004A004B0081008300840129030B0320",
+        quick_update_request=(
+            "0007000B001F00200021002200250027004A004B0081008300840129030B0320"
+        ),
         preset_modes=("off", "low", "medium", "high", "speed_4", "speed_5", "manual"),
         boost_statuses_name="statuses",
         humidity_sensor_states_name="states",

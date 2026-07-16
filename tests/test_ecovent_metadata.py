@@ -5,6 +5,46 @@ import unittest
 
 from ecovent_test_helpers import COMPONENT_PATH, Fan, PROTOCOL_REFERENCE_PATH
 
+README_PATH = COMPONENT_PATH.parents[1] / "README.md"
+ECONOPRIME_README_ONLY_NAMES = (
+    "DF 180 Flat",
+    "DF 180 Flat Connect",
+    "DFF18021",
+    "DF 270",
+    "DF27014",
+    "DF 270 Connect",
+    "DF27021",
+    "DF 350",
+    "DF 350 Connect",
+    "DF35021",
+    "Zephyr 100 S",
+    "ZEPH100",
+    "Zephyr 240 S",
+    "ZEPH240A14",
+    "Zephyr 240 S Connect",
+    "ZEPH240A21",
+    "Zephyr 270 V R",
+    "114800001",
+    "Zephyr 270 V Connect R",
+    "114800002",
+    "Zephyr 550 V PH Connect R",
+    "114800003",
+    "URC 250",
+    "URC250",
+    "URHF 150",
+    "URHF150",
+    "URHFCF 150",
+    "URHFCF150",
+    "URHF 200",
+    "URHF200",
+    "URHFCF 200",
+    "URHFCF200",
+    "URH 350",
+    "URH350",
+    "Airion 100",
+    "Airion 150",
+)
+
 
 class ParseResponseTest(unittest.TestCase):
     def test_entity_platforms_do_not_branch_on_profile_names(self):
@@ -56,6 +96,24 @@ class ParseResponseTest(unittest.TestCase):
             self.assertIn(mode, preset_icons)
 
     def test_unit_type_metadata_selects_device_profiles(self):
+        econoprime = Fan.device_models[0x0100]
+        self.assertEqual(econoprime.name, "ECONOPRIME DF270 Connect")
+        self.assertEqual(econoprime.profile_key, "vento")
+        self.assertEqual(econoprime.device_type, 1)
+        self.assertEqual(econoprime.parser_key, 0x0100)
+        self.assertEqual(
+            econoprime.manufacturer_group,
+            "Unknown (marketed as ECONOPRIME)",
+        )
+        self.assertIn("Econology DF270 Connect", econoprime.aliases)
+        self.assertIn(
+            "ECONOPRIME DF270 Connect",
+            {marketing.model for marketing in econoprime.official_names},
+        )
+        self.assertEqual(
+            {marketing.model for marketing in econoprime.candidates},
+            {"VENTS VUT 270 V5B EC A21"},
+        )
         self.assertEqual(
             Fan.device_models[0x1A00].name,
             "VENTO inHome old / TwinFresh Atmo old",
@@ -88,6 +146,9 @@ class ParseResponseTest(unittest.TestCase):
             marketing.model for marketing in Fan.device_models[0x1100].official_names
         }
         self.assertIn("Vents Breezy 160-E", breezy_160_names)
+        self.assertIn("Freshpoint 160-E", breezy_160_names)
+        self.assertIn("Freshpoint 160-E L07", breezy_160_names)
+        self.assertIn("Freshpoint 160-E Pro", breezy_160_names)
         self.assertIn("Freshpoint 160-E Pro L055", breezy_160_names)
         self.assertEqual(Fan.device_models[0x1100].profile_key, "breezy")
         breezy_eco_names = {
@@ -99,6 +160,9 @@ class ParseResponseTest(unittest.TestCase):
             marketing.model for marketing in Fan.device_models[0x1600].official_names
         }
         self.assertIn("Vents Breezy 200-E Smart", breezy_200_names)
+        self.assertIn("Freshpoint 200-E", breezy_200_names)
+        self.assertIn("Freshpoint 200-E L07", breezy_200_names)
+        self.assertIn("Freshpoint 200-E Pro", breezy_200_names)
         self.assertEqual(
             Fan.device_models[0x1800].name,
             "VENTS Breezy Eco 200 / Blauberg Freshpoint Eco 200",
@@ -159,7 +223,82 @@ class ParseResponseTest(unittest.TestCase):
         self.assertEqual(candidates["NIBE DVC 10-50W"], "candidate")
         self.assertNotIn("Flexit Roomie One WiFi V2", expert.display_name)
 
+        duo = Fan.device_models[0x0400]
+        duo_relabels = {marketing.model for marketing in duo.relabels}
+        duo_candidates = {marketing.model for marketing in duo.candidates}
+        self.assertIn("Flexit Roomie Dual Wifi", duo_relabels)
+        self.assertIn("Roomie Dual WiFi V2", duo_candidates)
+        self.assertNotIn("Roomie Dual WiFi V2", duo_relabels)
+
+    def test_econoprime_documentary_matches_stay_candidate_only(self):
+        econoprime = Fan.device_models[0x0100]
+        vut = econoprime.candidates[0]
+        self.assertEqual(vut.model, "VENTS VUT 270 V5B EC A21")
+        self.assertEqual(vut.evidence, "documentary_match")
+        self.assertIn(
+            "https://www.econology.fr/df-270-connect-econoprime-vmc-double-flux.html",
+            vut.source_documents,
+        )
+        self.assertNotIn(vut.model, econoprime.display_name)
+
+        bora_manual = (
+            "https://www.econology.fr/media/attachment/file_pdf/"
+            "notice_utilisateur_bora.pdf"
+        )
+        for parser_key, size in ((0x1100, 160), (0x1600, 200)):
+            model = Fan.device_models[parser_key]
+            bora_candidates = {
+                candidate.model: candidate
+                for candidate in model.candidates
+                if candidate.brand == "ECONOPRIME"
+            }
+            self.assertIn(f"Bora {size}", bora_candidates)
+            self.assertIn(f"Bora {size} Prime L1000", bora_candidates)
+            for candidate in bora_candidates.values():
+                self.assertEqual(candidate.evidence, "documentary_match")
+                self.assertIn(bora_manual, candidate.source_documents)
+                self.assertNotIn(candidate.model, model.display_name)
+
+    def test_readme_search_index_covers_catalog_names_and_statuses(self):
+        readme = README_PATH.read_text()
+        search_index = readme.split("## Device names and search keywords", 1)[1].split(
+            "# Tested on:", 1
+        )[0]
+        official_section, external_section = search_index.split(
+            "External relabels and OEM names tracked as evidence or candidates:", 1
+        )
+
+        all_marketing_names = []
+        for model in Fan.device_models.values():
+            for name in (*model.relabels, *model.candidates):
+                self.assertIn(name.model, external_section)
+                self.assertNotIn(name.model, official_section)
+            all_marketing_names.extend(
+                (*model.official_names, *model.relabels, *model.candidates)
+            )
+
+        for brand in {entry.brand for entry in all_marketing_names}:
+            self.assertIn(brand, search_index)
+        for name in ECONOPRIME_README_ONLY_NAMES:
+            self.assertIn(name, external_section)
+
+        self.assertNotIn("## Device and brand search index", readme)
+        self.assertNotIn("| Unit type / profile |", readme)
+
     def test_unit_type_metadata_keeps_source_documents_with_models(self):
+        self.assertIn(
+            "https://www.econology.fr/"
+            "df-270-connect-econoprime-vmc-double-flux.html",
+            Fan.device_models[0x0100].source_documents,
+        )
+        self.assertIn(
+            "https://ventilation-system.com/download/vut-v5b-ec-manual-19669.pdf",
+            Fan.device_models[0x0100].candidates[0].source_documents,
+        )
+        self.assertIn(
+            "https://blaubergventilatoren.net/download/freshpoint-datasheet-9055.pdf",
+            Fan.device_models[0x1100].source_documents,
+        )
         self.assertIn(
             "https://blaubergventilatoren.net/download/vento-inhome-manual-14758.pdf",
             Fan.device_models[0x0300].source_documents,

@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from .ecoventv2 import Fan
 import voluptuous as vol
 
 from homeassistant import config_entries, exceptions
@@ -18,259 +17,308 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 
-from .const import CONF_AUTO_CLOCK_SYNC, CONF_SILENT_MODE, DOMAIN, UPDATE_INTERVAL
+from .const import (
+    A21_DEVICE_MODELS,
+    A21_BAUD_RATES,
+    A21_STOP_BITS,
+    CONF_AUTO_CLOCK_SYNC,
+    CONF_BAUDRATE,
+    CONF_DEVICE_MODEL,
+    CONF_PARITY,
+    CONF_SERIAL_PORT,
+    CONF_SILENT_MODE,
+    CONF_STOPBITS,
+    CONF_TRANSPORT,
+    CONF_UNIT_ID,
+    DOMAIN,
+    SUPPORTED_TRANSPORTS,
+    TRANSPORT_BGCP_UDP,
+    TRANSPORT_MODBUS_RTU,
+    TRANSPORT_MODBUS_TCP,
+    UPDATE_INTERVAL,
+)
+from .device_factory import create_device
 
 _LOGGER = logging.getLogger(__name__)
 
-# adjust the data schema to the data that you need
-STEP_USER_DATA_SCHEMA = vol.Schema(
-    {
-        # vol.Required(CONF_IP_ADDRESS, default="<broadcast>"): str,
-        vol.Required(CONF_IP_ADDRESS): str,
-        vol.Optional(CONF_PORT, default=4000): int,
-        # vol.Optional(CONF_DEVICE_ID, default="DEFAULT_DEVICEID"): str,   nothing useful to enter
-        vol.Required(CONF_PASSWORD, default="1111"): str,
-        vol.Optional(CONF_NAME, default="Vento Expert Fan"): str,
-        vol.Optional(UPDATE_INTERVAL, default=30): int,
-        vol.Optional(CONF_AUTO_CLOCK_SYNC, default=True): bool,
-        vol.Optional(CONF_SILENT_MODE, default=False): bool,
+
+def _common_schema(defaults: dict[str, Any]) -> dict[Any, Any]:
+    """Return fields shared by every transport."""
+    return {
+        vol.Optional(
+            CONF_NAME, default=defaults.get(CONF_NAME, "Vento Expert Fan")
+        ): str,
+        vol.Optional(UPDATE_INTERVAL, default=defaults.get(UPDATE_INTERVAL, 30)): int,
+        vol.Optional(
+            # Legacy initial form default=True; reconfigure uses the saved value.
+            CONF_AUTO_CLOCK_SYNC,
+            default=defaults.get(CONF_AUTO_CLOCK_SYNC, True),
+        ): bool,
     }
-)
 
 
-class VentoHub:
-    """Vento Hub Class."""
+def _bgcp_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
+    """Return the legacy BGCP-over-UDP form schema."""
+    defaults = defaults or {}
+    schema = {
+        vol.Required(CONF_IP_ADDRESS, default=defaults.get(CONF_IP_ADDRESS, "")): str,
+        vol.Optional(CONF_PORT, default=defaults.get(CONF_PORT, 4000)): int,
+        vol.Required(CONF_PASSWORD, default=defaults.get(CONF_PASSWORD, "1111")): str,
+        **_common_schema(defaults),
+        # Legacy initial form default=False; reconfigure uses the saved value.
+        vol.Optional(
+            CONF_SILENT_MODE, default=defaults.get(CONF_SILENT_MODE, False)
+        ): bool,
+    }
+    return vol.Schema(schema)
 
-    def __init__(self, host: str, port: int, fan_id: str, name: str) -> None:
-        """Initialize."""
-        self.host = host
-        self.port = port
-        self.fan_id = fan_id
-        self.fan = None
-        self.name = name
 
-    async def authenticate(self, hass: HomeAssistant, password: str) -> bool:
-        """Authenticate."""
-        self.fan = Fan(self.host, password, self.fan_id, self.name, self.port)
-        await hass.async_add_executor_job(self.fan.init_device)
-        self.fan_id = self.fan.id
-        _LOGGER.info(
-            "Config Flow: Authenticated fan with name:%s ID: %s", self.name, self.fan_id
-        )
-        if self.fan_id is not None:
-            self.name = self.name + " " + self.fan_id
-        return (
-            (self.fan.id != "DEFAULT_DEVICEID")
-            and (self.fan_id is not None)
-            and (self.fan.current_wifi_ip is not None)
-        )
-        # added check for current wifi IP to avoid unvalid fan id. There is no further check elsewhere to prevent progressing with wrong fan id.
+def _modbus_tcp_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
+    """Return the A21 Modbus TCP form schema."""
+    defaults = defaults or {}
+    schema = {
+        vol.Required(CONF_IP_ADDRESS, default=defaults.get(CONF_IP_ADDRESS, "")): str,
+        vol.Optional(CONF_PORT, default=defaults.get(CONF_PORT, 502)): vol.All(
+            int, vol.Range(min=1, max=65535)
+        ),
+        vol.Optional(CONF_UNIT_ID, default=defaults.get(CONF_UNIT_ID, 1)): vol.All(
+            int, vol.Range(min=1, max=16)
+        ),
+        vol.Optional(
+            CONF_DEVICE_MODEL,
+            default=defaults.get(CONF_DEVICE_MODEL, A21_DEVICE_MODELS[-1]),
+        ): vol.In(A21_DEVICE_MODELS),
+        **_common_schema(defaults),
+    }
+    return vol.Schema(schema)
+
+
+def _modbus_rtu_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
+    """Return the A21 Modbus RTU form schema."""
+    defaults = defaults or {}
+    schema = {
+        vol.Required(CONF_SERIAL_PORT, default=defaults.get(CONF_SERIAL_PORT, "")): str,
+        vol.Optional(
+            CONF_BAUDRATE, default=defaults.get(CONF_BAUDRATE, 115200)
+        ): vol.In(A21_BAUD_RATES),
+        vol.Optional(CONF_PARITY, default=defaults.get(CONF_PARITY, "N")): vol.In(
+            ("N", "E", "O")
+        ),
+        vol.Optional(CONF_STOPBITS, default=defaults.get(CONF_STOPBITS, 2)): vol.In(
+            A21_STOP_BITS
+        ),
+        vol.Optional(CONF_UNIT_ID, default=defaults.get(CONF_UNIT_ID, 1)): vol.All(
+            int, vol.Range(min=1, max=16)
+        ),
+        vol.Optional(
+            CONF_DEVICE_MODEL,
+            default=defaults.get(CONF_DEVICE_MODEL, A21_DEVICE_MODELS[-1]),
+        ): vol.In(A21_DEVICE_MODELS),
+        **_common_schema(defaults),
+    }
+    return vol.Schema(schema)
+
+
+# Kept for callers/tests that imported the old public schema name.
+STEP_USER_DATA_SCHEMA = _bgcp_schema()
+
+
+def _schema_for_transport(
+    transport: str, defaults: dict[str, Any] | None = None
+) -> vol.Schema:
+    """Return the transport-specific connection schema."""
+    if transport == TRANSPORT_BGCP_UDP:
+        return _bgcp_schema(defaults)
+    if transport == TRANSPORT_MODBUS_TCP:
+        return _modbus_tcp_schema(defaults)
+    if transport == TRANSPORT_MODBUS_RTU:
+        return _modbus_rtu_schema(defaults)
+    raise ValueError(f"Unsupported transport: {transport}")
 
 
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
-    """Validate the user input allows us to connect.
+    """Validate a device connection and return its stable identity."""
+    config = dict(data)
+    config.setdefault(CONF_TRANSPORT, TRANSPORT_BGCP_UDP)
+    device = create_device(config)
 
-    Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
-    """
+    try:
+        initialized = await hass.async_add_executor_job(device.init_device)
+        if not initialized:
+            if getattr(device, "identity_probe_failed", False):
+                raise UnsupportedDevice
+            if config[CONF_TRANSPORT] == TRANSPORT_BGCP_UDP:
+                raise InvalidAuth
+            raise CannotConnect
 
-    # If your PyPI package is not built with async, pass your methods
-    # to the executor:
-    # await hass.async_add_executor_job(
-    #     your_validate_func, data["username"], data["password"]
-    # )
+        device_id = getattr(device, "id", None)
+        if not device_id or device_id == "DEFAULT_DEVICEID":
+            if getattr(device, "identity_probe_failed", False):
+                raise UnsupportedDevice
+            raise InvalidAuth
 
-    hub = VentoHub(
-        # data[CONF_IP_ADDRESS], data[CONF_PORT], data[CONF_DEVICE_ID], data[CONF_NAME]
-        data[CONF_IP_ADDRESS],
-        data[CONF_PORT],
-        "DEFAULT_DEVICEID",
-        data[CONF_NAME],
-    )
+        if (
+            config[CONF_TRANSPORT] == TRANSPORT_BGCP_UDP
+            and getattr(device, "current_wifi_ip", None) is None
+        ):
+            raise InvalidAuth
 
-    if not await hub.authenticate(hass, data[CONF_PASSWORD]):
-        raise InvalidAuth
+        title = getattr(device, "name", None) or config[CONF_NAME]
+        if config[CONF_TRANSPORT] == TRANSPORT_BGCP_UDP:
+            title = f"{title} {device_id}"
 
-    # If you cannot connect:
-    # throw CannotConnect
-    # If the authentication is wrong:
-    # InvalidAuth
-
-    # Return info that you want to store in the config entry.
-    return {"title": hub.name, "id": hub.fan_id}
+        return {
+            "title": title,
+            "id": device_id,
+        }
+    except (CannotConnect, InvalidAuth, UnsupportedDevice):
+        raise
+    except (ConnectionError, OSError) as err:
+        raise CannotConnect from err
+    finally:
+        close = getattr(device, "close", None)
+        if close is not None:
+            await hass.async_add_executor_job(close)
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for EcoVent_v2."""
 
-    VERSION = 1
-
-    def __init__(self):
-        """Initialite ConfigFlow."""
-        self._fan = Fan(
-            "<broadcast>", "1111", "DEFAULT_DEVICEID", "Vento Express", 4000
-        )
+    VERSION = 2
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle the initial step."""
-        if user_input is None:
-            return self.async_show_form(
-                step_id="user", data_schema=STEP_USER_DATA_SCHEMA
+        """Choose a transport before collecting its connection data."""
+        # Existing automations submit the legacy BGCP fields directly to `user`.
+        if user_input is not None and CONF_TRANSPORT not in user_input:
+            return await self._async_create_transport_entry(
+                TRANSPORT_BGCP_UDP, user_input, "user"
             )
 
-        errors = {}
+        if user_input is None:
+            return self.async_show_form(
+                step_id="user",
+                data_schema=vol.Schema(
+                    {
+                        vol.Required(
+                            CONF_TRANSPORT, default=TRANSPORT_BGCP_UDP
+                        ): vol.In(SUPPORTED_TRANSPORTS)
+                    }
+                ),
+            )
 
-        try:
-            """
-            if user_input[CONF_IP_ADDRESS] == "<broadcast>":
-                ip = None
-                ips = await self.hass.async_add_executor_job(
-                    self._fan.search_devices, "0.0.0.0"
-                )
-                # ips = ["10.94.0.105", "10.94.0.106", "10.94.0.107", "10.94.0.108"]
-                unique_ids = []
-                _LOGGER.debug("Config Flow: Found IPs: %s", ips)
-                for entry in self._async_current_entries(include_ignore=True):
-                    unique_ids.append(entry.unique_id)
-                for ip in ips:
-                    self._fan.host = ip
-                    self._fan.id = user_input[CONF_DEVICE_ID]
-                    self._fan.password = user_input[CONF_PASSWORD]
-                    self._fan.name = user_input[CONF_NAME]
-                    self._fan.port = user_input[CONF_PORT]
-                    _LOGGER.debug("Config Flow: Initializing fan at IP: %s", ip)
-                    await self.hass.async_add_executor_job(self._fan.init_device)
-                    if self._fan.id not in unique_ids:
-                        user_input[CONF_IP_ADDRESS] = ip
-                        break
-                if user_input[CONF_IP_ADDRESS] == "<broadcast>":
-                    raise CannotConnect
-                    """
-            if user_input[UPDATE_INTERVAL] < 3:
-                errors[UPDATE_INTERVAL] = (
-                    "update interval must be at least 3 seconds to prevent overloading the device with requests."
-                )
-                raise exceptions.HomeAssistantError("update interval too low")
+        transport = user_input[CONF_TRANSPORT]
+        if transport == TRANSPORT_BGCP_UDP:
+            return await self.async_step_bgcp()
+        if transport == TRANSPORT_MODBUS_TCP:
+            return await self.async_step_modbus_tcp()
+        if transport == TRANSPORT_MODBUS_RTU:
+            return await self.async_step_modbus_rtu()
+        return self.async_abort(reason="unsupported_transport")
 
-            info = await validate_input(self.hass, user_input)
-            await self.async_set_unique_id(info["id"])
-            self._abort_if_unique_id_configured()
-        except CannotConnect:
-            errors["base"] = "cannot_connect"
-        except InvalidAuth:
-            errors["base"] = "invalid_auth"
-        except Exception:  # pylint: disable=broad-except
-            _LOGGER.exception("Unexpected exception")
-            errors["base"] = "unknown"
-        else:
-            return self.async_create_entry(title=info["title"], data=user_input)
+    async def async_step_bgcp(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Configure a legacy BGCP-over-UDP device."""
+        return await self._async_create_transport_entry(
+            TRANSPORT_BGCP_UDP, user_input, "bgcp"
+        )
+
+    async def async_step_modbus_tcp(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Configure a VENTS A21 controller via Modbus TCP."""
+        return await self._async_create_transport_entry(
+            TRANSPORT_MODBUS_TCP, user_input, "modbus_tcp"
+        )
+
+    async def async_step_modbus_rtu(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Configure a VENTS A21 controller via Modbus RTU."""
+        return await self._async_create_transport_entry(
+            TRANSPORT_MODBUS_RTU, user_input, "modbus_rtu"
+        )
+
+    async def _async_create_transport_entry(
+        self,
+        transport: str,
+        user_input: dict[str, Any] | None,
+        step_id: str,
+    ) -> FlowResult:
+        """Validate and create an entry for a selected transport."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            data = _schema_for_transport(transport)(dict(user_input))
+            data[CONF_TRANSPORT] = transport
+            if data[UPDATE_INTERVAL] < 3:
+                errors[UPDATE_INTERVAL] = "update_interval_too_low"
+            else:
+                try:
+                    info = await validate_input(self.hass, data)
+                    await self.async_set_unique_id(info["id"])
+                    self._abort_if_unique_id_configured()
+                except CannotConnect:
+                    errors["base"] = "cannot_connect"
+                except InvalidAuth:
+                    errors["base"] = "invalid_auth"
+                except UnsupportedDevice:
+                    errors["base"] = "unsupported_device"
+                except Exception:  # pylint: disable=broad-except
+                    _LOGGER.exception("Unexpected exception during device validation")
+                    errors["base"] = "unknown"
+                else:
+                    return self.async_create_entry(title=info["title"], data=data)
 
         return self.async_show_form(
-            step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
+            step_id=step_id,
+            data_schema=_schema_for_transport(transport, user_input),
+            errors=errors,
         )
 
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle reconfigure step."""
+        """Reconfigure a device without changing its transport."""
+        entry = self._get_reconfigure_entry()
+        transport = entry.data.get(CONF_TRANSPORT, TRANSPORT_BGCP_UDP)
         errors: dict[str, str] = {}
 
-        # _LOGGER.info("Reconfigure called with user input: %s", user_input)
         if user_input is not None:
-            try:
-                """
-                if user_input[CONF_IP_ADDRESS] == "<broadcast>":
-                    ip = None
-                    ips = await self.hass.async_add_executor_job(
-                        self._fan.search_devices, "0.0.0.0"
-                    )
-                    # ips = ["10.94.0.105", "10.94.0.106", "10.94.0.107", "10.94.0.108"]
-                    unique_ids = []
-                    for entry in self._async_current_entries(include_ignore=True):
-                        unique_ids.append(entry.unique_id)
-                    for ip in ips:
-                        self._fan.host = ip
-                        self._fan.id = user_input[CONF_DEVICE_ID]
-                        self._fan.password = user_input[CONF_PASSWORD]
-                        self._fan.name = user_input[CONF_NAME]
-                        self._fan.port = user_input[CONF_PORT]
-                        await self.hass.async_add_executor_job(self._fan.init_device)
-                        if self._fan.id not in unique_ids:
-                            user_input[CONF_IP_ADDRESS] = ip
-                            break
-                    if user_input[CONF_IP_ADDRESS] == "<broadcast>":
-                        raise CannotConnect
-                    """
-                if user_input[UPDATE_INTERVAL] < 3:
-                    errors[UPDATE_INTERVAL] = (
-                        "update interval must be at least 3 seconds to prevent overloading the device with requests."
-                    )
-                    raise exceptions.HomeAssistantError("update interval too low")
-
-                await validate_input(self.hass, user_input)
-            except CannotConnect:
-                errors["base"] = "cannot_connect"
-            except InvalidAuth:
-                errors["base"] = "invalid_auth"
-            except Exception:  # pylint: disable=broad-except
-                _LOGGER.exception("Unexpected exception")
-                errors["base"] = "unknown"
+            data = _schema_for_transport(transport)(dict(user_input))
+            data[CONF_TRANSPORT] = transport
+            if data[UPDATE_INTERVAL] < 3:
+                errors[UPDATE_INTERVAL] = "update_interval_too_low"
             else:
-                return self.async_update_reload_and_abort(
-                    self._get_reconfigure_entry(), data_updates=user_input
-                )
-
-        ip_configured = self._get_reconfigure_entry().data.get(
-            CONF_IP_ADDRESS, "<broadcast>"
-        )
-        port_configured = self._get_reconfigure_entry().data.get(CONF_PORT, 4000)
-        # devId_configured = self._get_reconfigure_entry().data.get(
-        #    CONF_DEVICE_ID, "DEFAULT_DEVICEID"
-        # )
-        password_configured = self._get_reconfigure_entry().data.get(
-            CONF_PASSWORD, "1111"
-        )
-        name_configured = self._get_reconfigure_entry().data.get(
-            CONF_NAME, "Vento Expert Fan"
-        )
-        update_interval_configured = self._get_reconfigure_entry().data.get(
-            UPDATE_INTERVAL, 30
-        )
-        auto_clock_sync_configured = self._get_reconfigure_entry().data.get(
-            CONF_AUTO_CLOCK_SYNC, True
-        )
-        silent_mode_configured = self._get_reconfigure_entry().data.get(
-            CONF_SILENT_MODE, False
-        )
+                try:
+                    await validate_input(self.hass, data)
+                except CannotConnect:
+                    errors["base"] = "cannot_connect"
+                except InvalidAuth:
+                    errors["base"] = "invalid_auth"
+                except UnsupportedDevice:
+                    errors["base"] = "unsupported_device"
+                except Exception:  # pylint: disable=broad-except
+                    _LOGGER.exception("Unexpected exception during device validation")
+                    errors["base"] = "unknown"
+                else:
+                    return self.async_update_reload_and_abort(entry, data_updates=data)
 
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_IP_ADDRESS, default=ip_configured): str,
-                    vol.Optional(CONF_PORT, default=port_configured): int,
-                    # vol.Optional(CONF_DEVICE_ID, default=devId_configured): str,
-                    vol.Required(CONF_PASSWORD, default=password_configured): str,
-                    vol.Optional(CONF_NAME, default=name_configured): str,
-                    vol.Optional(
-                        UPDATE_INTERVAL, default=update_interval_configured
-                    ): int,
-                    vol.Optional(
-                        CONF_AUTO_CLOCK_SYNC, default=auto_clock_sync_configured
-                    ): bool,
-                    vol.Optional(
-                        CONF_SILENT_MODE, default=silent_mode_configured
-                    ): bool,
-                }
-            ),
+            data_schema=_schema_for_transport(transport, dict(entry.data)),
             errors=errors,
         )
 
 
 class CannotConnect(exceptions.HomeAssistantError):
-    """Error to indicate we cannot connect."""
+    """Error to indicate that a device cannot be reached."""
 
 
 class InvalidAuth(exceptions.HomeAssistantError):
-    """Error to indicate there is invalid auth."""
+    """Error to indicate invalid BGCP authentication or identity."""
+
+
+class UnsupportedDevice(exceptions.HomeAssistantError):
+    """Error to indicate a non-A21 controller answered the identity probe."""

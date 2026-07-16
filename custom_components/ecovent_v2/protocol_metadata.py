@@ -34,6 +34,48 @@ BREEZY_ECO_MANUAL_URL = (
 FRESHPOINT_MANUAL_URL = (
     "https://blaubergventilatoren.net/download/freshpoint-manual-16999.pdf"
 )
+FRESHPOINT_DATASHEET_URL = (
+    "https://blaubergventilatoren.net/download/freshpoint-datasheet-9055.pdf"
+)
+FRESHPOINT_USER_MANUAL_URL = (
+    "https://blaubergventilatoren.net/download/freshpoint-manual-9552.pdf"
+)
+ECONOPRIME_DF270_PRODUCT_URL = (
+    "https://www.econology.fr/df-270-connect-econoprime-vmc-double-flux.html"
+)
+ECONOPRIME_DF270_MANUAL_URL = (
+    "https://www.econology.fr/media/attachment/file_pdf/"
+    "notice_utilisation_df_270_econoprime_v5.pdf"
+)
+ECONOPRIME_DF_CONNECT_APP_MANUAL_URL = (
+    "https://www.econology.fr/media/attachment/file/n/o/"
+    "notice_installateur-application_df_connect5_v3_5.pdf"
+)
+ECONOPRIME_A22_WIFI_PANEL_URL = (
+    "https://www.econology.fr/panneau-de-commande-a22-wifi-vmc-double-flux-"
+    "df-connect-econoprime.html"
+)
+ECONOPRIME_BORA_PRODUCT_URL = (
+    "https://www.econology.fr/bora-extracteur-d-air-double-flux-econoprime.html"
+)
+ECONOPRIME_BORA_MANUAL_URL = (
+    "https://www.econology.fr/media/attachment/file_pdf/notice_utilisateur_bora.pdf"
+)
+VENTS_VUT_270_V5B_EC_A21_URL = (
+    "https://ventilation-system.com/product/vut-270-v5b-ec-a21"
+)
+VENTS_VUT_V5B_EC_DATASHEET_URL = (
+    "https://ventilation-system.com/download/vut-v5b-ec-datasheet-19690.pdf"
+)
+VENTS_VUT_V5B_EC_USER_MANUAL_URL = (
+    "https://ventilation-system.com/download/vut-v5b-ec-manual-19693.pdf"
+)
+VENTS_A21_MODBUS_MANUAL_URL = (
+    "https://ventilation-system.com/download/vut-v5b-ec-manual-19669.pdf"
+)
+VENTS_A21_CONTROL_MANUAL_URL = (
+    "https://ventilation-system.com/download/vut-v5b-ec-manual-19670.pdf"
+)
 FRESHBOX_100_WIFI_MANUAL_URL = (
     "https://blaubergventilatoren.net/download/freshbox-100-wifi-datasheet-7508.pdf"
 )

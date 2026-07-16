@@ -4,9 +4,12 @@
 Home Assistant Integration. Integration for newest Fans with api version 2
 
 This integration talks to the local BGCP/UDP Wi-Fi protocol used by devices on
-the Blauberg Group / VENTS platform. VENTS is an official sibling brand, not
-just a Blauberg relabel. The exact feature set is selected from the protocol
-device type reported by parameter `0x00B9`.
+the Blauberg Group / VENTS platform and compatible units, and to VENTS A21
+controllers over Modbus TCP or RTU. VENTS is an official sibling brand, not just
+a Blauberg relabel. BGCP features are selected from parameter `0x00B9`; Modbus
+onboarding requires the controller to report A21 value `1` in input register
+`37`. Candidate OEM relationships remain labelled as candidates until device
+or manufacturer evidence proves them.
 
 ## Device names and search keywords
 
@@ -44,8 +47,9 @@ Official Blauberg / VENTS platform families and names:
 * VENTS Breezy, Breezy 160, Breezy 160-E, Breezy 160-E Smart,
   Breezy 200-E, Breezy 200-E Smart, Breezy Eco 160, Breezy Eco 200
 * Blauberg Freshpoint, Freshpoint 160, Freshpoint 160-E,
-  Freshpoint 160-E Pro, Freshpoint 200, Freshpoint 200-E,
-  Freshpoint 200-E Pro, Freshpoint Eco 160, Freshpoint Eco 200
+  Freshpoint 160-E L055/L07/L1, Freshpoint 160-E Pro L055/L07/L1,
+  Freshpoint 200, Freshpoint 200-E L055/L07/L1,
+  Freshpoint 200-E Pro L055/L07/L1, Freshpoint Eco 160, Freshpoint Eco 200
 * VENTS Arc Smart, Arc Smart white, Arc Smart black,
   Blauberg O2 Supreme, O2 Supreme white, O2 Supreme black
 
@@ -56,20 +60,42 @@ External relabels and OEM names tracked as evidence or candidates:
 * SIKU RV, SIKU RV 50 W Pro WiFi V2, SIKU RV 50 W PRO WIFI V2,
   SIKU RV 30 DW Pro Duo WiFi V2, SIKU RV 30 DW PRO DUO WIFI V2,
   SIKU RV 25 W Pro WiFi V2
-* Flexit Roomie One WiFi V2, Roomie One Wifi V2, Roomie Dual Wifi,
-  Roomie Dual WiFi V2, Flexit Aura, Flexit Muto
+* Flexit Roomie One WiFi V2, Roomie One Wifi V2, Flexit Roomie Dual Wifi,
+  Roomie Dual Wifi, Roomie Dual WiFi V2, Flexit Aura, Flexit Muto
 * DUKA One, DUKA One S6W, DUKA One S6BW, DUKA One S4 Wi-Fi,
   DUKA One S6 Wi-Fi, DUKA One Pro 25 S Wi-Fi, DUKA One Pro 50 S Wi-Fi
 * RL Raumklima, RL PRO-Serie, RL 50RVW, RL 30DVW, RL 25RVW
 * Winzel V.2, Winzel Expert WiFi RW1-50 P,
   Blauberg Winzel Expert WiFi RW1-50 P
 * NIBE DVC 10, NIBE DVC 10-50W, NIBE DVC 10-D30W
+* ECONOPRIME DF270, ECONOPRIME DF270 Connect, and the reported seller spelling
+  Econology DF270 Connect (`0x0100`, mapped to the tested VENTO protocol
+  profile). VENTS VUT 270 V5B EC A21 is supported through the separate A21
+  Modbus transport; this does not make it a confirmed DF270 relabel or prove
+  BGCP compatibility.
+* ECONOPRIME Bora documentary candidates: Bora 160, Bora 160 L440,
+  Bora 160 L550, Bora 160 L700, Bora 160 L1000, Bora 160 Prime L440,
+  Bora 160 Prime L550, Bora 160 Prime L700, Bora 160 Prime L1000,
+  Bora 200, Bora 200 L440, Bora 200 L550, Bora 200 L700, Bora 200 L1000,
+  Bora 200 Prime L440, Bora 200 Prime L550, Bora 200 Prime L700,
+  Bora 200 Prime L1000. No Bora unit type or BGCP capture is documented.
+* Other ECONOPRIME DF search names: DF 180 Flat, DF 180 Flat Connect,
+  DFF18021, DF 270, DF27014, DF 270 Connect, DF27021, DF 350,
+  DF 350 Connect, DF35021
+* Other ECONOPRIME Zephyr search names: Zephyr 100 S, ZEPH100, Zephyr 240 S,
+  ZEPH240A14, Zephyr 240 S Connect, ZEPH240A21, Zephyr 270 V R, 114800001,
+  Zephyr 270 V Connect R, 114800002, Zephyr 550 V PH Connect R, 114800003
+* Other ECONOPRIME PremAIR/GatePass search names: URC 250, URC250, URHF 150,
+  URHF150, URHFCF 150, URHFCF150, URHF 200, URHF200, URHFCF 200,
+  URHFCF200, URH 350, URH350
+* Other ECONOPRIME search names without BGCP evidence: Airion 100, Airion 150
 
 # Tested on:
 * Blauberg VENTO Expert A50-1 W V.2
 
 # Currently supported:
 * UI integration setup
+* VENTS A21 Modbus TCP/RTU with an input-register `37 == 1` identity check
 * turn_on/turn_off
 * Preset modes:
   - low
@@ -437,3 +463,26 @@ Version 1.2.15
 * Guard schedule frontend registration before the first await, preventing
   duplicate static route registration when multiple EcoVent config entries are
   set up concurrently.
+
+Version 1.2.16
+* Keep protocol reads inside the documented 256-byte packet limit and verify
+  that every requested register was present in a valid bulk response. Registers
+  omitted by an otherwise valid reply are retried individually, and the parser
+  now preserves the protocol high-byte page across following parameters. A
+  refresh remains failed if an omitted register cannot be recovered, preventing
+  Home Assistant from accepting a stale cycle as complete.
+* Refresh Freshpoint humidity and all four built-in temperature registers on
+  quick updates. The non-Pro model has no VOC/CO2eq sensor, so those optional
+  readings may correctly remain unavailable.
+* Map reported device type `256` / parser key `0x0100` to ECONOPRIME DF270
+  Connect with the tested VENTO profile, while keeping the reported VENTS A21
+  OEM relationship explicitly unconfirmed.
+* Add official Freshpoint 160/200 standard and Pro length variants, current
+  Freshpoint specification/manual links, and the current VENTS VUT V5B EC A21
+  datasheet, product manual, Modbus table, and control manual as research
+  sources.
+
+Version 1.2.17
+* Add separate VENTS A21 Modbus TCP and RTU transports with a read-only
+  controller identity check, the complete published register table, RTC and
+  weekly schedule support, and legacy BGCP config-entry migration.

@@ -13,6 +13,18 @@ def encode_raw_number(value: float, value_bytes: int = 1) -> str:
     return hex(intval).replace("0x", "").zfill(2)
 
 
+def encode_number_write_value(
+    value: float, value_bytes: int, *, native_numeric: bool
+) -> int | str:
+    """Encode a number for BGCP, or keep it numeric for a typed protocol."""
+    if native_numeric:
+        intval = int(value)
+        if intval != value:
+            raise ValueError(f"integer protocol value required, got {value!r}")
+        return intval
+    return encode_raw_number(value, value_bytes)
+
+
 def encode_speed_percent(value: float, speed_percent_scale: str) -> str:
     """Encode a Home Assistant percent value for a speed setpoint row."""
     target = max(0, min(100, int(value)))

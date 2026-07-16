@@ -2,11 +2,11 @@
   "domain": "ecovent_v2",
   "name": "Vento Eco Vent v 2.1",
   "codeowners": ["@gody01","@AndyNew2"],
-  "version": "1.2.15",
+  "version": "1.2.17",
   "config_flow": true,
   "documentation": "https://www.home-assistant.io/integrations/ecovent_v2",
   "issue_tracker": "https://github.com/gody01/ecovent_v2/issues",
   "iot_class": "local_polling",
   "loggers": ["pyEcoventV2"],
-  "requirements": []
+  "requirements": ["pymodbus==3.13.1", "pyserial==3.5"]
 }

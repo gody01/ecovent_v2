@@ -3,7 +3,10 @@
 try:
     from .protocol_metadata import (
         ARC_SMART_MANUAL_URL,
-        ECONOPRIME_DF270_LISTING_URL,
+        ECONOPRIME_A22_WIFI_PANEL_URL,
+        ECONOPRIME_DF_CONNECT_APP_MANUAL_URL,
+        ECONOPRIME_DF270_MANUAL_URL,
+        ECONOPRIME_DF270_PRODUCT_URL,
         O2_SUPREME_MANUAL_URL,
         TWINFRESH_STYLE_MANUAL_URL,
         TWINFRESH_STYLE_MINI_MANUAL_URL,
@@ -19,7 +22,10 @@ try:
 except ImportError:
     from protocol_metadata import (
         ARC_SMART_MANUAL_URL,
-        ECONOPRIME_DF270_LISTING_URL,
+        ECONOPRIME_A22_WIFI_PANEL_URL,
+        ECONOPRIME_DF_CONNECT_APP_MANUAL_URL,
+        ECONOPRIME_DF270_MANUAL_URL,
+        ECONOPRIME_DF270_PRODUCT_URL,
         O2_SUPREME_MANUAL_URL,
         TWINFRESH_STYLE_MANUAL_URL,
         TWINFRESH_STYLE_MINI_MANUAL_URL,
@@ -46,14 +52,22 @@ DEVICE_MODELS = {
                 "DF270",
                 "ECONOPRIME DF270",
                 "official_listing",
-                (ECONOPRIME_DF270_LISTING_URL,),
+                (
+                    ECONOPRIME_DF270_PRODUCT_URL,
+                    ECONOPRIME_DF270_MANUAL_URL,
+                ),
             ),
             MarketingName(
                 "ECONOPRIME",
                 "DF270",
                 "ECONOPRIME DF270 Connect",
                 "official_listing",
-                (ECONOPRIME_DF270_LISTING_URL,),
+                (
+                    ECONOPRIME_DF270_PRODUCT_URL,
+                    ECONOPRIME_DF270_MANUAL_URL,
+                    ECONOPRIME_DF_CONNECT_APP_MANUAL_URL,
+                    ECONOPRIME_A22_WIFI_PANEL_URL,
+                ),
             ),
         ),
         relabels=(
@@ -69,8 +83,12 @@ DEVICE_MODELS = {
                 "VENTS",
                 "VUT V5B EC",
                 "VENTS VUT 270 V5B EC A21",
-                "candidate",
+                "documentary_match",
                 (
+                    ECONOPRIME_DF270_PRODUCT_URL,
+                    ECONOPRIME_DF270_MANUAL_URL,
+                    ECONOPRIME_DF_CONNECT_APP_MANUAL_URL,
+                    ECONOPRIME_A22_WIFI_PANEL_URL,
                     VENTS_VUT_270_V5B_EC_A21_URL,
                     VENTS_VUT_V5B_EC_DATASHEET_URL,
                     VENTS_VUT_V5B_EC_USER_MANUAL_URL,
@@ -79,7 +97,12 @@ DEVICE_MODELS = {
                 ),
             ),
         ),
-        source_documents=(ECONOPRIME_DF270_LISTING_URL,),
+        source_documents=(
+            ECONOPRIME_DF270_PRODUCT_URL,
+            ECONOPRIME_DF270_MANUAL_URL,
+            ECONOPRIME_DF_CONNECT_APP_MANUAL_URL,
+            ECONOPRIME_A22_WIFI_PANEL_URL,
+        ),
     ),
     0x0300: DeviceModel(
         "Blauberg VENTO Expert / VENTS TwinFresh Expert",
@@ -217,11 +240,11 @@ DEVICE_MODELS = {
             MarketingName(
                 "Flexit", "Roomie Dual", "Flexit Roomie Dual Wifi", "community_tested"
             ),
-            MarketingName("Flexit", "Roomie Dual", "Roomie Dual WiFi V2", "candidate"),
             MarketingName("DUKA", "DUKA One", "DUKA One S6BW", "community_tested"),
             MarketingName("RL Raumklima", "RL PRO-Serie", "RL 30DVW", "community_tested"),
         ),
         candidates=(
+            MarketingName("Flexit", "Roomie Dual", "Roomie Dual WiFi V2", "candidate"),
             MarketingName("Flexit", "Aura", "Flexit Aura", "candidate"),
             MarketingName("Flexit", "Muto", "Flexit Muto", "candidate"),
             MarketingName("NIBE", "DVC 10", "NIBE DVC 10-D30W", "candidate"),

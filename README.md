@@ -10,69 +10,103 @@ from the protocol device type reported by parameter `0x00B9`; candidate OEM
 relationships remain labelled as candidates until manufacturer evidence proves
 them.
 
-## Device names and search keywords
+## Device and brand search index
 
-Use this list for search/discovery. Some third-party/OEM names are recorded as
-compatibility evidence or candidates; if your device is listed as a candidate,
-please open an issue with its reported unit type (`0x00B9`) so it can be mapped
-confidently.
+Searchable brands in the reviewed catalogue are `Blauberg Ventilatoren`,
+`VENTS`, `ECONOPRIME`, `Econology`, `SIKU`, `Flexit`, `DUKA`, `OXXIFY`,
+`Oxxify`, `RL Raumklima`, `Winzel`, and `NIBE`. A listed name is not
+automatically a hardware-support guarantee. The integration chooses behavior
+from the device-reported `0x00B9` unit type:
 
-Official Blauberg / VENTS platform families and names:
+* **Protocol-mapped** means the reported unit type selects an implemented
+  profile. It does not mean every marketing alias has been hardware-tested.
+* **Reported/relabel evidence** ties a name to an existing unit type with the
+  evidence label shown below.
+* **Candidate** is a research lead only. It is not added to the parser-facing
+  device name and must not be treated as supported without a device report.
 
-* Blauberg Ventilatoren, VENTS, Vento, VENTO, TwinFresh, EcoVent
-* Blauberg VENTO Expert, VENTO Expert A50-1 W V.2, VENTO Expert A50-1 S10 W V.2,
-  VENTO Expert A85-1 S10 W V.2, VENTO Expert A100-1 S10 W V.2,
-  VENTO Expert A50-1 W V.3
-* VENTS TwinFresh Expert, TwinFresh Expert RW1-50 V.2,
-  TwinFresh Expert RW1-85 V.2, TwinFresh Expert RW1-100 V.2,
-  TwinFresh Expert RW1-50 V.3
-* Blauberg VENTO Expert DUO A30-1 W V.2,
-  VENTO Expert DUO A30-1 S10 W V.2,
-  VENTS TwinFresh Expert Duo RW1-30 V.2
-* Blauberg VENTO Expert A30 W V.2, VENTO Expert A30 S10 W V.2,
-  VENTS TwinFresh Expert RW-30 V.2
-* Blauberg VENTO inHome, VENTO inHome W, VENTO inHome mini,
-  VENTO inHome mini W, VENTO inHome 100, VENTO inHome 160
-* VENTS TwinFresh Atmo, TwinFresh Atmo 100, TwinFresh Atmo 160,
-  TwinFresh Atmo mini, TwinFresh Atmo Wi-Fi, TwinFresh Atmo mini Wi-Fi
-* VENTS TwinFresh Style Wi-Fi, TwinFresh Style Frost Wi-Fi,
-  TwinFresh Style Wi-Fi mini
-* Blauberg Smart Wi-Fi, Smart IR Wi-Fi, VENTS iFan Wi-Fi,
-  VENTS iFan Move Wi-Fi
-* Blauberg Freshbox 100 WiFi, Freshbox 100 ERV WiFi, Freshbox E-100 WiFi,
-  Freshbox E1-100 WiFi, Freshbox E2-100 WiFi
-* VENTS Micra 100 WiFi, Micra 100 ERV WiFi, Micra 100 E WiFi,
-  Micra 100 E1 WiFi, Micra 100 E2 WiFi
-* VENTS Breezy, Breezy 160, Breezy 160-E, Breezy 160-E Smart,
-  Breezy 200-E, Breezy 200-E Smart, Breezy Eco 160, Breezy Eco 200
-* Blauberg Freshpoint, Freshpoint 160, Freshpoint 160-E,
-  Freshpoint 160-E L055/L07/L1, Freshpoint 160-E Pro L055/L07/L1,
-  Freshpoint 200, Freshpoint 200-E L055/L07/L1,
-  Freshpoint 200-E Pro L055/L07/L1, Freshpoint Eco 160, Freshpoint Eco 200
-* VENTS Arc Smart, Arc Smart white, Arc Smart black,
-  Blauberg O2 Supreme, O2 Supreme white, O2 Supreme black
+If a candidate speaks BGCP, please attach its `0x00B9` value and a UDP packet
+capture to an issue instead of relying on product appearance or Wi-Fi branding.
 
-External relabels and OEM names tracked as evidence or candidates:
+### Protocol-mapped official names
 
-* OXXIFY.smart 50, Oxxify.smart 50, Oxxify smart 50,
-  Oxxify.smart 30, oxxify.smart 50k, OXXIFY.pro 50, OXXIFY.eco 50
-* SIKU RV, SIKU RV 50 W Pro WiFi V2, SIKU RV 50 W PRO WIFI V2,
-  SIKU RV 30 DW Pro Duo WiFi V2, SIKU RV 30 DW PRO DUO WIFI V2,
-  SIKU RV 25 W Pro WiFi V2
-* Flexit Roomie One WiFi V2, Roomie One Wifi V2, Roomie Dual Wifi,
-  Roomie Dual WiFi V2, Flexit Aura, Flexit Muto
-* DUKA One, DUKA One S6W, DUKA One S6BW, DUKA One S4 Wi-Fi,
-  DUKA One S6 Wi-Fi, DUKA One Pro 25 S Wi-Fi, DUKA One Pro 50 S Wi-Fi
-* RL Raumklima, RL PRO-Serie, RL 50RVW, RL 30DVW, RL 25RVW
-* Winzel V.2, Winzel Expert WiFi RW1-50 P,
-  Blauberg Winzel Expert WiFi RW1-50 P
-* NIBE DVC 10, NIBE DVC 10-50W, NIBE DVC 10-D30W
-* ECONOPRIME DF270, ECONOPRIME DF270 Connect, and the reported seller spelling
-  Econology DF270 Connect (`0x0100`, mapped to the tested VENTO protocol
-  profile). VENTS VUT 270 V5B EC A21 is recorded only as an unconfirmed OEM
-  candidate; its published A21/Modbus documents do not prove that relationship.
+| Unit type / profile | Exact brand and model search names |
+| -- | -- |
+| `0x0100` / `vento` | `ECONOPRIME DF270`<br>`ECONOPRIME DF270 Connect` |
+| `0x0200` / `freshbox` | `Freshbox 100 WiFi`<br>`Freshbox 100 ERV WiFi`<br>`Freshbox E-100 WiFi`<br>`Freshbox E2-100 ERV WiFi`<br>`Vents Micra 100 WiFi`<br>`Vents Micra 100 ERV WiFi`<br>`Vents Micra 100 E WiFi`<br>`Vents Micra 100 E2 ERV WiFi` |
+| `0x0300` / `vento` | `VENTO Expert A50-1 S10 W V.2`<br>`VENTO Expert A85-1 S10 W V.2`<br>`VENTO Expert A100-1 S10 W V.2`<br>`VENTO Expert A50-1 W V.3`<br>`TwinFresh Expert RW1-50 V.2`<br>`TwinFresh Expert RW1-85 V.2`<br>`TwinFresh Expert RW1-100 V.2`<br>`TwinFresh Expert RW1-50 V.3` |
+| `0x0400` / `vento` | `VENTO Expert DUO A30-1 S10 W V.2`<br>`VENTO Expert DUO A30-1 S10 W V.2 BLK`<br>`TwinFresh Expert Duo RW1-30 V.2` |
+| `0x0500` / `vento` | `VENTO Expert A30 S10 W V.2`<br>`TwinFresh Expert RW-30 V.2` |
+| `0x0600` / `extract_fan` | `Blauberg Smart Wi-Fi`<br>`Smart IR Wi-Fi`<br>`Vents iFan Wi-Fi`<br>`Vents iFan Move Wi-Fi` |
+| `0x0D00` / `arc` | `Vents Arc Smart`<br>`Vents Arc Smart white`<br>`Vents Arc Smart black`<br>`Blauberg O2 Supreme`<br>`O2 Supreme white`<br>`O2 Supreme black` |
+| `0x0E00` / `vento` | `Vents TwinFresh Style Wi-Fi`<br>`TwinFresh Style Wi-Fi`<br>`Vents TwinFresh Style Frost Wi-Fi`<br>`Vents TwinFresh Style Wi-Fi mini` |
+| `0x1100` / `breezy` | `Vents Breezy 160`<br>`Vents Breezy 160-E`<br>`Vents Breezy 160-E Smart`<br>`Freshpoint 160`<br>`Freshpoint 160-E`<br>`Freshpoint 160-E L055`<br>`Freshpoint 160-E L07`<br>`Freshpoint 160-E L1`<br>`Freshpoint 160-E Pro`<br>`Freshpoint 160-E Pro L055`<br>`Freshpoint 160-E Pro L07`<br>`Freshpoint 160-E Pro L1` |
+| `0x1400` / `breezy` | `Vents Breezy Eco 160`<br>`Vents Breezy Eco 160-E`<br>`Freshpoint Eco 160`<br>`Freshpoint Eco 160-E L07` |
+| `0x1600` / `breezy` | `Vents Breezy 200-E`<br>`Vents Breezy 200-E Smart`<br>`Freshpoint 200`<br>`Freshpoint 200-E`<br>`Freshpoint 200-E L055`<br>`Freshpoint 200-E L07`<br>`Freshpoint 200-E L1`<br>`Freshpoint 200-E Pro`<br>`Freshpoint 200-E Pro L055`<br>`Freshpoint 200-E Pro L07`<br>`Freshpoint 200-E Pro L1` |
+| `0x1800` / `breezy` | `Vents Breezy Eco 200`<br>`Freshpoint Eco 200` |
+| `0x1A00` / `vento` | `VENTO inHome`<br>`TwinFresh Atmo` |
+| `0x1B00` / `vento` | `VENTO inHome 100`<br>`VENTO inHome mini`<br>`VENTO inHome mini W`<br>`TwinFresh Atmo 100`<br>`Vents TwinFresh Atmo mini`<br>`Vents TwinFresh Atmo mini Wi-Fi` |
+| `0x1C00` / `vento` | `VENTO inHome 160`<br>`VENTO inHome W`<br>`TwinFresh Atmo 160`<br>`Vents TwinFresh Atmo Wi-Fi` |
 
-# Tested on:
+### Reported/relabel evidence
+
+| Reported unit type | Exact search names and evidence |
+| -- | -- |
+| `0x0100` | `Econology DF270 Connect` — `community_tested` |
+| `0x0300` | `SIKU RV 50 W Pro WiFi V2` — `official_listing`<br>`SIKU RV 50 W PRO WIFI V2` — `official_listing`<br>`DUKA One S6W` — `community_tested`<br>`RL 50RVW` — `community_tested`<br>`Winzel Expert WiFi RW1-50 P` — `app_by_blauberg`<br>`Blauberg Winzel Expert WiFi RW1-50 P` — `app_by_blauberg` |
+| `0x0400` | `SIKU RV 30 DW Pro Duo WiFi V2` — `official_listing`<br>`SIKU RV 30 DW PRO DUO WIFI V2` — `official_listing`<br>`Flexit Roomie Dual Wifi` — `community_tested`<br>`DUKA One S6BW` — `community_tested`<br>`RL 30DVW` — `community_tested` |
+| `0x0E00` | `OXXIFY.smart 50` — `observed`<br>`Oxxify.smart 50` — `observed`<br>`Oxxify smart 50` — `observed` |
+
+### Candidate relationships — not parser aliases
+
+`documentary_match` means two first-party document sets match closely enough to
+justify targeted protocol testing. It still does not supply a BGCP unit type.
+
+| Research target | Exact search names and evidence |
+| -- | -- |
+| near `0x0100` | `VENTS VUT 270 V5B EC A21` — `documentary_match` |
+| near `0x0300` | `Flexit Roomie One WiFi V2` — `candidate`<br>`DUKA One Pro 50 S Wi-Fi` — `candidate`<br>`NIBE DVC 10` — `candidate`<br>`NIBE DVC 10-50W` — `candidate` |
+| near `0x0400` | `Roomie Dual WiFi V2` — `candidate`<br>`Flexit Aura` — `candidate`<br>`Flexit Muto` — `candidate`<br>`NIBE DVC 10-D30W` — `candidate` |
+| near `0x0500` | `SIKU RV 25 W Pro WiFi V2` — `candidate`<br>`RL 25RVW` — `candidate` |
+| near `0x0E00` | `Oxxify.smart 30` — `candidate`<br>`oxxify.smart 50k` — `candidate`<br>`OXXIFY.pro 50` — `candidate`<br>`OXXIFY.eco 50` — `candidate` |
+| near `0x1100` | `Bora 160` — `documentary_match`<br>`Bora 160 L440` — `documentary_match`<br>`Bora 160 L550` — `documentary_match`<br>`Bora 160 L700` — `documentary_match`<br>`Bora 160 L1000` — `documentary_match`<br>`Bora 160 Prime L440` — `documentary_match`<br>`Bora 160 Prime L550` — `documentary_match`<br>`Bora 160 Prime L700` — `documentary_match`<br>`Bora 160 Prime L1000` — `documentary_match` |
+| near `0x1600` | `Bora 200` — `documentary_match`<br>`Bora 200 L440` — `documentary_match`<br>`Bora 200 L550` — `documentary_match`<br>`Bora 200 L700` — `documentary_match`<br>`Bora 200 L1000` — `documentary_match`<br>`Bora 200 Prime L440` — `documentary_match`<br>`Bora 200 Prime L550` — `documentary_match`<br>`Bora 200 Prime L700` — `documentary_match`<br>`Bora 200 Prime L1000` — `documentary_match` |
+
+### Econology / ECONOPRIME catalogue research — not mapped
+
+The live Econology sitemap and product pages expose substantially more devices
+than the former DF270 filter page. These exact names are kept here so repository
+and web search can find them, but they are not runtime aliases:
+
+| Research group | Exact Econology / ECONOPRIME names | What the current documents prove |
+| -- | -- | -- |
+| Blauberg Home application leads | `DF 180 Flat`, `DF 180 Flat Connect`, `DFF18021`, `DF 270`, `DF27014`, `DF 270 Connect`, `DF27021`, `DF 350`, `DF 350 Connect`, `DF35021` | The [DF Connect application manual](https://www.econology.fr/media/attachment/file/n/o/notice_installateur-application_df_connect5_v3_5.pdf) explicitly names Blauberg Home. Only the reported DF270 unit currently supplies a BGCP `0x0100` observation. |
+| A14 / A21 / Modbus family | `Zephyr 240 S`, `ZEPH240A14`, `Zephyr 240 S Connect`, `ZEPH240A21`, `Zephyr 270 V R`, `114800001`, `Zephyr 270 V Connect R`, `114800002`, `Zephyr 550 V PH Connect R`, `114800003` | The [Zephyr 270 Connect page](https://www.econology.fr/zephyr-270-connect-econoprime-vmc-double-flux-114800002.html) publishes Modbus RTU/TCP/IP. `A21` is a controller generation, not BGCP unit type `0x0100`. |
+| PremAIR / GatePass family | `URC 250`, `URC250`, `URHF 150`, `URHF150`, `URHFCF 150`, `URHFCF150`, `URHF 200`, `URHF200`, `URHFCF 200`, `URHFCF200`, `URH 350`, `URH350` | The [URC 250 manual](https://www.econology.fr/media/attachment/file_pdf/notice_installateur_urc250_econoprime_v1.pdf) documents PremAIR and GatePass rather than BGCP. |
+| No network protocol evidence | `Zephyr 100 S`, `ZEPH100`, `Airion 100`, `Airion 150` | Current manuals provide installation/control data but no BGCP or compatible local-network protocol. |
+
+The strongest new model lead is the [ECONOPRIME Bora family](https://www.econology.fr/bora-extracteur-d-air-double-flux-econoprime.html). A cross-document comparison of the ECONOPRIME Bora and Blauberg Freshpoint manuals found the same 160/200 dimensions, performance tables, wall-length variants, Pro/Prime sensor package, Wi-Fi provisioning (`FAN:` plus 16-character ID and password `11111111`), and control behavior. This suggests a protocol-family lead; neither manufacturer identifies Bora as Freshpoint/Breezy or documents Bora's BGCP unit type. Bora therefore remains a targeted `documentary_match` outside parser-facing names until a real unit reports `0x00B9`.
+
+### Legacy discovery aliases — no additional compatibility claim
+
+These exact strings were present in earlier README search guidance and are kept
+to avoid making existing devices harder to find. They are not runtime aliases
+unless the same exact name also appears in one of the catalogued sections above:
+
+`Blauberg VENTO Expert DUO A30-1 W V.2`,
+`Blauberg VENTO Expert A30 W V.2`,
+`Blauberg Freshbox 100 WiFi`,
+`Freshbox E1-100 WiFi`,
+`VENTS Micra 100 WiFi`,
+`Micra 100 E1 WiFi`,
+`VENTS Breezy`,
+`VENTS Arc Smart`,
+`DUKA One S4 Wi-Fi`,
+`DUKA One S6 Wi-Fi`,
+`Winzel V.2`, and
+`Roomie One Wifi V2`.
+
+# Hardware smoke-tested:
 * Blauberg VENTO Expert A50-1 W V.2
 
 # Currently supported:

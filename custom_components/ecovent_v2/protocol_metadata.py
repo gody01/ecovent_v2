@@ -40,9 +40,26 @@ FRESHPOINT_DATASHEET_URL = (
 FRESHPOINT_USER_MANUAL_URL = (
     "https://blaubergventilatoren.net/download/freshpoint-manual-9552.pdf"
 )
-ECONOPRIME_DF270_LISTING_URL = (
-    "https://www.econology.fr/filtres-vmc-double-flux-paul/"
-    "filtres-vmc-double-flux-econoprime-df270.html"
+ECONOPRIME_DF270_PRODUCT_URL = (
+    "https://www.econology.fr/df-270-connect-econoprime-vmc-double-flux.html"
+)
+ECONOPRIME_DF270_MANUAL_URL = (
+    "https://www.econology.fr/media/attachment/file_pdf/"
+    "notice_utilisation_df_270_econoprime_v5.pdf"
+)
+ECONOPRIME_DF_CONNECT_APP_MANUAL_URL = (
+    "https://www.econology.fr/media/attachment/file/n/o/"
+    "notice_installateur-application_df_connect5_v3_5.pdf"
+)
+ECONOPRIME_A22_WIFI_PANEL_URL = (
+    "https://www.econology.fr/panneau-de-commande-a22-wifi-vmc-double-flux-"
+    "df-connect-econoprime.html"
+)
+ECONOPRIME_BORA_PRODUCT_URL = (
+    "https://www.econology.fr/bora-extracteur-d-air-double-flux-econoprime.html"
+)
+ECONOPRIME_BORA_MANUAL_URL = (
+    "https://www.econology.fr/media/attachment/file_pdf/notice_utilisateur_bora.pdf"
 )
 VENTS_VUT_270_V5B_EC_A21_URL = (
     "https://ventilation-system.com/product/vut-270-v5b-ec-a21"

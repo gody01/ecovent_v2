@@ -5,6 +5,22 @@ import unittest
 
 from ecovent_test_helpers import COMPONENT_PATH, Fan, PROTOCOL_REFERENCE_PATH
 
+README_PATH = COMPONENT_PATH.parents[1] / "README.md"
+LEGACY_README_SEARCH_ALIASES = (
+    "Blauberg VENTO Expert DUO A30-1 W V.2",
+    "Blauberg VENTO Expert A30 W V.2",
+    "Blauberg Freshbox 100 WiFi",
+    "Freshbox E1-100 WiFi",
+    "VENTS Micra 100 WiFi",
+    "Micra 100 E1 WiFi",
+    "VENTS Breezy",
+    "VENTS Arc Smart",
+    "DUKA One S4 Wi-Fi",
+    "DUKA One S6 Wi-Fi",
+    "Winzel V.2",
+    "Roomie One Wifi V2",
+)
+
 
 class ParseResponseTest(unittest.TestCase):
     def test_entity_platforms_do_not_branch_on_profile_names(self):
@@ -183,10 +199,108 @@ class ParseResponseTest(unittest.TestCase):
         self.assertEqual(candidates["NIBE DVC 10-50W"], "candidate")
         self.assertNotIn("Flexit Roomie One WiFi V2", expert.display_name)
 
+        duo = Fan.device_models[0x0400]
+        duo_relabels = {marketing.model for marketing in duo.relabels}
+        duo_candidates = {marketing.model for marketing in duo.candidates}
+        self.assertIn("Flexit Roomie Dual Wifi", duo_relabels)
+        self.assertIn("Roomie Dual WiFi V2", duo_candidates)
+        self.assertNotIn("Roomie Dual WiFi V2", duo_relabels)
+
+    def test_econoprime_documentary_matches_stay_candidate_only(self):
+        econoprime = Fan.device_models[0x0100]
+        vut = econoprime.candidates[0]
+        self.assertEqual(vut.model, "VENTS VUT 270 V5B EC A21")
+        self.assertEqual(vut.evidence, "documentary_match")
+        self.assertIn(
+            "https://www.econology.fr/df-270-connect-econoprime-vmc-double-flux.html",
+            vut.source_documents,
+        )
+        self.assertNotIn(vut.model, econoprime.display_name)
+
+        bora_manual = (
+            "https://www.econology.fr/media/attachment/file_pdf/"
+            "notice_utilisateur_bora.pdf"
+        )
+        for parser_key, size in ((0x1100, 160), (0x1600, 200)):
+            model = Fan.device_models[parser_key]
+            bora_candidates = {
+                candidate.model: candidate
+                for candidate in model.candidates
+                if candidate.brand == "ECONOPRIME"
+            }
+            self.assertIn(f"Bora {size}", bora_candidates)
+            self.assertIn(f"Bora {size} Prime L1000", bora_candidates)
+            for candidate in bora_candidates.values():
+                self.assertEqual(candidate.evidence, "documentary_match")
+                self.assertIn(bora_manual, candidate.source_documents)
+                self.assertNotIn(candidate.model, model.display_name)
+
+    def test_readme_search_index_covers_catalog_names_and_statuses(self):
+        readme = README_PATH.read_text()
+        search_index = readme.split("## Device and brand search index", 1)[1].split(
+            "# Hardware smoke-tested", 1
+        )[0]
+        official_section = search_index.split(
+            "### Protocol-mapped official names", 1
+        )[1].split("### Reported/relabel evidence", 1)[0]
+        relabel_section = search_index.split("### Reported/relabel evidence", 1)[
+            1
+        ].split("### Candidate relationships", 1)[0]
+        candidate_section = search_index.split("### Candidate relationships", 1)[
+            1
+        ].split("### Econology / ECONOPRIME catalogue research", 1)[0]
+
+        all_marketing_names = []
+        for parser_key, model in Fan.device_models.items():
+            official = {entry.model for entry in model.official_names}
+            relabels = {entry.model for entry in model.relabels}
+            candidates = {entry.model for entry in model.candidates}
+            self.assertTrue(official.isdisjoint(relabels))
+            self.assertTrue(official.isdisjoint(candidates))
+            self.assertTrue(relabels.isdisjoint(candidates))
+
+            official_row = next(
+                line
+                for line in official_section.splitlines()
+                if line.startswith(
+                    f"| `0x{parser_key:04X}` / `{model.profile_key}` |"
+                )
+            )
+            for name in official:
+                self.assertIn(f"`{name}`", official_row)
+
+            if relabels:
+                relabel_row = next(
+                    line
+                    for line in relabel_section.splitlines()
+                    if line.startswith(f"| `0x{parser_key:04X}` |")
+                )
+                for name in relabels:
+                    self.assertIn(f"`{name}`", relabel_row)
+
+            if candidates:
+                candidate_row = next(
+                    line
+                    for line in candidate_section.splitlines()
+                    if line.startswith(f"| near `0x{parser_key:04X}` |")
+                )
+            for name in candidates:
+                self.assertIn(f"`{name}`", candidate_row)
+                self.assertNotIn(f"`{name}`", official_section)
+                self.assertNotIn(f"`{name}`", relabel_section)
+            all_marketing_names.extend(
+                (*model.official_names, *model.relabels, *model.candidates)
+            )
+
+        for brand in {entry.brand for entry in all_marketing_names}:
+            self.assertIn(f"`{brand}`", search_index)
+        for alias in LEGACY_README_SEARCH_ALIASES:
+            self.assertIn(f"`{alias}`", search_index)
+
     def test_unit_type_metadata_keeps_source_documents_with_models(self):
         self.assertIn(
-            "https://www.econology.fr/filtres-vmc-double-flux-paul/"
-            "filtres-vmc-double-flux-econoprime-df270.html",
+            "https://www.econology.fr/"
+            "df-270-connect-econoprime-vmc-double-flux.html",
             Fan.device_models[0x0100].source_documents,
         )
         self.assertIn(

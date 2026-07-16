@@ -296,9 +296,13 @@ class FanProtocolMixin:
         The Smart Home protocol limits a packet to 256 bytes. Keep each request
         bounded, then retry only parameters omitted from an otherwise valid
         response. An explicit 0xFD unsupported-parameter marker counts as a
-        response and is not retried.
+        response and is not retried. Profiles that cover multiple hardware
+        variants may identify the parameters that must complete a poll; missing
+        optional probes are retried but do not make the whole device unavailable.
         """
         complete = bool(request)
+        received_response = False
+        optional_params = self.device_profile.optional_read_params
         chunk_size = MAX_BULK_READ_PARAMS * 4
         for start in range(0, len(request), chunk_size):
             chunk = request[start : start + chunk_size]
@@ -307,6 +311,7 @@ class FanProtocolMixin:
             if self._bulk_read_supported is not False:
                 self._last_response_param_ids = None
                 if self.send_command(self.func["read"], chunk, retries=3):
+                    received_response = True
                     self._bulk_read_supported = True
                     response_ids = self._last_response_param_ids
                     if response_ids is None:
@@ -333,10 +338,18 @@ class FanProtocolMixin:
                     self.func["read"], param, retries=1
                 )
                 response_ids = self._last_response_param_ids
+                received_response = param_complete or received_response
                 if param_complete and response_ids is not None:
                     param_complete = int(param, 16) in response_ids
-                complete = param_complete and complete
-        return complete
+                if not param_complete:
+                    param_id = int(param, 16)
+                    if param_id not in optional_params:
+                        complete = False
+                    else:
+                        _LOGGER.debug(
+                            "Optional parameter 0x%04X did not respond", param_id
+                        )
+        return complete and received_response
 
     def set_param(self, param, value):
         valpar = self.get_params_values(param, value)

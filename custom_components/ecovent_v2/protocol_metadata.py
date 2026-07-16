@@ -109,6 +109,7 @@ class DeviceProfile:
     uses_operating_mode_presets: bool = False
     speed_percent_scale: str = "byte"
     supports_percentage_control: bool = True
+    optional_read_params: frozenset[int] = frozenset()
 
 
 @dataclass(frozen=True)

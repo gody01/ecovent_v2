@@ -486,3 +486,9 @@ Version 1.2.17
 * Add separate VENTS A21 Modbus TCP and RTU transports with a read-only
   controller identity check, the complete published register table, RTC and
   weekly schedule support, and legacy BGCP config-entry migration.
+
+Version 1.2.18
+* Restore setup for standard Freshpoint 160-E devices whose non-Pro CO2/VOC
+  probes are legitimately absent. Missing optional variant registers are still
+  retried, while humidity and all four documented temperature registers remain
+  required for a successful Freshpoint refresh.

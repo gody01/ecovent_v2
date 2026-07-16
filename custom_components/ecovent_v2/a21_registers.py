@@ -232,6 +232,7 @@ class RegisterSpec:
     unit: str | None = None
     word_count: int = 1
     enum: Mapping[int, str] | None = None
+    source_note: str | None = None
 
     def decode(self, words: Iterable[int]) -> Any:
         return decode(self.kind, words)
@@ -245,8 +246,8 @@ class RegisterSpec:
         return words
 
 
-def _spec(key: str, table: Table, address: int, access: Access, kind: Kind, description: str, minimum: int | None = None, maximum: int | None = None, unit: str | None = None, word_count: int = 1, enum: Mapping[int, str] | None = None) -> RegisterSpec:
-    return RegisterSpec(key, table, address, access, kind, description, minimum, maximum, unit, word_count, enum)
+def _spec(key: str, table: Table, address: int, access: Access, kind: Kind, description: str, minimum: int | None = None, maximum: int | None = None, unit: str | None = None, word_count: int = 1, enum: Mapping[int, str] | None = None, source_note: str | None = None) -> RegisterSpec:
+    return RegisterSpec(key, table, address, access, kind, description, minimum, maximum, unit, word_count, enum, source_note)
 
 
 _COILS = [
@@ -280,7 +281,17 @@ def _catalogue() -> tuple[RegisterSpec, ...]:
     for address, key in enumerate(hr_names):
         ro = address in {0,1,3,4,23,24,37,38,57}; kind = Kind.U16 if address in set(range(23,43)) | {46,58} else Kind.U8
         low, high = (0,10000) if kind is Kind.U16 else (0,255)
-        out.append(_spec(key, Table.HOLDING_REGISTER, address, Access.READ_ONLY if ro else Access.READ_WRITE, kind, key[3:].replace("_", " "), low, high))
+        if address == 57:
+            # V55-8-1EN-02's maximum column says 4, while its explicit list
+            # continues with 5 (three-point bypass).  Preserve that discrepancy
+            # instead of silently losing the documented enum member.
+            high = 5
+            enum = {0: "not available", 1: "two-point bypass", 2: "analogue bypass", 3: "discrete rotary", 4: "analogue rotary", 5: "three-point bypass"}
+            note = "V55-8-1EN-02 numeric maximum is 4; its prose enum also documents value 5 (three-point bypass)."
+        else:
+            enum = None
+            note = None
+        out.append(_spec(key, Table.HOLDING_REGISTER, address, Access.READ_ONLY if ro else Access.READ_WRITE, kind, key[3:].replace("_", " "), low, high, enum=enum, source_note=note))
     out += [_spec("HR_RTC_TIME",Table.HOLDING_REGISTER,61,Access.READ_WRITE,Kind.RTC_TIME,"RTC time",word_count=2), _spec("HR_RTC_CALENDAR",Table.HOLDING_REGISTER,63,Access.READ_WRITE,Kind.RTC_CALENDAR,"RTC calendar",word_count=2)]
     for address, key in enumerate(["HR_MaxCO2_Int","HR_MaxPM2_5_Int","HR_SetMinSuAirOutTEMP","HR_MainHeaterMODE","HR_SetMainHeaterMANUAL","HR_CoolerMODE","HR_SetCoolerMANUAL","HR_PreHeaterMODE","HR_SetPreHeaterMANUAL","HR_BPS_ROTOR_MODE","HR_SetBpsRotorMANUAL"],65): out.append(_spec(key,Table.HOLDING_REGISTER,address,Access.READ_WRITE,Kind.U16 if address<67 else Kind.U8,key[3:].replace("_"," ")))
     for address, key in enumerate([f"HR_{controller}_{term}" for controller in ("RH","CO2","PM2_5","VOC","PreHeater","MainHeater","BPS_ROTOR","KKB","ReturnWater") for term in ("Kp","Ki","Kd")],76): out.append(_spec(key,Table.HOLDING_REGISTER,address,Access.READ_WRITE,Kind.U16,key[3:].replace("_"," "),0,1000))
@@ -328,4 +339,3 @@ def get_by_address(table: Table, address: int) -> RegisterSpec:
 
 A21_IDENTITY_REGISTER = BY_KEY["IR_DeviceTYPE"]
 A21_IDENTITY_VALUE = 1
-

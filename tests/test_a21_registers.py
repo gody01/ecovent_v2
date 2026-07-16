@@ -47,6 +47,13 @@ def test_permissions_ranges_and_bad_records_reject():
     with pytest.raises(ValueError): decode(Kind.BOOL, (2,))
 
 
+def test_bypass_rotor_type_preserves_the_pdf_maximum_discrepancy():
+    spec = get_register("HR_BPS_ROTOR_TYPE")
+    assert spec.maximum == 5
+    assert spec.enum[5] == "three-point bypass"
+    assert "numeric maximum is 4" in spec.source_note
+
+
 def test_index_validation_rejects_duplicates_and_overlaps():
     one = get_register("CL_POWER")
     with pytest.raises(ValueError, match="duplicate key"):

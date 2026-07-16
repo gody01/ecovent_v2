@@ -4,7 +4,11 @@ import ast
 import unittest
 
 from ecovent_test_helpers import COMPONENT_PATH, Fan  # noqa: F401  Sets module path.
-from number_helpers import encode_raw_number, encode_speed_percent
+from number_helpers import (
+    encode_number_write_value,
+    encode_raw_number,
+    encode_speed_percent,
+)
 
 
 NUMBER_PATH = COMPONENT_PATH / "number.py"
@@ -40,6 +44,14 @@ class NumberHelperTest(unittest.TestCase):
     def test_raw_number_encoder_keeps_little_endian_multibyte_values(self):
         self.assertEqual(encode_raw_number(45), "2d")
         self.assertEqual(encode_raw_number(365, 2), "6d01")
+
+    def test_typed_protocol_numbers_are_not_bgcp_byte_strings(self):
+        self.assertEqual(encode_number_write_value(1200, 2, native_numeric=True), 1200)
+        self.assertEqual(
+            encode_number_write_value(1200, 2, native_numeric=False), "b004"
+        )
+        with self.assertRaises(ValueError):
+            encode_number_write_value(1.5, 2, native_numeric=True)
 
     def test_manual_speed_number_is_visible_configuration_entity(self):
         manual_specs = [

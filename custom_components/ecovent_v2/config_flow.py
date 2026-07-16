@@ -19,6 +19,8 @@ from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
     A21_DEVICE_MODELS,
+    A21_BAUD_RATES,
+    A21_STOP_BITS,
     CONF_AUTO_CLOCK_SYNC,
     CONF_BAUDRATE,
     CONF_DEVICE_MODEL,
@@ -43,13 +45,14 @@ _LOGGER = logging.getLogger(__name__)
 def _common_schema(defaults: dict[str, Any]) -> dict[Any, Any]:
     """Return fields shared by every transport."""
     return {
-        vol.Optional(CONF_NAME, default=defaults.get(CONF_NAME, "Vento Expert Fan")): str,
         vol.Optional(
-            UPDATE_INTERVAL, default=defaults.get(UPDATE_INTERVAL, 30)
-        ): int,
+            CONF_NAME, default=defaults.get(CONF_NAME, "Vento Expert Fan")
+        ): str,
+        vol.Optional(UPDATE_INTERVAL, default=defaults.get(UPDATE_INTERVAL, 30)): int,
         vol.Optional(
             # Legacy initial form default=True; reconfigure uses the saved value.
-            CONF_AUTO_CLOCK_SYNC, default=defaults.get(CONF_AUTO_CLOCK_SYNC, True)
+            CONF_AUTO_CLOCK_SYNC,
+            default=defaults.get(CONF_AUTO_CLOCK_SYNC, True),
         ): bool,
     }
 
@@ -58,9 +61,7 @@ def _bgcp_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     """Return the legacy BGCP-over-UDP form schema."""
     defaults = defaults or {}
     schema = {
-        vol.Required(
-            CONF_IP_ADDRESS, default=defaults.get(CONF_IP_ADDRESS, "")
-        ): str,
+        vol.Required(CONF_IP_ADDRESS, default=defaults.get(CONF_IP_ADDRESS, "")): str,
         vol.Optional(CONF_PORT, default=defaults.get(CONF_PORT, 4000)): int,
         vol.Required(CONF_PASSWORD, default=defaults.get(CONF_PASSWORD, "1111")): str,
         **_common_schema(defaults),
@@ -76,11 +77,13 @@ def _modbus_tcp_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     """Return the A21 Modbus TCP form schema."""
     defaults = defaults or {}
     schema = {
-        vol.Required(
-            CONF_IP_ADDRESS, default=defaults.get(CONF_IP_ADDRESS, "")
-        ): str,
-        vol.Optional(CONF_PORT, default=defaults.get(CONF_PORT, 502)): int,
-        vol.Optional(CONF_UNIT_ID, default=defaults.get(CONF_UNIT_ID, 1)): int,
+        vol.Required(CONF_IP_ADDRESS, default=defaults.get(CONF_IP_ADDRESS, "")): str,
+        vol.Optional(CONF_PORT, default=defaults.get(CONF_PORT, 502)): vol.All(
+            int, vol.Range(min=1, max=65535)
+        ),
+        vol.Optional(CONF_UNIT_ID, default=defaults.get(CONF_UNIT_ID, 1)): vol.All(
+            int, vol.Range(min=1, max=16)
+        ),
         vol.Optional(
             CONF_DEVICE_MODEL,
             default=defaults.get(CONF_DEVICE_MODEL, A21_DEVICE_MODELS[-1]),
@@ -94,17 +97,19 @@ def _modbus_rtu_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     """Return the A21 Modbus RTU form schema."""
     defaults = defaults or {}
     schema = {
-        vol.Required(
-            CONF_SERIAL_PORT, default=defaults.get(CONF_SERIAL_PORT, "")
-        ): str,
-        vol.Optional(CONF_BAUDRATE, default=defaults.get(CONF_BAUDRATE, 115200)): int,
+        vol.Required(CONF_SERIAL_PORT, default=defaults.get(CONF_SERIAL_PORT, "")): str,
+        vol.Optional(
+            CONF_BAUDRATE, default=defaults.get(CONF_BAUDRATE, 115200)
+        ): vol.In(A21_BAUD_RATES),
         vol.Optional(CONF_PARITY, default=defaults.get(CONF_PARITY, "N")): vol.In(
             ("N", "E", "O")
         ),
-        vol.Optional(CONF_STOPBITS, default=defaults.get(CONF_STOPBITS, 1)): vol.In(
-            (1, 2)
+        vol.Optional(CONF_STOPBITS, default=defaults.get(CONF_STOPBITS, 2)): vol.In(
+            A21_STOP_BITS
         ),
-        vol.Optional(CONF_UNIT_ID, default=defaults.get(CONF_UNIT_ID, 1)): int,
+        vol.Optional(CONF_UNIT_ID, default=defaults.get(CONF_UNIT_ID, 1)): vol.All(
+            int, vol.Range(min=1, max=16)
+        ),
         vol.Optional(
             CONF_DEVICE_MODEL,
             default=defaults.get(CONF_DEVICE_MODEL, A21_DEVICE_MODELS[-1]),
@@ -152,8 +157,18 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
                 raise UnsupportedDevice
             raise InvalidAuth
 
+        if (
+            config[CONF_TRANSPORT] == TRANSPORT_BGCP_UDP
+            and getattr(device, "current_wifi_ip", None) is None
+        ):
+            raise InvalidAuth
+
+        title = getattr(device, "name", None) or config[CONF_NAME]
+        if config[CONF_TRANSPORT] == TRANSPORT_BGCP_UDP:
+            title = f"{title} {device_id}"
+
         return {
-            "title": getattr(device, "name", None) or config[CONF_NAME],
+            "title": title,
             "id": device_id,
         }
     except (CannotConnect, InvalidAuth, UnsupportedDevice):
@@ -288,9 +303,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     _LOGGER.exception("Unexpected exception during device validation")
                     errors["base"] = "unknown"
                 else:
-                    return self.async_update_reload_and_abort(
-                        entry, data_updates=data
-                    )
+                    return self.async_update_reload_and_abort(entry, data_updates=data)
 
         return self.async_show_form(
             step_id="reconfigure",

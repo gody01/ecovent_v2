@@ -18,7 +18,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import slugify
 
-from .const import CONF_AUTO_CLOCK_SYNC, DOMAIN, UPDATE_INTERVAL
+from .const import (
+    CONF_AUTO_CLOCK_SYNC,
+    CONF_TRANSPORT,
+    DOMAIN,
+    TRANSPORT_BGCP_UDP,
+    UPDATE_INTERVAL,
+)
 from .coordinator import EcoVentCoordinator
 from .entity_naming import stable_entity_id
 from .frontend import async_register_frontend
@@ -434,15 +440,19 @@ async def _async_migrate_statistics_metadata_on_start(
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up EcoVent_v2 from a config entry."""
 
-    entry.runtime_data = {
-        CONF_IP_ADDRESS: entry.data.get(CONF_IP_ADDRESS, "<broadcast>"),
-        CONF_PORT: entry.data.get(CONF_PORT, 4000),
-        # CONF_DEVICE_ID: entry.data.get(CONF_DEVICE_ID, "DEFAULT_DEVICEID"),
-        CONF_PASSWORD: entry.data.get(CONF_PASSWORD, "1111"),
-        CONF_NAME: entry.data.get(CONF_NAME, "Vento Expert Fan"),
-        UPDATE_INTERVAL: entry.data.get(UPDATE_INTERVAL, 30),
-        CONF_AUTO_CLOCK_SYNC: entry.data.get(CONF_AUTO_CLOCK_SYNC, True),
-    }
+    entry.runtime_data = dict(entry.data)
+    entry.runtime_data.update(
+        {
+            CONF_IP_ADDRESS: entry.data.get(CONF_IP_ADDRESS, "<broadcast>"),
+            CONF_PORT: entry.data.get(CONF_PORT, 4000),
+            # CONF_DEVICE_ID: entry.data.get(CONF_DEVICE_ID, "DEFAULT_DEVICEID"),
+            CONF_PASSWORD: entry.data.get(CONF_PASSWORD, "1111"),
+            CONF_NAME: entry.data.get(CONF_NAME, "Vento Expert Fan"),
+            UPDATE_INTERVAL: entry.data.get(UPDATE_INTERVAL, 30),
+            CONF_AUTO_CLOCK_SYNC: entry.data.get(CONF_AUTO_CLOCK_SYNC, True),
+            CONF_TRANSPORT: entry.data.get(CONF_TRANSPORT, TRANSPORT_BGCP_UDP),
+        }
+    )
 
     coordinator = EcoVentCoordinator(
         hass, entry, update_seconds=entry.runtime_data[UPDATE_INTERVAL]
@@ -463,4 +473,20 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, _PLATFORMS)
+    if unload_ok:
+        coordinator = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
+        close = getattr(getattr(coordinator, "_fan", None), "close", None)
+        if close is not None:
+            await hass.async_add_executor_job(close)
     return unload_ok
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Mark pre-Modbus entries as the legacy BGCP/UDP transport."""
+    if entry.version >= 2:
+        return True
+
+    data = dict(entry.data)
+    data.setdefault(CONF_TRANSPORT, TRANSPORT_BGCP_UDP)
+    hass.config_entries.async_update_entry(entry, data=data, version=2)
+    return True

@@ -117,10 +117,21 @@ targeted `documentary_match`; neither manufacturer explicitly states the
 cross-brand relationship or documents a BGCP unit type for it.
 
 It is not a manufacturer-backed BGCP bridge. The official VENTS A21 documents
-publish Modbus RTU/TCP (Wi-Fi TCP port 502), and their controller device type
-`1 = A21` is not BGCP parameter `0x00B9`. The catalogue therefore keeps `VENTS
-VUT 270 V5B EC A21` under `candidates`; the reported `0x0100`/`vento` behavior
-remains a separate live observation.
+publish Modbus RTU/TCP (Wi-Fi TCP port 502), and controller value `1` in input
+register `37` is not BGCP parameter `0x00B9`. The integration implements that
+A21 table as a separate transport and accepts it only after this read-only
+identity check. The reported `0x0100`/`vento` behavior remains the runtime
+evidence for the specific DF270 Connect device; it does not prove that DF270
+and VUT 270 are the same model.
+
+The A21 implementation covers the complete published address surface: coils
+`0..25`, discrete inputs `0..71`, input registers `0..53`, and holding
+registers `0..182`, including multi-register timers, firmware, RTC, engineering
+password encoding, and the seven-day schedule. Automatic polling excludes the
+three write-only action coils and the engineering password; both remain
+available through the typed protocol API. A controller that does not return
+`1` from input register `37` is rejected instead of being guessed from its
+marketing name.
 
 Two additional groups are worth targeted device captures:
 

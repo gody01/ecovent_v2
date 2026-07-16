@@ -27,6 +27,11 @@ class A21ConfigFlowTest(unittest.TestCase):
         self.assertIn("create_device(config)", source)
         self.assertIn("identity_probe_failed", source)
         self.assertIn("UnsupportedDevice", source)
+        self.assertIn("current_wifi_ip", source)
+        self.assertIn("A21_BAUD_RATES", source)
+        self.assertIn("A21_STOP_BITS", source)
+        self.assertIn("vol.Range(min=1, max=16)", source)
+        self.assertIn("defaults.get(CONF_STOPBITS, 2)", source)
         self.assertTrue(
             any(
                 isinstance(node, ast.AsyncFunctionDef)
@@ -46,7 +51,10 @@ class A21ConfigFlowTest(unittest.TestCase):
             "stopbits",
         }
 
-        for path in [COMPONENT / "strings.json", *(COMPONENT / "translations").glob("*.json")]:
+        for path in [
+            COMPONENT / "strings.json",
+            *(COMPONENT / "translations").glob("*.json"),
+        ]:
             with self.subTest(path=path.name):
                 config = json.loads(path.read_text())["config"]
                 steps = config["step"]

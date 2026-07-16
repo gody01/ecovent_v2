@@ -4,7 +4,7 @@
 from datetime import datetime, timedelta
 import logging
 
-from .ecoventv2 import Fan
+from .device_factory import create_device
 from .schedule_helpers import (
     SCHEDULE_DAY_LABELS,
     SCHEDULE_DAY_OPTIONS,
@@ -14,12 +14,6 @@ from .schedule_helpers import (
 )
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    CONF_IP_ADDRESS,
-    CONF_NAME,
-    CONF_PASSWORD,
-    CONF_PORT,
-)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
@@ -36,6 +30,7 @@ except ImportError:
     def is_hassio(hass):
         """Return false when HA has no Supervisor helper available."""
         return False
+
 
 from .const import CONF_AUTO_CLOCK_SYNC, CONF_SILENT_MODE, DOMAIN
 
@@ -54,14 +49,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         update_seconds: int = 30,
     ) -> None:
         """Initialize global Vento data updater."""
-        self._fan = Fan(
-            config.data[CONF_IP_ADDRESS],
-            config.data[CONF_PASSWORD],
-            # config.data[CONF_DEVICE_ID],
-            "DEFAULT_DEVICEID",
-            config.data[CONF_NAME],
-            config.data[CONF_PORT],
-        )
+        self._fan = create_device(config.data, unique_id=config.unique_id)
         # self._fan.init_device()  is a blocking call cannot be done in constructur ...
         self.fan_initialized = False  # flag to indicate if the fan has been initialized
         self.updateCounter = 0

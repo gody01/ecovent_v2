@@ -4,11 +4,12 @@
 Home Assistant Integration. Integration for newest Fans with api version 2
 
 This integration talks to the local BGCP/UDP Wi-Fi protocol used by devices on
-the Blauberg Group / VENTS platform and compatible units. VENTS is an official
-sibling brand, not just a Blauberg relabel. The exact feature set is selected
-from the protocol device type reported by parameter `0x00B9`; candidate OEM
-relationships remain labelled as candidates until manufacturer evidence proves
-them.
+the Blauberg Group / VENTS platform and compatible units, and to VENTS A21
+controllers over Modbus TCP or RTU. VENTS is an official sibling brand, not just
+a Blauberg relabel. BGCP features are selected from parameter `0x00B9`; Modbus
+onboarding requires the controller to report A21 value `1` in input register
+`37`. Candidate OEM relationships remain labelled as candidates until device
+or manufacturer evidence proves them.
 
 ## Device names and search keywords
 
@@ -69,8 +70,9 @@ External relabels and OEM names tracked as evidence or candidates:
 * NIBE DVC 10, NIBE DVC 10-50W, NIBE DVC 10-D30W
 * ECONOPRIME DF270, ECONOPRIME DF270 Connect, and the reported seller spelling
   Econology DF270 Connect (`0x0100`, mapped to the tested VENTO protocol
-  profile). VENTS VUT 270 V5B EC A21 remains an unconfirmed documentary
-  candidate; its published A21/Modbus documents do not prove BGCP compatibility.
+  profile). VENTS VUT 270 V5B EC A21 is supported through the separate A21
+  Modbus transport; this does not make it a confirmed DF270 relabel or prove
+  BGCP compatibility.
 * ECONOPRIME Bora documentary candidates: Bora 160, Bora 160 L440,
   Bora 160 L550, Bora 160 L700, Bora 160 L1000, Bora 160 Prime L440,
   Bora 160 Prime L550, Bora 160 Prime L700, Bora 160 Prime L1000,
@@ -93,6 +95,7 @@ External relabels and OEM names tracked as evidence or candidates:
 
 # Currently supported:
 * UI integration setup
+* VENTS A21 Modbus TCP/RTU with an input-register `37 == 1` identity check
 * turn_on/turn_off
 * Preset modes:
   - low
@@ -478,3 +481,8 @@ Version 1.2.16
   Freshpoint specification/manual links, and the current VENTS VUT V5B EC A21
   datasheet, product manual, Modbus table, and control manual as research
   sources.
+
+Version 1.2.17
+* Add separate VENTS A21 Modbus TCP and RTU transports with a read-only
+  controller identity check, the complete published register table, RTC and
+  weekly schedule support, and legacy BGCP config-entry migration.

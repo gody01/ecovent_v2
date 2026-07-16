@@ -22,9 +22,21 @@
                     "silent_mode": "Ціхі рэжым ручной хуткасці"
                 }
             },
-            "bgcp": {"data": {"ip_address": "IP-адрас", "password": "Пароль", "port": "Порт", "name": "Назва", "update_interval": "Інтэрвал абнаўлення", "auto_clock_sync": "Аўтаматычна сінхранізаваць гадзіннік прылады", "silent_mode": "Ціхі рэжым ручной хуткасці"}},
-            "modbus_tcp": {"data": {"ip_address": "IP-адрас", "port": "Порт", "unit_id": "ID прылады Modbus", "device_model": "Мадэль прылады", "name": "Назва", "update_interval": "Інтэрвал абнаўлення", "auto_clock_sync": "Аўтаматычна сінхранізаваць гадзіннік прылады"}},
-            "modbus_rtu": {"data": {"serial_port": "Паслядоўны порт", "baudrate": "Хуткасць перадачы", "parity": "Цотнасць", "stopbits": "Стопавыя біты", "unit_id": "ID прылады Modbus", "device_model": "Мадэль прылады", "name": "Назва", "update_interval": "Інтэрвал абнаўлення", "auto_clock_sync": "Аўтаматычна сінхранізаваць гадзіннік прылады"}},
+            "bgcp": {
+                "data": {
+                    "ip_address": "IP-адрас", "password": "Пароль", "port": "Порт", "name": "Назва", "update_interval": "Інтэрвал абнаўлення", "auto_clock_sync": "Аўтаматычна сінхранізаваць гадзіннік прылады", "silent_mode": "Ціхі рэжым ручной хуткасці"
+                }
+            },
+            "modbus_tcp": {
+                "data": {
+                    "ip_address": "IP-адрас", "port": "Порт", "unit_id": "ID прылады Modbus", "device_model": "Мадэль прылады", "name": "Назва", "update_interval": "Інтэрвал абнаўлення", "auto_clock_sync": "Аўтаматычна сінхранізаваць гадзіннік прылады"
+                }
+            },
+            "modbus_rtu": {
+                "data": {
+                    "serial_port": "Паслядоўны порт", "baudrate": "Хуткасць перадачы", "parity": "Цотнасць", "stopbits": "Стопавыя біты", "unit_id": "ID прылады Modbus", "device_model": "Мадэль прылады", "name": "Назва", "update_interval": "Інтэрвал абнаўлення", "auto_clock_sync": "Аўтаматычна сінхранізаваць гадзіннік прылады"
+                }
+            },
             "reconfigure": {
                 "data": {
                     "ip_address": "IP-адрас",

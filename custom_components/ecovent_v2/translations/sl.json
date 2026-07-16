@@ -6,11 +6,13 @@
         "error": {
             "cannot_connect": "Povezava ni uspela.",
             "invalid_auth": "Neveljavni podatki za prijavo.",
+            "unsupported_device": "Krmilnik se ni identificiral kot VENTS A21.",
             "unknown": "Nepričakovana napaka."
         },
         "step": {
             "user": {
                 "data": {
+                    "transport": "Vrsta povezave",
                     "ip_address": "IP",
                     "password": "Geslo",
                     "port": "Vrata",
@@ -20,6 +22,9 @@
                     "silent_mode": "Tihi način ročne hitrosti"
                 }
             },
+            "bgcp": {"data": {"ip_address": "IP", "password": "Geslo", "port": "Vrata", "name": "Naziv", "update_interval": "Interval posodabljanja", "auto_clock_sync": "Samodejno sinhroniziraj uro naprave", "silent_mode": "Tihi način ročne hitrosti"}},
+            "modbus_tcp": {"data": {"ip_address": "IP", "port": "Vrata", "unit_id": "ID naprave Modbus", "device_model": "Model naprave", "name": "Naziv", "update_interval": "Interval posodabljanja", "auto_clock_sync": "Samodejno sinhroniziraj uro naprave"}},
+            "modbus_rtu": {"data": {"serial_port": "Serijska vrata", "baudrate": "Hitrost prenosa", "parity": "Pariteta", "stopbits": "Stop biti", "unit_id": "ID naprave Modbus", "device_model": "Model naprave", "name": "Naziv", "update_interval": "Interval posodabljanja", "auto_clock_sync": "Samodejno sinhroniziraj uro naprave"}},
             "reconfigure": {
                 "data": {
                     "ip_address": "IP",
@@ -28,7 +33,13 @@
                     "name": "Naziv",
                     "update_interval": "Interval posodabljanja",
                     "auto_clock_sync": "Samodejno sinhroniziraj uro naprave",
-                    "silent_mode": "Tihi način ročne hitrosti"
+                    "silent_mode": "Tihi način ročne hitrosti",
+                    "unit_id": "ID naprave Modbus",
+                    "device_model": "Model naprave",
+                    "serial_port": "Serijska vrata",
+                    "baudrate": "Hitrost prenosa",
+                    "parity": "Pariteta",
+                    "stopbits": "Stop biti"
                 }
             }
         }

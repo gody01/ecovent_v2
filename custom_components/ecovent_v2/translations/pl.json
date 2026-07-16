@@ -6,11 +6,13 @@
         "error": {
             "cannot_connect": "Nie udało się połączyć.",
             "invalid_auth": "Nieprawidłowe dane logowania.",
+            "unsupported_device": "Kontroler nie zidentyfikował się jako VENTS A21.",
             "unknown": "Nieoczekiwany błąd."
         },
         "step": {
             "user": {
                 "data": {
+                    "transport": "Typ połączenia",
                     "ip_address": "Host",
                     "password": "Hasło",
                     "port": "Port",
@@ -20,6 +22,9 @@
                     "silent_mode": "Cichy tryb ręcznej prędkości"
                 }
             },
+            "bgcp": {"data": {"ip_address": "Host", "password": "Hasło", "port": "Port", "name": "Nazwa", "update_interval": "Interwał aktualizacji", "auto_clock_sync": "Automatycznie synchronizuj zegar urządzenia", "silent_mode": "Cichy tryb ręcznej prędkości"}},
+            "modbus_tcp": {"data": {"ip_address": "Host", "port": "Port", "unit_id": "ID urządzenia Modbus", "device_model": "Model urządzenia", "name": "Nazwa", "update_interval": "Interwał aktualizacji", "auto_clock_sync": "Automatycznie synchronizuj zegar urządzenia"}},
+            "modbus_rtu": {"data": {"serial_port": "Port szeregowy", "baudrate": "Szybkość transmisji", "parity": "Parzystość", "stopbits": "Bity stopu", "unit_id": "ID urządzenia Modbus", "device_model": "Model urządzenia", "name": "Nazwa", "update_interval": "Interwał aktualizacji", "auto_clock_sync": "Automatycznie synchronizuj zegar urządzenia"}},
             "reconfigure": {
                 "data": {
                     "ip_address": "Host",
@@ -28,7 +33,13 @@
                     "name": "Nazwa",
                     "update_interval": "Interwał aktualizacji",
                     "auto_clock_sync": "Automatycznie synchronizuj zegar urządzenia",
-                    "silent_mode": "Cichy tryb ręcznej prędkości"
+                    "silent_mode": "Cichy tryb ręcznej prędkości",
+                    "unit_id": "ID urządzenia Modbus",
+                    "device_model": "Model urządzenia",
+                    "serial_port": "Port szeregowy",
+                    "baudrate": "Szybkość transmisji",
+                    "parity": "Parzystość",
+                    "stopbits": "Bity stopu"
                 }
             }
         }

@@ -6,11 +6,13 @@
         "error": {
             "cannot_connect": "Es kann keine Verbindung zum Lüfter aufgebaut werden.",
             "invalid_auth": "Ungültige Zugangsdaten.",
+            "unsupported_device": "Der Controller hat sich nicht als VENTS A21 identifiziert.",
             "unknown": "Unbekannter Fehler."
         },
         "step": {
             "user": {
                 "data": {
+                    "transport": "Verbindungstyp",
                     "ip_address": "IP-Adresse",
                     "password": "Passwort",
                     "port": "Port",
@@ -20,6 +22,9 @@
                     "silent_mode": "Leiser manueller Geschwindigkeitsmodus"
                 }
             },
+            "bgcp": {"data": {"ip_address": "IP-Adresse", "password": "Passwort", "port": "Port", "name": "Name", "update_interval": "Aktualisierungsintervall", "auto_clock_sync": "Geräteuhr automatisch synchronisieren", "silent_mode": "Leiser manueller Geschwindigkeitsmodus"}},
+            "modbus_tcp": {"data": {"ip_address": "IP-Adresse", "port": "Port", "unit_id": "Modbus-Geräte-ID", "device_model": "Gerätemodell", "name": "Name", "update_interval": "Aktualisierungsintervall", "auto_clock_sync": "Geräteuhr automatisch synchronisieren"}},
+            "modbus_rtu": {"data": {"serial_port": "Serieller Anschluss", "baudrate": "Baudrate", "parity": "Parität", "stopbits": "Stoppbits", "unit_id": "Modbus-Geräte-ID", "device_model": "Gerätemodell", "name": "Name", "update_interval": "Aktualisierungsintervall", "auto_clock_sync": "Geräteuhr automatisch synchronisieren"}},
             "reconfigure": {
                 "data": {
                     "ip_address": "IP-Adresse",
@@ -28,7 +33,13 @@
                     "name": "Name",
                     "update_interval": "Aktualisierungsintervall",
                     "auto_clock_sync": "Geräteuhr automatisch synchronisieren",
-                    "silent_mode": "Leiser manueller Geschwindigkeitsmodus"
+                    "silent_mode": "Leiser manueller Geschwindigkeitsmodus",
+                    "unit_id": "Modbus-Geräte-ID",
+                    "device_model": "Gerätemodell",
+                    "serial_port": "Serieller Anschluss",
+                    "baudrate": "Baudrate",
+                    "parity": "Parität",
+                    "stopbits": "Stoppbits"
                 }
             }
         }

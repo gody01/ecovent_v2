@@ -6,10 +6,23 @@
         "error": {
             "cannot_connect": "Failed to connect",
             "invalid_auth": "Invalid authentication",
+            "unsupported_device": "The controller did not identify itself as VENTS A21.",
             "unknown": "Unexpected error"
         },
         "step": {
             "user": {
+                "data": {
+                    "transport": "Connection type",
+                    "ip_address": "IP address",
+                    "name": "Name",
+                    "password": "Password",
+                    "port": "Port",
+                    "update_interval": "Update interval",
+                    "auto_clock_sync": "Sync device clock automatically",
+                    "silent_mode": "Use silent manual-speed mode"
+                }
+            },
+            "bgcp": {
                 "data": {
                     "ip_address": "IP address",
                     "name": "Name",
@@ -20,6 +33,30 @@
                     "silent_mode": "Use silent manual-speed mode"
                 }
             },
+            "modbus_tcp": {
+                "data": {
+                    "ip_address": "IP address",
+                    "port": "Port",
+                    "unit_id": "Modbus unit ID",
+                    "device_model": "Device model",
+                    "name": "Name",
+                    "update_interval": "Update interval",
+                    "auto_clock_sync": "Sync device clock automatically"
+                }
+            },
+            "modbus_rtu": {
+                "data": {
+                    "serial_port": "Serial port",
+                    "baudrate": "Baud rate",
+                    "parity": "Parity",
+                    "stopbits": "Stop bits",
+                    "unit_id": "Modbus unit ID",
+                    "device_model": "Device model",
+                    "name": "Name",
+                    "update_interval": "Update interval",
+                    "auto_clock_sync": "Sync device clock automatically"
+                }
+            },
             "reconfigure": {
                 "data": {
                     "ip_address": "IP address",
@@ -28,7 +65,13 @@
                     "port": "Port",
                     "update_interval": "Update interval",
                     "auto_clock_sync": "Sync device clock automatically",
-                    "silent_mode": "Use silent manual-speed mode"
+                    "silent_mode": "Use silent manual-speed mode",
+                    "unit_id": "Modbus unit ID",
+                    "device_model": "Device model",
+                    "serial_port": "Serial port",
+                    "baudrate": "Baud rate",
+                    "parity": "Parity",
+                    "stopbits": "Stop bits"
                 }
             }
         }

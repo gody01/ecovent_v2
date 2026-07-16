@@ -3,6 +3,24 @@
         "step": {
             "user": {
                 "data": {
+                    "transport": "Connection type",
+                    "ip_address": "IP address",
+                    "port": "[%key:common::config_flow::data::port%]",
+                    "password": "[%key:common::config_flow::data::password%]",
+                    "name": "[%key:common::config_flow::data::name%]",
+                    "update_interval": "Update interval",
+                    "auto_clock_sync": "Sync device clock automatically",
+                    "silent_mode": "Use silent manual-speed mode",
+                    "unit_id": "Modbus unit ID",
+                    "device_model": "Device model",
+                    "serial_port": "Serial port",
+                    "baudrate": "Baud rate",
+                    "parity": "Parity",
+                    "stopbits": "Stop bits"
+                }
+            },
+            "bgcp": {
+                "data": {
                     "ip_address": "IP address",
                     "port": "[%key:common::config_flow::data::port%]",
                     "password": "[%key:common::config_flow::data::password%]",
@@ -10,6 +28,30 @@
                     "update_interval": "Update interval",
                     "auto_clock_sync": "Sync device clock automatically",
                     "silent_mode": "Use silent manual-speed mode"
+                }
+            },
+            "modbus_tcp": {
+                "data": {
+                    "ip_address": "IP address",
+                    "port": "[%key:common::config_flow::data::port%]",
+                    "unit_id": "Modbus unit ID",
+                    "device_model": "Device model",
+                    "name": "[%key:common::config_flow::data::name%]",
+                    "update_interval": "Update interval",
+                    "auto_clock_sync": "Sync device clock automatically"
+                }
+            },
+            "modbus_rtu": {
+                "data": {
+                    "serial_port": "Serial port",
+                    "baudrate": "Baud rate",
+                    "parity": "Parity",
+                    "stopbits": "Stop bits",
+                    "unit_id": "Modbus unit ID",
+                    "device_model": "Device model",
+                    "name": "[%key:common::config_flow::data::name%]",
+                    "update_interval": "Update interval",
+                    "auto_clock_sync": "Sync device clock automatically"
                 }
             },
             "reconfigure": {
@@ -20,13 +62,20 @@
                     "name": "[%key:common::config_flow::data::name%]",
                     "update_interval": "Update interval",
                     "auto_clock_sync": "Sync device clock automatically",
-                    "silent_mode": "Use silent manual-speed mode"
+                    "silent_mode": "Use silent manual-speed mode",
+                    "unit_id": "Modbus unit ID",
+                    "device_model": "Device model",
+                    "serial_port": "Serial port",
+                    "baudrate": "Baud rate",
+                    "parity": "Parity",
+                    "stopbits": "Stop bits"
                 }
             }
         },
         "error": {
             "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
             "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+            "unsupported_device": "The controller did not identify itself as VENTS A21.",
             "unknown": "[%key:common::config_flow::error::unknown%]"
         },
         "abort": {

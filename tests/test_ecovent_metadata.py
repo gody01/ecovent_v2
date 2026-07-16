@@ -6,25 +6,44 @@ import unittest
 from ecovent_test_helpers import COMPONENT_PATH, Fan, PROTOCOL_REFERENCE_PATH
 
 README_PATH = COMPONENT_PATH.parents[1] / "README.md"
-LEGACY_README_OFFICIAL_ALIASES = {
-    0x0200: (
-        "Blauberg Freshbox 100 WiFi",
-        "Freshbox E1-100 WiFi",
-        "VENTS Micra 100 WiFi",
-        "Micra 100 E1 WiFi",
-    ),
-    0x0400: ("Blauberg VENTO Expert DUO A30-1 W V.2",),
-    0x0500: ("Blauberg VENTO Expert A30 W V.2",),
-}
-LEGACY_README_CANDIDATE_ALIASES = {
-    0x0300: (
-        "Roomie One Wifi V2",
-        "DUKA One S4 Wi-Fi",
-        "DUKA One S6 Wi-Fi",
-        "Winzel V.2",
-    ),
-}
-LEGACY_README_FAMILY_TERMS = ("VENTS Breezy", "VENTS Arc Smart")
+ECONOPRIME_README_ONLY_NAMES = (
+    "DF 180 Flat",
+    "DF 180 Flat Connect",
+    "DFF18021",
+    "DF 270",
+    "DF27014",
+    "DF 270 Connect",
+    "DF27021",
+    "DF 350",
+    "DF 350 Connect",
+    "DF35021",
+    "Zephyr 100 S",
+    "ZEPH100",
+    "Zephyr 240 S",
+    "ZEPH240A14",
+    "Zephyr 240 S Connect",
+    "ZEPH240A21",
+    "Zephyr 270 V R",
+    "114800001",
+    "Zephyr 270 V Connect R",
+    "114800002",
+    "Zephyr 550 V PH Connect R",
+    "114800003",
+    "URC 250",
+    "URC250",
+    "URHF 150",
+    "URHF150",
+    "URHFCF 150",
+    "URHFCF150",
+    "URHF 200",
+    "URHF200",
+    "URHFCF 200",
+    "URHFCF200",
+    "URH 350",
+    "URH350",
+    "Airion 100",
+    "Airion 150",
+)
 
 
 class ParseResponseTest(unittest.TestCase):
@@ -242,88 +261,29 @@ class ParseResponseTest(unittest.TestCase):
 
     def test_readme_search_index_covers_catalog_names_and_statuses(self):
         readme = README_PATH.read_text()
-        search_index = readme.split("## Device and brand search index", 1)[1].split(
-            "# Hardware smoke-tested", 1
+        search_index = readme.split("## Device names and search keywords", 1)[1].split(
+            "# Tested on:", 1
         )[0]
-        official_section = search_index.split(
-            "### Protocol-mapped official names", 1
-        )[1].split("### Reported/relabel evidence", 1)[0]
-        relabel_section = search_index.split("### Reported/relabel evidence", 1)[
-            1
-        ].split("### Candidate relationships", 1)[0]
-        candidate_section = search_index.split("### Candidate relationships", 1)[
-            1
-        ].split("### Econology / ECONOPRIME catalogue research", 1)[0]
+        official_section, external_section = search_index.split(
+            "External relabels and OEM names tracked as evidence or candidates:", 1
+        )
 
         all_marketing_names = []
-        for parser_key, model in Fan.device_models.items():
-            official = {entry.model for entry in model.official_names}
-            relabels = {entry.model for entry in model.relabels}
-            candidates = {entry.model for entry in model.candidates}
-            self.assertTrue(official.isdisjoint(relabels))
-            self.assertTrue(official.isdisjoint(candidates))
-            self.assertTrue(relabels.isdisjoint(candidates))
-
-            official_row = next(
-                line
-                for line in official_section.splitlines()
-                if line.startswith(
-                    f"| `0x{parser_key:04X}` / `{model.profile_key}` |"
-                )
-            )
-            for name in official:
-                self.assertIn(f"`{name}`", official_row)
-            self.assertEqual(official_row.count("|"), 4)
-
-            if relabels:
-                relabel_row = next(
-                    line
-                    for line in relabel_section.splitlines()
-                    if line.startswith(f"| `0x{parser_key:04X}` |")
-                )
-                for name in relabels:
-                    self.assertIn(f"`{name}`", relabel_row)
-
-            if candidates:
-                candidate_row = next(
-                    line
-                    for line in candidate_section.splitlines()
-                    if line.startswith(f"| near `0x{parser_key:04X}` |")
-                )
-            for name in candidates:
-                self.assertIn(f"`{name}`", candidate_row)
-                self.assertNotIn(f"`{name}`", official_section)
-                self.assertNotIn(f"`{name}`", relabel_section)
+        for model in Fan.device_models.values():
+            for name in (*model.relabels, *model.candidates):
+                self.assertIn(name.model, external_section)
+                self.assertNotIn(name.model, official_section)
             all_marketing_names.extend(
                 (*model.official_names, *model.relabels, *model.candidates)
             )
 
-        brand_section = search_index.split("### Protocol-mapped official names", 1)[0]
         for brand in {entry.brand for entry in all_marketing_names}:
-            self.assertIn(f"`{brand}`", search_index)
-        for term in LEGACY_README_FAMILY_TERMS:
-            self.assertIn(f"`{term}`", brand_section)
+            self.assertIn(brand, search_index)
+        for name in ECONOPRIME_README_ONLY_NAMES:
+            self.assertIn(name, external_section)
 
-        for parser_key, aliases in LEGACY_README_OFFICIAL_ALIASES.items():
-            row = next(
-                line
-                for line in official_section.splitlines()
-                if line.startswith(f"| `0x{parser_key:04X}` /")
-            )
-            for alias in aliases:
-                self.assertIn(f"`{alias}`", row)
-
-        for parser_key, aliases in LEGACY_README_CANDIDATE_ALIASES.items():
-            row = next(
-                line
-                for line in candidate_section.splitlines()
-                if line.startswith(f"| near `0x{parser_key:04X}` |")
-            )
-            for alias in aliases:
-                self.assertIn(f"`{alias}`", row)
-                self.assertIn(f"`{alias}` — `legacy_search`", row)
-
-        self.assertNotIn("### Legacy discovery aliases", search_index)
+        self.assertNotIn("## Device and brand search index", readme)
+        self.assertNotIn("| Unit type / profile |", readme)
 
     def test_unit_type_metadata_keeps_source_documents_with_models(self):
         self.assertIn(

@@ -4,9 +4,11 @@
 Home Assistant Integration. Integration for newest Fans with api version 2
 
 This integration talks to the local BGCP/UDP Wi-Fi protocol used by devices on
-the Blauberg Group / VENTS platform. VENTS is an official sibling brand, not
-just a Blauberg relabel. The exact feature set is selected from the protocol
-device type reported by parameter `0x00B9`.
+the Blauberg Group / VENTS platform and compatible units. VENTS is an official
+sibling brand, not just a Blauberg relabel. The exact feature set is selected
+from the protocol device type reported by parameter `0x00B9`; candidate OEM
+relationships remain labelled as candidates until manufacturer evidence proves
+them.
 
 ## Device names and search keywords
 
@@ -44,8 +46,9 @@ Official Blauberg / VENTS platform families and names:
 * VENTS Breezy, Breezy 160, Breezy 160-E, Breezy 160-E Smart,
   Breezy 200-E, Breezy 200-E Smart, Breezy Eco 160, Breezy Eco 200
 * Blauberg Freshpoint, Freshpoint 160, Freshpoint 160-E,
-  Freshpoint 160-E Pro, Freshpoint 200, Freshpoint 200-E,
-  Freshpoint 200-E Pro, Freshpoint Eco 160, Freshpoint Eco 200
+  Freshpoint 160-E L055/L07/L1, Freshpoint 160-E Pro L055/L07/L1,
+  Freshpoint 200, Freshpoint 200-E L055/L07/L1,
+  Freshpoint 200-E Pro L055/L07/L1, Freshpoint Eco 160, Freshpoint Eco 200
 * VENTS Arc Smart, Arc Smart white, Arc Smart black,
   Blauberg O2 Supreme, O2 Supreme white, O2 Supreme black
 
@@ -64,6 +67,10 @@ External relabels and OEM names tracked as evidence or candidates:
 * Winzel V.2, Winzel Expert WiFi RW1-50 P,
   Blauberg Winzel Expert WiFi RW1-50 P
 * NIBE DVC 10, NIBE DVC 10-50W, NIBE DVC 10-D30W
+* ECONOPRIME DF270, ECONOPRIME DF270 Connect, and the reported seller spelling
+  Econology DF270 Connect (`0x0100`, mapped to the tested VENTO protocol
+  profile). VENTS VUT 270 V5B EC A21 is recorded only as an unconfirmed OEM
+  candidate; its published A21/Modbus documents do not prove that relationship.
 
 # Tested on:
 * Blauberg VENTO Expert A50-1 W V.2
@@ -437,3 +444,21 @@ Version 1.2.15
 * Guard schedule frontend registration before the first await, preventing
   duplicate static route registration when multiple EcoVent config entries are
   set up concurrently.
+
+Version 1.2.16
+* Keep protocol reads inside the documented 256-byte packet limit and verify
+  that every requested register was present in a valid bulk response. Registers
+  omitted by an otherwise valid reply are retried individually, and the parser
+  now preserves the protocol high-byte page across following parameters. A
+  refresh remains failed if an omitted register cannot be recovered, preventing
+  Home Assistant from accepting a stale cycle as complete.
+* Refresh Freshpoint humidity and all four built-in temperature registers on
+  quick updates. The non-Pro model has no VOC/CO2eq sensor, so those optional
+  readings may correctly remain unavailable.
+* Map reported device type `256` / parser key `0x0100` to ECONOPRIME DF270
+  Connect with the tested VENTO profile, while keeping the reported VENTS A21
+  OEM relationship explicitly unconfirmed.
+* Add official Freshpoint 160/200 standard and Pro length variants, current
+  Freshpoint specification/manual links, and the current VENTS VUT V5B EC A21
+  datasheet, product manual, Modbus table, and control manual as research
+  sources.

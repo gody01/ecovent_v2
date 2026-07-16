@@ -11,6 +11,7 @@ except ImportError:
 
 
 _LOGGER = logging.getLogger(__name__)
+MAX_BULK_READ_PARAMS = 12
 
 
 class FanProtocolMixin:
@@ -231,6 +232,7 @@ class FanProtocolMixin:
         i = 0
         while not response:
             i = i + 1
+            self._last_response_param_ids = None
             self.send(data)
             response = self.receive()
             if response:
@@ -289,20 +291,52 @@ class FanProtocolMixin:
         return self._read_params(request)
 
     def _read_params(self, request):
-        if self._bulk_read_supported is not False and self.send_command(
-            self.func["read"], request, retries=3
-        ):
-            self._bulk_read_supported = True
-            return True
+        """Read parameters without trusting a valid but incomplete bulk reply.
 
-        self._bulk_read_supported = False
-        success = False
-        for i in range(0, len(request), 4):
-            success = (
-                self.send_command(self.func["read"], request[i : i + 4], retries=1)
-                or success
-            )
-        return success
+        The Smart Home protocol limits a packet to 256 bytes. Keep each request
+        bounded, then retry only parameters omitted from an otherwise valid
+        response. An explicit 0xFD unsupported-parameter marker counts as a
+        response and is not retried.
+        """
+        complete = bool(request)
+        chunk_size = MAX_BULK_READ_PARAMS * 4
+        for start in range(0, len(request), chunk_size):
+            chunk = request[start : start + chunk_size]
+            missing = [chunk[i : i + 4] for i in range(0, len(chunk), 4)]
+
+            if self._bulk_read_supported is not False:
+                self._last_response_param_ids = None
+                if self.send_command(self.func["read"], chunk, retries=3):
+                    self._bulk_read_supported = True
+                    response_ids = self._last_response_param_ids
+                    if response_ids is None:
+                        continue
+                    missing = [
+                        param for param in missing if int(param, 16) not in response_ids
+                    ]
+                    if missing:
+                        _LOGGER.debug(
+                            "Bulk read returned %d of %d requested parameters; "
+                            "retrying %d individually",
+                            len(response_ids),
+                            len(chunk) // 4,
+                            len(missing),
+                        )
+                    else:
+                        continue
+                else:
+                    self._bulk_read_supported = False
+
+            for param in missing:
+                self._last_response_param_ids = None
+                param_complete = self.send_command(
+                    self.func["read"], param, retries=1
+                )
+                response_ids = self._last_response_param_ids
+                if param_complete and response_ids is not None:
+                    param_complete = int(param, 16) in response_ids
+                complete = param_complete and complete
+        return complete
 
     def set_param(self, param, value):
         valpar = self.get_params_values(param, value)

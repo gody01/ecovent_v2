@@ -23,6 +23,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
+    UpdateFailed,
 )
 from homeassistant.util import dt as dt_util
 
@@ -106,10 +107,17 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         if (self.updateCounter % 2 == 0) or (self.updateCounter < 4):
             # every 2nd update do a full update, otherwise a quick update to reduce load on the device
             _LOGGER.debug("EcoVentCoordinator: Starting full data update...")
-            await self.hass.async_add_executor_job(self._fan.update)
+            update_complete = await self.hass.async_add_executor_job(self._fan.update)
         else:
             _LOGGER.debug("EcoVentCoordinator: Starting quick data update...")
-            await self.hass.async_add_executor_job(self._fan.quick_update)
+            update_complete = await self.hass.async_add_executor_job(
+                self._fan.quick_update
+            )
+
+        if not update_complete:
+            raise UpdateFailed(
+                f"Incomplete protocol response from EcoVent device {self._fan.name}"
+            )
 
         if self._should_refresh_schedule_week():
             await self.hass.async_add_executor_job(self._load_schedule_week)

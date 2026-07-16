@@ -10,7 +10,9 @@ class ParseRobustnessTest(unittest.TestCase):
         fan = Fan("192.0.2.1")
         self.assertTrue(
             fan.parse_response(
-                packet_with_payload([0xFF, 0x12, 0x34, 0xAB, 0x01, 0x01])
+                packet_with_payload(
+                    [0xFF, 0x12, 0x34, 0xAB, 0xFF, 0x00, 0x01, 0x01]
+                )
             )
         )
         self.assertEqual(fan.unknown_params, {0x1234: "ab"})
@@ -100,3 +102,37 @@ class ParseRobustnessTest(unittest.TestCase):
         )
         self.assertEqual(fan.unknown_params, {})
         self.assertEqual(fan.state, "on")
+        self.assertEqual(fan._last_response_param_ids, {0x0065, 0x0001})
+
+    def test_parse_response_records_present_and_unsupported_parameter_ids(self):
+        fan = Fan("192.0.2.1")
+
+        self.assertTrue(
+            fan.parse_response(packet_with_payload([0x25, 0x32, 0xFD, 0x27]))
+        )
+
+        self.assertEqual(fan.humidity, "50")
+        self.assertEqual(fan._last_response_param_ids, {0x0025, 0x0027})
+
+    def test_parse_response_applies_page_to_unsupported_parameter_id(self):
+        fan = Fan("192.0.2.1")
+
+        self.assertTrue(
+            fan.parse_response(
+                packet_with_payload([0xFF, 0x01, 0xFD, 0x01, 0x04, 0x05])
+            )
+        )
+
+        self.assertEqual(fan._last_response_param_ids, {0x0101, 0x0104})
+
+    def test_parse_response_keeps_page_for_following_parameters(self):
+        fan = Fan("192.0.2.1")
+
+        self.assertTrue(
+            fan.parse_response(
+                packet_with_payload([0xFF, 0x01, 0x04, 0x05, 0x05, 0x06])
+            )
+        )
+
+        self.assertEqual(fan.unknown_params, {0x0104: "05", 0x0105: "06"})
+        self.assertEqual(fan._last_response_param_ids, {0x0104, 0x0105})

@@ -34,6 +34,31 @@ BREEZY_ECO_MANUAL_URL = (
 FRESHPOINT_MANUAL_URL = (
     "https://blaubergventilatoren.net/download/freshpoint-manual-16999.pdf"
 )
+FRESHPOINT_DATASHEET_URL = (
+    "https://blaubergventilatoren.net/download/freshpoint-datasheet-9055.pdf"
+)
+FRESHPOINT_USER_MANUAL_URL = (
+    "https://blaubergventilatoren.net/download/freshpoint-manual-9552.pdf"
+)
+ECONOPRIME_DF270_LISTING_URL = (
+    "https://www.econology.fr/filtres-vmc-double-flux-paul/"
+    "filtres-vmc-double-flux-econoprime-df270.html"
+)
+VENTS_VUT_270_V5B_EC_A21_URL = (
+    "https://ventilation-system.com/product/vut-270-v5b-ec-a21"
+)
+VENTS_VUT_V5B_EC_DATASHEET_URL = (
+    "https://ventilation-system.com/download/vut-v5b-ec-datasheet-19690.pdf"
+)
+VENTS_VUT_V5B_EC_USER_MANUAL_URL = (
+    "https://ventilation-system.com/download/vut-v5b-ec-manual-19693.pdf"
+)
+VENTS_A21_MODBUS_MANUAL_URL = (
+    "https://ventilation-system.com/download/vut-v5b-ec-manual-19669.pdf"
+)
+VENTS_A21_CONTROL_MANUAL_URL = (
+    "https://ventilation-system.com/download/vut-v5b-ec-manual-19670.pdf"
+)
 FRESHBOX_100_WIFI_MANUAL_URL = (
     "https://blaubergventilatoren.net/download/freshbox-100-wifi-datasheet-7508.pdf"
 )

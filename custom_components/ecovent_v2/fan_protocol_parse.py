@@ -2,6 +2,7 @@
 
 class FanProtocolParseMixin:
     def parse_response(self, data):
+        self._last_response_param_ids = None
         if not self.validate_packet(data):
             return False
         pointer = 2  # discard frame marker
@@ -28,6 +29,7 @@ class FanProtocolParseMixin:
         value_counter = 1
         high_byte_value = 0
         parameter = 1
+        response_param_ids = set()
         for p in payload:
             if parameter and p == 0xFF:
                 ext_function = 0xFF
@@ -46,6 +48,7 @@ class FanProtocolParseMixin:
                     value_counter = p
                     ext_function = 2
                 elif ext_function == 0xFD:
+                    response_param_ids.add((high_byte_value << 8) | p)
                     ext_function = 0
                     response = bytearray()
                 else:
@@ -61,15 +64,18 @@ class FanProtocolParseMixin:
             if value_counter <= 0:
                 parameter = 1
                 value_counter = 1
-                high_byte_value = 0
                 ext_function = 0
                 if len(response) < 2:
                     return False
+                response_param_ids.add(int(response[:2].hex(), 16))
                 self._store_param(response)
                 response = bytearray()
-        return (
+        valid = (
             ext_function == 0 and parameter == 1 and value_counter == 1 and not response
         )
+        if valid:
+            self._last_response_param_ids = response_param_ids
+        return valid
 
     def _store_param(self, response):
         param_id = int(response[:2].hex(), 16)

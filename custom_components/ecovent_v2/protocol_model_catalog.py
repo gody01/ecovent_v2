@@ -3,25 +3,84 @@
 try:
     from .protocol_metadata import (
         ARC_SMART_MANUAL_URL,
+        ECONOPRIME_DF270_LISTING_URL,
         O2_SUPREME_MANUAL_URL,
         TWINFRESH_STYLE_MANUAL_URL,
         TWINFRESH_STYLE_MINI_MANUAL_URL,
+        VENTS_A21_CONTROL_MANUAL_URL,
+        VENTS_A21_MODBUS_MANUAL_URL,
         VENTO_SMART_HOME_MANUAL_URL,
+        VENTS_VUT_270_V5B_EC_A21_URL,
+        VENTS_VUT_V5B_EC_DATASHEET_URL,
+        VENTS_VUT_V5B_EC_USER_MANUAL_URL,
         DeviceModel,
         MarketingName,
     )
 except ImportError:
     from protocol_metadata import (
         ARC_SMART_MANUAL_URL,
+        ECONOPRIME_DF270_LISTING_URL,
         O2_SUPREME_MANUAL_URL,
         TWINFRESH_STYLE_MANUAL_URL,
         TWINFRESH_STYLE_MINI_MANUAL_URL,
+        VENTS_A21_CONTROL_MANUAL_URL,
+        VENTS_A21_MODBUS_MANUAL_URL,
         VENTO_SMART_HOME_MANUAL_URL,
+        VENTS_VUT_270_V5B_EC_A21_URL,
+        VENTS_VUT_V5B_EC_DATASHEET_URL,
+        VENTS_VUT_V5B_EC_USER_MANUAL_URL,
         DeviceModel,
         MarketingName,
     )
 
 DEVICE_MODELS = {
+    0x0100: DeviceModel(
+        "ECONOPRIME DF270 Connect",
+        aliases=("Econology DF270 Connect",),
+        device_type=1,
+        parser_key=0x0100,
+        manufacturer_group="Unknown (marketed as ECONOPRIME)",
+        official_names=(
+            MarketingName(
+                "ECONOPRIME",
+                "DF270",
+                "ECONOPRIME DF270",
+                "official_listing",
+                (ECONOPRIME_DF270_LISTING_URL,),
+            ),
+            MarketingName(
+                "ECONOPRIME",
+                "DF270",
+                "ECONOPRIME DF270 Connect",
+                "official_listing",
+                (ECONOPRIME_DF270_LISTING_URL,),
+            ),
+        ),
+        relabels=(
+            MarketingName(
+                "Econology",
+                "DF270",
+                "Econology DF270 Connect",
+                "community_tested",
+            ),
+        ),
+        candidates=(
+            MarketingName(
+                "VENTS",
+                "VUT V5B EC",
+                "VENTS VUT 270 V5B EC A21",
+                "candidate",
+                (
+                    VENTS_VUT_270_V5B_EC_A21_URL,
+                    VENTS_VUT_V5B_EC_DATASHEET_URL,
+                    VENTS_VUT_V5B_EC_USER_MANUAL_URL,
+                    VENTS_A21_MODBUS_MANUAL_URL,
+                    VENTS_A21_CONTROL_MANUAL_URL,
+                ),
+            ),
+        ),
+        source_documents=(ECONOPRIME_DF270_LISTING_URL,),
+    ),
     0x0300: DeviceModel(
         "Blauberg VENTO Expert / VENTS TwinFresh Expert",
         device_type=3,

@@ -10,7 +10,7 @@ from this documentation alone.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Any, Iterable, Mapping
 
@@ -233,6 +233,7 @@ class RegisterSpec:
     word_count: int = 1
     enum: Mapping[int, str] | None = None
     source_note: str | None = None
+    default: Any = None
 
     def decode(self, words: Iterable[int]) -> Any:
         return decode(self.kind, words)
@@ -246,8 +247,8 @@ class RegisterSpec:
         return words
 
 
-def _spec(key: str, table: Table, address: int, access: Access, kind: Kind, description: str, minimum: int | None = None, maximum: int | None = None, unit: str | None = None, word_count: int = 1, enum: Mapping[int, str] | None = None, source_note: str | None = None) -> RegisterSpec:
-    return RegisterSpec(key, table, address, access, kind, description, minimum, maximum, unit, word_count, enum, source_note)
+def _spec(key: str, table: Table, address: int, access: Access, kind: Kind, description: str, minimum: int | None = None, maximum: int | None = None, unit: str | None = None, word_count: int = 1, enum: Mapping[int, str] | None = None, source_note: str | None = None, default: Any = None) -> RegisterSpec:
+    return RegisterSpec(key, table, address, access, kind, description, minimum, maximum, unit, word_count, enum, source_note, default)
 
 
 _COILS = [
@@ -311,7 +312,65 @@ def _catalogue() -> tuple[RegisterSpec, ...]:
     return tuple(out)
 
 
-REGISTERS = _catalogue()
+_ENUMS = {
+    "HR_OPERATION_MODE": {0: "ventilation only", 1: "heating", 2: "cooling", 3: "auto"},
+    "HR_TIMER_MODE": {0: "standby", 1: "speed 1", 2: "speed 2", 3: "speed 3", 4: "speed 4", 5: "speed 5"},
+    "HR_SelTEMP_SENSOR": {0: "extract air duct", 1: "external panel sensor", 2: "supply air duct"},
+    "HR_MainHEATER_TYPE": {0: "off", 1: "electric", 2: "water"},
+    "HR_COOLER_TYPE": {0: "off", 1: "digital", 2: "analogue 0-10 V"},
+    "HR_DEF_MODE": {0: "off", 1: "preheating", 2: "bypass/rotor", 3: "fan imbalance"},
+    "HR_MainHeaterMODE": {1: "manual", 2: "auto"}, "HR_CoolerMODE": {1: "manual", 2: "auto"},
+    "HR_PreHeaterMODE": {1: "manual", 2: "auto"}, "HR_BPS_ROTOR_MODE": {0: "closed/start", 1: "open/stop/manual", 2: "auto"},
+}
+
+
+def _published_metadata(spec: RegisterSpec) -> RegisterSpec:
+    """Apply every numeric/default field published in V55-8-1EN-02."""
+    if spec.table is Table.COIL:
+        defaults = (0, 0, 0, None, None, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, None, None, None, 0, 1, 1, 0, 1, 1)
+        return replace(spec, default=defaults[spec.address])
+    if spec.table is Table.INPUT_REGISTER:
+        extra = {
+            25: (0, 59, "min/sec + hours", None), 27: (0, 365, "days/hours/min", None), 29: (0, 65535, "days/hours/min", None),
+            31: (0, 3, None, None), 32: (0, 5, None, None), 33: (0, 30, "°C", None), 34: (0, 65535, None, None), 37: (0, 65535, None, None), 38: (0, 2, None, None),
+            39: (0, 100, "%", None), 40: (0, 100, "%", None), 41: (0, 100, "%", None), 42: (0, 100, "%", None),
+            43: (0, 200, "%", None), 44: (0, 200, "%", None), 45: (0, 200, "%", None), 46: (0, 100, "%", None), 47: (0, 100, "%", None),
+            48: (100, 400, "0.1 °C", None), 49: (100, 400, "0.1 °C", None), 50: (300, 600, "0.1 °C", None), 51: (0, 100, "%", None), 52: (0, 100, "%", None), 53: (0, 100, "%", None),
+        }
+        if spec.address in extra:
+            low, high, unit, default = extra[spec.address]
+            return replace(spec, minimum=low, maximum=high, unit=unit or spec.unit, default=default)
+        return spec
+    if spec.table is not Table.HOLDING_REGISTER:
+        return spec
+    # address: (min, max, default, unit, kind override)
+    details = {
+        0:(0,2,1,None,None),1:(3,5,3,None,None),2:(1,255,1,None,None),3:(0,100,30,"%",None),4:(0,100,100,"%",None),
+        43:(0,3,3,None,None),44:(15,30,23,"°C",None),45:(40,80,60,"%RH",None),46:(400,2000,1200,"ppm",Kind.U16),47:(100,1000,400,"µg/m³",Kind.U16),48:(20,100,40,"%",None),49:(0,5,1,None,None),50:(0,30,23,"°C",None),51:(0,23,ScheduleEnd(0,30),"hours/min",Kind.SCHEDULE_END),52:(5,15,7,"°C",None),53:(0,2,2,None,None),54:(0,2,None,None,None),55:(0,2,None,None,None),56:(0,3,None,None,None),57:(0,5,None,None,None),58:(0,365,90,"days",None),59:(0,60,0,"min",None),60:(0,15,0,"min",None),
+        65:(500,10000,2000,"ppm",Kind.U16),66:(500,10000,1000,"µg/m³",Kind.U16),67:(5,12,10,"°C",None),68:(1,2,2,None,None),69:(0,100,50,"%",None),70:(1,2,2,None,None),71:(0,100,0,"%",None),72:(1,2,2,None,None),73:(0,100,50,"%",None),74:(0,2,2,None,None),75:(0,100,100,"%",None),
+        103:(0,255,2,None,None),104:(5,120,30,"sec",None),105:(0,240,0,"sec",None),106:(20,240,120,"sec",None),107:(0,20,3,"min",None),108:(0,20,1,"min",None),109:(1,10,2,"°C",None),110:(0,1,None,None,None),111:(2,300,None,"sec",Kind.U16),
+        112:(-500,500,0,"0.1 °C",Kind.S16),113:(-500,500,0,"0.1 °C",Kind.S16),114:(-500,500,0,"0.1 °C",Kind.S16),115:(-500,500,0,"0.1 °C",Kind.S16),116:(-500,500,0,"0.1 °C",Kind.S16),117:(-500,500,0,"0.1 °C",Kind.S16),118:(0,100,0,"%",None),119:(2,30,5,"min",None),120:(30,60,30,"°C",Kind.S16),121:(30,60,50,"°C",Kind.S16),122:(10,30,12,"°C",Kind.S16),123:(10,30,20,"°C",Kind.S16),124:(48,57,"1111","ASCII",None),182:(4,10,5,"°C",None),
+    }
+    if 5 <= spec.address <= 22:
+        defaults=(0,0,40,40,70,70,100,100,100,100,100,100,50,50,100,100,60,40)
+        return replace(spec, minimum=0, maximum=100, default=defaults[spec.address-5], unit="%")
+    if 23 <= spec.address <= 42:
+        return replace(spec, minimum=0, maximum=10000, unit="m³/h" if spec.address <= 36 else "Pa")
+    if 76 <= spec.address <= 102:
+        defaults=(150,150,0,150,150,0,150,150,0,150,150,0,200,200,500,400,400,600,200,200,500,200,200,500,120,120,350)
+        return replace(spec, minimum=0, maximum=1000, default=defaults[spec.address-76])
+    if 126 <= spec.address <= 181:
+        period=(spec.address-126)%8
+        default = SchedulePeriod(1,23) if period % 2 == 0 else ScheduleEnd((6,9,19,23)[period//2], 0 if period < 6 else 59)
+        if period == 7: default = ScheduleEnd(23,59)
+        return replace(spec, minimum=0, maximum=30, unit="speed/°C" if period % 2 == 0 else "hours/min", default=default)
+    if spec.address in details:
+        low, high, default, unit, kind = details[spec.address]
+        return replace(spec, minimum=low, maximum=high, default=default, unit=unit or spec.unit, kind=kind or spec.kind, enum=_ENUMS.get(spec.key, spec.enum))
+    return replace(spec, enum=_ENUMS.get(spec.key, spec.enum))
+
+
+REGISTERS = tuple(_published_metadata(spec) for spec in _catalogue())
 
 
 def _indexes(registers: Iterable[RegisterSpec]) -> tuple[dict[str, RegisterSpec], dict[tuple[Table, int], RegisterSpec]]:

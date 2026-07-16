@@ -54,6 +54,17 @@ def test_bypass_rotor_type_preserves_the_pdf_maximum_discrepancy():
     assert "numeric maximum is 4" in spec.source_note
 
 
+def test_pdf_specific_holding_metadata_has_no_generic_fallback_ranges():
+    # 0..255 is published only for speed mode and fan-alarm control, not a
+    # generic default for the many byte-sized holding registers.
+    generic = [spec.key for spec in REGISTERS if spec.table is Table.HOLDING_REGISTER and spec.maximum == 255]
+    assert generic == ["HR_SPEED_MODE", "HR_FanAlarmCTRL"]
+    temp = get_register("HR_SetTEMP")
+    assert (temp.minimum, temp.maximum, temp.default, temp.unit) == (15, 30, 23, "°C")
+    assert get_register("HR_SetCO2").maximum == 2000
+    assert get_register("HR_RTC_TIME").default is None
+
+
 def test_index_validation_rejects_duplicates_and_overlaps():
     one = get_register("CL_POWER")
     with pytest.raises(ValueError, match="duplicate key"):

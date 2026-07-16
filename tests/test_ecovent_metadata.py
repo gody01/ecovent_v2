@@ -6,20 +6,25 @@ import unittest
 from ecovent_test_helpers import COMPONENT_PATH, Fan, PROTOCOL_REFERENCE_PATH
 
 README_PATH = COMPONENT_PATH.parents[1] / "README.md"
-LEGACY_README_SEARCH_ALIASES = (
-    "Blauberg VENTO Expert DUO A30-1 W V.2",
-    "Blauberg VENTO Expert A30 W V.2",
-    "Blauberg Freshbox 100 WiFi",
-    "Freshbox E1-100 WiFi",
-    "VENTS Micra 100 WiFi",
-    "Micra 100 E1 WiFi",
-    "VENTS Breezy",
-    "VENTS Arc Smart",
-    "DUKA One S4 Wi-Fi",
-    "DUKA One S6 Wi-Fi",
-    "Winzel V.2",
-    "Roomie One Wifi V2",
-)
+LEGACY_README_OFFICIAL_ALIASES = {
+    0x0200: (
+        "Blauberg Freshbox 100 WiFi",
+        "Freshbox E1-100 WiFi",
+        "VENTS Micra 100 WiFi",
+        "Micra 100 E1 WiFi",
+    ),
+    0x0400: ("Blauberg VENTO Expert DUO A30-1 W V.2",),
+    0x0500: ("Blauberg VENTO Expert A30 W V.2",),
+}
+LEGACY_README_CANDIDATE_ALIASES = {
+    0x0300: (
+        "Roomie One Wifi V2",
+        "DUKA One S4 Wi-Fi",
+        "DUKA One S6 Wi-Fi",
+        "Winzel V.2",
+    ),
+}
+LEGACY_README_FAMILY_TERMS = ("VENTS Breezy", "VENTS Arc Smart")
 
 
 class ParseResponseTest(unittest.TestCase):
@@ -268,6 +273,7 @@ class ParseResponseTest(unittest.TestCase):
             )
             for name in official:
                 self.assertIn(f"`{name}`", official_row)
+            self.assertEqual(official_row.count("|"), 4)
 
             if relabels:
                 relabel_row = next(
@@ -292,10 +298,32 @@ class ParseResponseTest(unittest.TestCase):
                 (*model.official_names, *model.relabels, *model.candidates)
             )
 
+        brand_section = search_index.split("### Protocol-mapped official names", 1)[0]
         for brand in {entry.brand for entry in all_marketing_names}:
             self.assertIn(f"`{brand}`", search_index)
-        for alias in LEGACY_README_SEARCH_ALIASES:
-            self.assertIn(f"`{alias}`", search_index)
+        for term in LEGACY_README_FAMILY_TERMS:
+            self.assertIn(f"`{term}`", brand_section)
+
+        for parser_key, aliases in LEGACY_README_OFFICIAL_ALIASES.items():
+            row = next(
+                line
+                for line in official_section.splitlines()
+                if line.startswith(f"| `0x{parser_key:04X}` /")
+            )
+            for alias in aliases:
+                self.assertIn(f"`{alias}`", row)
+
+        for parser_key, aliases in LEGACY_README_CANDIDATE_ALIASES.items():
+            row = next(
+                line
+                for line in candidate_section.splitlines()
+                if line.startswith(f"| near `0x{parser_key:04X}` |")
+            )
+            for alias in aliases:
+                self.assertIn(f"`{alias}`", row)
+                self.assertIn(f"`{alias}` — `legacy_search`", row)
+
+        self.assertNotIn("### Legacy discovery aliases", search_index)
 
     def test_unit_type_metadata_keeps_source_documents_with_models(self):
         self.assertIn(

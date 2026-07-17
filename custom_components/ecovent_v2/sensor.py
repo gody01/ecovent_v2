@@ -423,16 +423,23 @@ class WeeklyScheduleSummarySensor(StableObjectIdMixin, CoordinatorEntity, Sensor
         )
 
     @property
-    def native_value(self) -> str:
+    def native_value(self) -> str | None:
         """Return a compact summary state for the schedule entity."""
-        return "Enabled" if self._fan.weekly_schedule_state == "on" else "Disabled"
+        state = self._fan.weekly_schedule_state
+        if state == "on":
+            return "Enabled"
+        if state == "off":
+            return "Disabled"
+        return None
 
     @property
     def extra_state_attributes(self) -> dict[str, object]:
         """Expose the full schedule summary for the custom editor."""
+        state = self._fan.weekly_schedule_state
+        enabled = state == "on" if state in ("on", "off") else None
         attrs: dict[str, object] = {
             "editor": "ecovent_schedule",
-            "weekly_schedule_enabled": self._fan.weekly_schedule_state == "on",
+            "weekly_schedule_enabled": enabled,
             "selected_day": self.coordinator.schedule_day_option,
             "day_options": list(SCHEDULE_DAY_OPTIONS),
             "speed_options": self._fan.available_schedule_speed_options(),

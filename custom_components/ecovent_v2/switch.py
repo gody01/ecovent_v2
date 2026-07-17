@@ -370,7 +370,8 @@ class VentoSwitch(StableObjectIdMixin, CoordinatorEntity, SwitchEntity):
     @property
     def is_on(self) -> bool | None:
         """Is switch on."""
-        self._attr_is_on = self._method() == "on"
+        value = self._method()
+        self._attr_is_on = None if value is None else value == "on"
         # self._attr_is_on = (self._attribute == "on")  # do not work reliably, use method instead
         # _LOGGER.debug(f"Switch {self._attr_name}, val [{self._attribute2}] is_on: {self._attr_is_on}")
         _LOGGER.debug(f"Switch {self._attr_name} is_on: {self._attr_is_on}")

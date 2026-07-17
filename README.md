@@ -492,3 +492,25 @@ Version 1.2.18
   probes are legitimately absent. Missing optional variant registers are still
   retried, while humidity and all four documented temperature registers remain
   required for a successful Freshpoint refresh.
+
+Version 1.2.19
+* Restore Freshpoint 160-E polling when sensor/feature rows remain unavailable
+  after retry. Older 1.2.15 polling silently tolerated those omitted rows, while
+  1.2.16/1.2.17 made any omission fatal. Breezy/Freshpoint polls now require
+  only `0x0001` state, `0x0002` speed, and `0x0044` manual speed to prove the
+  device itself is reachable.
+* Treat explicit `0xFD` unsupported-register markers as unavailable data rather
+  than fresh values. Missing or unsupported optional rows are cleared, backed off
+  for ten poll cycles, and exposed as unknown/unavailable instead of stale or
+  false HA states.
+* Skip automatic full weekly-schedule cache reads while the lightweight
+  `0x0072` schedule-state row is unavailable, avoiding setup/reload delays on
+  Freshpoint variants that do not answer the optional schedule rows.
+* Add debug logging for incomplete BGCP/UDP refreshes after individual register
+  retries. The log now lists the missing required register addresses and any
+  non-critical poll registers that stayed unavailable or unsupported, making
+  Freshpoint hardware reports actionable without a local test device.
+* Note for HACS downgrades: entries migrated by 1.2.16/1.2.17 use config-entry
+  version 2. Home Assistant cannot load those entries with older 1.2.15 code;
+  delete and re-add the integration entries or restore a full Home Assistant
+  backup before downgrading to 1.2.15.

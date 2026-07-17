@@ -12,9 +12,46 @@ except ImportError:
 
 _LOGGER = logging.getLogger(__name__)
 MAX_BULK_READ_PARAMS = 12
+OPTIONAL_PARAM_RETRY_BACKOFF_READS = 10
+PRESERVE_ON_SOFT_MISS_PARAMS = frozenset(
+    {
+        0x007C,  # device_search
+        0x0086,  # firmware
+        0x009C,  # wifi_assigned_ip
+        0x00A3,  # current_wifi_ip
+        0x00B9,  # unit_type/profile identity
+    }
+)
+
+
+def _format_param_ids(param_ids):
+    """Return protocol parameter ids in the format users see in docs/logs."""
+    if not param_ids:
+        return "none"
+    return ", ".join(f"0x{param_id:04X}" for param_id in sorted(param_ids))
+
+
+def _request_param_ids(request):
+    """Return parameter ids encoded in a read request string."""
+    return {int(request[i : i + 4], 16) for i in range(0, len(request), 4)}
 
 
 class FanProtocolMixin:
+    @property
+    def last_missing_required_params(self):
+        """Return required parameters missing from the last protocol read."""
+        return getattr(self, "_last_missing_required_params", frozenset())
+
+    @property
+    def last_missing_optional_params(self):
+        """Return optional parameters missing from the last protocol read."""
+        return getattr(self, "_last_missing_optional_params", frozenset())
+
+    @property
+    def last_unsupported_params(self):
+        """Return parameters explicitly rejected by the last protocol read."""
+        return getattr(self, "_last_unsupported_params", frozenset())
+
     def search_devices(self, addr="0.0.0.0", port=4000):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
@@ -233,6 +270,7 @@ class FanProtocolMixin:
         while not response:
             i = i + 1
             self._last_response_param_ids = None
+            self._last_unsupported_param_ids = None
             self.send(data)
             response = self.receive()
             if response:
@@ -267,7 +305,10 @@ class FanProtocolMixin:
             if definition[0] == "weekly_schedule_setup":
                 continue
             request += hex(param).replace("0x", "").zfill(4)
-        success = self._read_params(request)
+        success = self._read_params(
+            request,
+            required_params=self.device_profile.poll_required_params,
+        )
         return success
 
     def quick_update(self):
@@ -281,7 +322,10 @@ class FanProtocolMixin:
         # 0x004B: ["fan2_speed", None],
         # 0x0304: ["humidity_status", statuses],
         # 0x0305: ["analogV_status", statuses],
-        return self._read_params(self.device_profile.quick_update_request)
+        return self._read_params(
+            self.device_profile.quick_update_request,
+            required_params=self.device_profile.poll_required_params,
+        )
 
     def update_preset_speed_settings(self):
         if not self.supports_preset_speed_settings:
@@ -290,42 +334,119 @@ class FanProtocolMixin:
         request = "003A003B003C003D003E003F"
         return self._read_params(request)
 
-    def _read_params(self, request):
+    def _mark_param_unavailable(self, param_id):
+        """Clear a missing soft-poll value so Home Assistant does not keep stale data."""
+        if param_id in PRESERVE_ON_SOFT_MISS_PARAMS:
+            return
+
+        definition = self.params.get(param_id)
+        if definition is None:
+            return
+
+        setattr(self, f"_{definition[0]}", None)
+
+    def _optional_param_backoff(self):
+        backoff = getattr(self, "_optional_read_backoff", None)
+        if backoff is None:
+            backoff = {}
+            self._optional_read_backoff = backoff
+        return backoff
+
+    def _mark_param_available_for_retry(self, param_id):
+        self._optional_param_backoff().pop(param_id, None)
+
+    def _delay_optional_param_retry(self, param_id):
+        self._optional_param_backoff()[param_id] = OPTIONAL_PARAM_RETRY_BACKOFF_READS
+
+    def _optional_param_retry_delayed(self, param_id):
+        backoff = self._optional_param_backoff()
+        remaining = backoff.get(param_id, 0)
+        if remaining <= 0:
+            return False
+
+        remaining -= 1
+        if remaining:
+            backoff[param_id] = remaining
+        else:
+            backoff.pop(param_id, None)
+        return True
+
+    def _read_params(self, request, *, required_params=None):
         """Read parameters without trusting a valid but incomplete bulk reply.
 
         The Smart Home protocol limits a packet to 256 bytes. Keep each request
         bounded, then retry only parameters omitted from an otherwise valid
-        response. An explicit 0xFD unsupported-parameter marker counts as a
-        response and is not retried. Profiles that cover multiple hardware
-        variants may identify the parameters that must complete a poll; missing
-        optional probes are retried but do not make the whole device unavailable.
+        response. An explicit 0xFD unsupported-parameter marker proves the
+        device answered, but it is still treated as unavailable data: required
+        rows fail the read, while optional rows are cleared and backed off.
+        Poll callers may identify the parameters that prove the device itself
+        is healthy; missing non-critical probes are retried and logged but do
+        not make the whole device unavailable.
         """
+        requested_params = _request_param_ids(request)
+        if required_params is None:
+            required_param_ids = requested_params
+        else:
+            required_param_ids = requested_params & set(required_params)
         complete = bool(request)
         received_response = False
-        optional_params = self.device_profile.optional_read_params
+        missing_required_params = set()
+        missing_optional_params = set()
+        unsupported_params = set()
+        self._last_missing_required_params = frozenset()
+        self._last_missing_optional_params = frozenset()
+        self._last_unsupported_params = frozenset()
         chunk_size = MAX_BULK_READ_PARAMS * 4
+
+        def mark_unavailable(param_id, *, delay_optional_retry=False):
+            nonlocal complete
+            if param_id in required_param_ids:
+                complete = False
+                missing_required_params.add(param_id)
+                return
+
+            missing_optional_params.add(param_id)
+            self._mark_param_unavailable(param_id)
+            if delay_optional_retry:
+                self._delay_optional_param_retry(param_id)
+
         for start in range(0, len(request), chunk_size):
             chunk = request[start : start + chunk_size]
             missing = [chunk[i : i + 4] for i in range(0, len(chunk), 4)]
+            chunk_param_ids = {int(param, 16) for param in missing}
 
             if self._bulk_read_supported is not False:
                 self._last_response_param_ids = None
+                self._last_unsupported_param_ids = None
                 if self.send_command(self.func["read"], chunk, retries=3):
                     received_response = True
                     self._bulk_read_supported = True
                     response_ids = self._last_response_param_ids
-                    if response_ids is None:
+                    unsupported_ids = self._last_unsupported_param_ids
+                    if response_ids is None and unsupported_ids is None:
                         continue
+                    response_ids = set(response_ids or ()) & chunk_param_ids
+                    unsupported_ids = set(unsupported_ids or ()) & chunk_param_ids
+                    for param_id in response_ids:
+                        self._mark_param_available_for_retry(param_id)
+                    for param_id in unsupported_ids:
+                        unsupported_params.add(param_id)
+                        mark_unavailable(param_id, delay_optional_retry=True)
                     missing = [
-                        param for param in missing if int(param, 16) not in response_ids
+                        param
+                        for param in missing
+                        if int(param, 16) not in response_ids | unsupported_ids
                     ]
                     if missing:
                         _LOGGER.debug(
                             "Bulk read returned %d of %d requested parameters; "
-                            "retrying %d individually",
+                            "retrying %d individually: %s",
                             len(response_ids),
                             len(chunk) // 4,
                             len(missing),
+                            _format_param_ids(
+                                int(param, 16) for param in missing
+                            ),
                         )
                     else:
                         continue
@@ -333,22 +454,57 @@ class FanProtocolMixin:
                     self._bulk_read_supported = False
 
             for param in missing:
+                param_id = int(param, 16)
+                if (
+                    param_id not in required_param_ids
+                    and self._optional_param_retry_delayed(param_id)
+                ):
+                    missing_optional_params.add(param_id)
+                    self._mark_param_unavailable(param_id)
+                    _LOGGER.debug(
+                        "Optional parameter 0x%04X still unavailable; "
+                        "skipping individual retry during backoff",
+                        param_id,
+                    )
+                    continue
+
                 self._last_response_param_ids = None
+                self._last_unsupported_param_ids = None
                 param_complete = self.send_command(
                     self.func["read"], param, retries=1
                 )
                 response_ids = self._last_response_param_ids
+                unsupported_ids = set(self._last_unsupported_param_ids or ())
                 received_response = param_complete or received_response
+                if param_complete and param_id in unsupported_ids:
+                    unsupported_params.add(param_id)
+                    mark_unavailable(param_id, delay_optional_retry=True)
+                    continue
                 if param_complete and response_ids is not None:
-                    param_complete = int(param, 16) in response_ids
+                    param_complete = param_id in response_ids
+                if param_complete:
+                    self._mark_param_available_for_retry(param_id)
                 if not param_complete:
-                    param_id = int(param, 16)
-                    if param_id not in optional_params:
-                        complete = False
-                    else:
+                    mark_unavailable(param_id, delay_optional_retry=True)
+                    if param_id not in required_param_ids:
                         _LOGGER.debug(
                             "Optional parameter 0x%04X did not respond", param_id
                         )
+        self._last_missing_required_params = frozenset(missing_required_params)
+        self._last_missing_optional_params = frozenset(missing_optional_params)
+        self._last_unsupported_params = frozenset(unsupported_params)
+        if missing_required_params or missing_optional_params or unsupported_params:
+            _LOGGER.debug(
+                "EcoVent protocol read incomplete for %s at %s using %s profile; "
+                "missing required parameters: %s; optional unavailable parameters: %s; "
+                "unsupported parameters: %s",
+                self.name,
+                self.host,
+                self.device_profile.key,
+                _format_param_ids(missing_required_params),
+                _format_param_ids(missing_optional_params),
+                _format_param_ids(unsupported_params),
+            )
         return complete and received_response
 
     def set_param(self, param, value):

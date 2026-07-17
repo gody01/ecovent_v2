@@ -164,6 +164,7 @@ class FanCapabilitiesMixin:
         self._write_only_params = set(self.write_params)
         if previous_profile != profile_key:
             self._bulk_read_supported = None
+            self._optional_read_backoff = {}
 
     def _apply_device_profile(self):
         """Select parameter meanings after reading the model id."""

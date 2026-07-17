@@ -97,6 +97,8 @@ class FanSpeedPropertiesMixin:
     def preset_speed_percent(self, preset, *, fallback_to_manual=True):
         if self.uses_operating_mode_presets:
             return self.max_speed_setpoint
+        if preset == "manual":
+            return self.man_speed if fallback_to_manual else None
 
         preset_speeds = {
             "speed_1": (self.supply_speed_low, self.exhaust_speed_low),
@@ -110,12 +112,18 @@ class FanSpeedPropertiesMixin:
         }
         preset_speed = preset_speeds.get(preset)
         if preset_speed is None:
-            return self.man_speed if fallback_to_manual else None
+            return None
 
         supply_speed, exhaust_speed = preset_speed
-        if self.airflow == "air_supply" and supply_speed is not None:
+        airflow = self.airflow
+        if (
+            self.supports_parameter("airflow")
+            and airflow not in ("air_supply", "ventilation", "heat_recovery")
+        ):
+            return None
+        if airflow == "air_supply" and supply_speed is not None:
             return supply_speed
-        if self.airflow == "ventilation" and exhaust_speed is not None:
+        if airflow == "ventilation" and exhaust_speed is not None:
             return exhaust_speed
 
         available_speeds = [
@@ -123,7 +131,7 @@ class FanSpeedPropertiesMixin:
         ]
         if available_speeds:
             return int(sum(available_speeds) / len(available_speeds))
-        return self.man_speed if fallback_to_manual else None
+        return None
 
     @property
     def man_speed(self):

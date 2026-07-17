@@ -225,14 +225,28 @@ The Freshpoint Smart Home guide limits each packet to 256 bytes. Full profile
 polls contain more registers than one response can safely carry on every
 firmware. A valid but incomplete response previously counted as success and
 could leave omitted fields stale. The implementation therefore sends at most 12
-read parameters per bulk request, records every returned or explicitly
-unsupported (`0xFD`) parameter, and retries only omitted parameters
-individually. The standard and Pro variants share one unit type, so missing
-CO2/VOC package probes do not fail the whole poll after their individual retry;
-humidity and the four documented temperature rows remain required. Quick
-polling includes those five required sensor rows. The response parser keeps the
-current `0xFF` high-byte page until another page marker changes it, as required
-by the guide's packet example.
+read parameters per bulk request, records returned parameters separately from
+explicitly unsupported (`0xFD`) parameters, and retries only omitted parameters
+individually. `0xFD` means the controller answered but did not provide fresh
+data for that row: unsupported required rows fail the read, and unsupported
+optional rows are cleared just like omitted optional rows.
+
+The standard and Pro variants share one unit type, and real Freshpoint 160-E
+reports before 1.2.17 showed the fan/control rows working while humidity,
+temperature, CO2, VOC, alarm, schedule, or airflow rows could stay absent. The
+Breezy/Freshpoint poll therefore treats only `0x0001` (`state`), `0x0002`
+(`speed`), and `0x0044` (`man_speed`) as fatal for coordinator availability.
+Quick polling includes those same control proof rows. Missing or unsupported
+non-critical rows are retried once, then put into a ten-poll retry backoff;
+their HA entities report `unknown`/`unavailable` instead of stale or false
+states. Automatic weekly-schedule cache loading waits until `0x0072`
+(`weekly_schedule_state`) reports `on` or `off`; if that row is unavailable,
+setup/reload avoids probing all 28 `0x0077` schedule records. Identity rows such
+as `0x00B9` (`unit_type`) are preserved on soft misses so the active profile is
+not lost during a degraded poll. Targeted reads remain all-required and bypass
+optional poll backoff. The response parser keeps the current `0xFF` high-byte
+page until another page marker changes it, as required by the guide's packet
+example.
 
 Documented unit type values from parameter `0x00B9`:
 

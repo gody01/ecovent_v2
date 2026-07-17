@@ -58,7 +58,8 @@ DEVICE_PROFILES = {
         params_name="breezy_params",
         write_params_name="breezy_write_params",
         quick_update_request=(
-            "0007000B001F00200021002200250027004A004B0081008300840129030B0320"
+            "000100020007000B001F002000210022002500270044004A004B008100830084"
+            "0129030B0320"
         ),
         preset_modes=("off", "low", "medium", "high", "speed_4", "speed_5", "manual"),
         boost_statuses_name="statuses",
@@ -85,14 +86,15 @@ DEVICE_PROFILES = {
         supports_oscillation=True,
         supports_preset_speed_settings=True,
         speed_percent_scale="percent",
-        optional_read_params=frozenset(
+        poll_required_params=frozenset(
             {
-                0x0011,
-                0x001A,
-                0x0027,
-                0x0315,
-                0x031F,
-                0x0320,
+                # Standard Freshpoint units have been reported to keep the
+                # fan/control rows alive while sensor and feature probes stay
+                # absent. Keep only the rows that prove the fan poll itself is
+                # healthy as fatal for coordinator availability.
+                0x0001,
+                0x0002,
+                0x0044,
             }
         ),
     ),

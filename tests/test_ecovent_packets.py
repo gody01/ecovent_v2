@@ -144,6 +144,68 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertFalse(fan.update())
         self.assertEqual(calls, [("00010002", 3), ("0002", 1)])
 
+    def test_freshpoint_update_allows_missing_variant_only_sensor_params(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        optional = fan.device_profile.optional_read_params
+        self.assertEqual(
+            optional,
+            {0x0011, 0x001A, 0x0027, 0x0315, 0x031F, 0x0320},
+        )
+        calls = []
+
+        def send_command(func, param, value="", retries=10):
+            calls.append((param, retries))
+            requested = {
+                int(param[i : i + 4], 16) for i in range(0, len(param), 4)
+            }
+            if len(param) > 4:
+                fan._last_response_param_ids = requested - optional
+                return True
+            param_id = int(param, 16)
+            if param_id not in optional:
+                fan._last_response_param_ids = {param_id}
+                return True
+            return False
+
+        fan.send_command = send_command
+
+        self.assertTrue(fan.update())
+        retried = {int(param, 16) for param, retries in calls if retries == 1}
+        self.assertIn(0x0027, retried)
+        self.assertIn(0x0320, retried)
+
+    def test_freshpoint_update_still_fails_when_required_sensor_is_missing(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        optional = fan.device_profile.optional_read_params
+
+        def send_command(func, param, value="", retries=10):
+            requested = {
+                int(param[i : i + 4], 16) for i in range(0, len(param), 4)
+            }
+            returned = requested - optional - {0x0025}
+            fan._last_response_param_ids = returned
+            return bool(returned) or len(param) > 4
+
+        fan.send_command = send_command
+
+        self.assertFalse(fan.update())
+
+    def test_freshpoint_non_poll_read_still_requires_every_requested_param(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+
+        def send_command(func, param, value="", retries=10):
+            if len(param) > 4:
+                fan._last_response_param_ids = {0x003A}
+                return True
+            return False
+
+        fan.send_command = send_command
+
+        self.assertFalse(fan.update_preset_speed_settings())
+
     def test_vento_update_reads_humidity_in_bulk_request(self):
         fan = Fan("192.0.2.1")
         calls = []

@@ -227,9 +227,12 @@ firmware. A valid but incomplete response previously counted as success and
 could leave omitted fields stale. The implementation therefore sends at most 12
 read parameters per bulk request, records every returned or explicitly
 unsupported (`0xFD`) parameter, and retries only omitted parameters
-individually. Quick polling also includes humidity plus all four temperature
-rows. The response parser keeps the current `0xFF` high-byte page until another
-page marker changes it, as required by the guide's packet example.
+individually. The standard and Pro variants share one unit type, so missing
+CO2/VOC package probes do not fail the whole poll after their individual retry;
+humidity and the four documented temperature rows remain required. Quick
+polling includes those five required sensor rows. The response parser keeps the
+current `0xFF` high-byte page until another page marker changes it, as required
+by the guide's packet example.
 
 Documented unit type values from parameter `0x00B9`:
 

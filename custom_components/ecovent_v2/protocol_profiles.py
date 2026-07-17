@@ -85,6 +85,16 @@ DEVICE_PROFILES = {
         supports_oscillation=True,
         supports_preset_speed_settings=True,
         speed_percent_scale="percent",
+        optional_read_params=frozenset(
+            {
+                0x0011,
+                0x001A,
+                0x0027,
+                0x0315,
+                0x031F,
+                0x0320,
+            }
+        ),
     ),
     "freshbox": DeviceProfile(
         key="freshbox",

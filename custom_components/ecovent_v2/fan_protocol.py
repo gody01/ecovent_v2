@@ -297,6 +297,20 @@ class FanProtocolMixin:
         """Return whether encoded params contain exactly one 0x0044 write."""
         return len(encoded_params) == 4 and encoded_params[:2].lower() == "44"
 
+    def _protocol_context(self):
+        """Return non-secret device context for protocol diagnostics."""
+        return (
+            "name=%s host=%s profile=%s unit_type=%s unit_type_id=%s device_id=%s"
+            % (
+                self.name,
+                self.host,
+                self.device_profile.key,
+                self.unit_type,
+                f"0x{self._unit_type_id:04X}" if self._unit_type_id is not None else "unknown",
+                "known" if self.id and self.id != "DEFAULT_DEVICEID" else "default",
+            )
+        )
+
     def update(self):
         request = ""
         for param, definition in self.params.items():
@@ -308,6 +322,7 @@ class FanProtocolMixin:
         success = self._read_params(
             request,
             required_params=self.device_profile.poll_required_params,
+            read_name="full poll",
         )
         return success
 
@@ -325,6 +340,7 @@ class FanProtocolMixin:
         return self._read_params(
             self.device_profile.quick_update_request,
             required_params=self.device_profile.poll_required_params,
+            read_name="quick poll",
         )
 
     def update_preset_speed_settings(self):
@@ -332,7 +348,7 @@ class FanProtocolMixin:
             return True
 
         request = "003A003B003C003D003E003F"
-        return self._read_params(request)
+        return self._read_params(request, read_name="preset speed settings")
 
     def _mark_param_unavailable(self, param_id):
         """Clear a missing soft-poll value so Home Assistant does not keep stale data."""
@@ -371,7 +387,7 @@ class FanProtocolMixin:
             backoff.pop(param_id, None)
         return True
 
-    def _read_params(self, request, *, required_params=None):
+    def _read_params(self, request, *, required_params=None, read_name="custom read"):
         """Read parameters without trusting a valid but incomplete bulk reply.
 
         The Smart Home protocol limits a packet to 256 bytes. Keep each request
@@ -393,6 +409,11 @@ class FanProtocolMixin:
         missing_required_params = set()
         missing_optional_params = set()
         unsupported_params = set()
+        received_params = set()
+        bulk_gap_params = set()
+        individual_retry_params = set()
+        no_response_params = set()
+        untracked_response_chunks = 0
         self._last_missing_required_params = frozenset()
         self._last_missing_optional_params = frozenset()
         self._last_unsupported_params = frozenset()
@@ -424,9 +445,11 @@ class FanProtocolMixin:
                     response_ids = self._last_response_param_ids
                     unsupported_ids = self._last_unsupported_param_ids
                     if response_ids is None and unsupported_ids is None:
+                        untracked_response_chunks += 1
                         continue
                     response_ids = set(response_ids or ()) & chunk_param_ids
                     unsupported_ids = set(unsupported_ids or ()) & chunk_param_ids
+                    received_params.update(response_ids)
                     for param_id in response_ids:
                         self._mark_param_available_for_retry(param_id)
                     for param_id in unsupported_ids:
@@ -438,12 +461,14 @@ class FanProtocolMixin:
                         if int(param, 16) not in response_ids | unsupported_ids
                     ]
                     if missing:
+                        bulk_gap_params.update(int(param, 16) for param in missing)
                         _LOGGER.debug(
-                            "Bulk read returned %d of %d requested parameters; "
-                            "retrying %d individually: %s",
+                            "EcoVent %s bulk read returned %d of %d requested "
+                            "parameters for %s; missing from bulk response: %s",
+                            read_name,
                             len(response_ids),
                             len(chunk) // 4,
-                            len(missing),
+                            self._protocol_context(),
                             _format_param_ids(
                                 int(param, 16) for param in missing
                             ),
@@ -470,6 +495,7 @@ class FanProtocolMixin:
 
                 self._last_response_param_ids = None
                 self._last_unsupported_param_ids = None
+                individual_retry_params.add(param_id)
                 param_complete = self.send_command(
                     self.func["read"], param, retries=1
                 )
@@ -482,28 +508,48 @@ class FanProtocolMixin:
                     continue
                 if param_complete and response_ids is not None:
                     param_complete = param_id in response_ids
+                if param_complete and response_ids is not None:
+                    received_params.update(set(response_ids) & {param_id})
                 if param_complete:
                     self._mark_param_available_for_retry(param_id)
                 if not param_complete:
+                    no_response_params.add(param_id)
                     mark_unavailable(param_id, delay_optional_retry=True)
                     if param_id not in required_param_ids:
                         _LOGGER.debug(
-                            "Optional parameter 0x%04X did not respond", param_id
+                            "EcoVent optional parameter 0x%04X did not respond "
+                            "during %s for %s",
+                            param_id,
+                            read_name,
+                            self._protocol_context(),
                         )
         self._last_missing_required_params = frozenset(missing_required_params)
         self._last_missing_optional_params = frozenset(missing_optional_params)
         self._last_unsupported_params = frozenset(unsupported_params)
         if missing_required_params or missing_optional_params or unsupported_params:
-            _LOGGER.debug(
-                "EcoVent protocol read incomplete for %s at %s using %s profile; "
+            log_level = logging.WARNING if missing_required_params else logging.DEBUG
+            _LOGGER.log(
+                log_level,
+                "EcoVent %s incomplete for %s; requested parameters: %s; "
+                "required availability parameters: %s; received parameters: %s; "
                 "missing required parameters: %s; optional unavailable parameters: %s; "
-                "unsupported parameters: %s",
-                self.name,
-                self.host,
-                self.device_profile.key,
+                "unsupported parameters: %s; missing from bulk response: %s; "
+                "individual retries attempted: %s; "
+                "no-response individual retries: %s; untracked valid bulk chunks: %d; "
+                "result: %s",
+                read_name,
+                self._protocol_context(),
+                _format_param_ids(requested_params),
+                _format_param_ids(required_param_ids),
+                _format_param_ids(received_params),
                 _format_param_ids(missing_required_params),
                 _format_param_ids(missing_optional_params),
                 _format_param_ids(unsupported_params),
+                _format_param_ids(bulk_gap_params),
+                _format_param_ids(individual_retry_params),
+                _format_param_ids(no_response_params),
+                untracked_response_chunks,
+                "available" if complete and received_response else "unavailable",
             )
         return complete and received_response
 

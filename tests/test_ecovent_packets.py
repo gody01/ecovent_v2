@@ -162,11 +162,17 @@ class PacketBuilderTest(unittest.TestCase):
 
         fan.send_command = send_command
 
-        with self.assertLogs("fan_protocol", level="DEBUG") as logs:
-            self.assertFalse(fan._read_params("000100020025"))
+        with self.assertLogs("fan_protocol", level="WARNING") as logs:
+            self.assertFalse(fan._read_params("000100020025", read_name="setup poll"))
 
         messages = "\n".join(logs.output)
+        self.assertIn("EcoVent setup poll incomplete", messages)
+        self.assertIn("requested parameters: 0x0001, 0x0002, 0x0025", messages)
+        self.assertIn("required availability parameters: 0x0001, 0x0002, 0x0025", messages)
+        self.assertIn("received parameters: 0x0001", messages)
         self.assertIn("missing required parameters: 0x0002, 0x0025", messages)
+        self.assertIn("no-response individual retries: 0x0002, 0x0025", messages)
+        self.assertIn("result: unavailable", messages)
         self.assertIn("Freshpoint MBR", messages)
 
     def test_freshpoint_update_allows_missing_noncritical_poll_params(self):
@@ -612,11 +618,45 @@ class PacketBuilderTest(unittest.TestCase):
 
         fan.send_command = send_command
 
-        self.assertTrue(fan.quick_update())
+        with self.assertLogs("fan_protocol", level="DEBUG") as logs:
+            self.assertTrue(fan.quick_update())
+
+        messages = "\n".join(logs.output)
+        self.assertIn("EcoVent quick poll incomplete", messages)
+        self.assertIn("profile=vento", messages)
+        self.assertIn("required availability parameters: 0x0044", messages)
+        self.assertIn("optional unavailable parameters: 0x0006, 0x002D, 0x0304, 0x0305", messages)
+        self.assertIn("missing from bulk response: 0x0006, 0x002D, 0x0304, 0x0305", messages)
+        self.assertIn("individual retries attempted: 0x0006, 0x002D, 0x0304, 0x0305", messages)
+        self.assertIn("result: available", messages)
         retried = {int(param, 16) for param, retries in calls if retries == 1}
         self.assertLessEqual(missing_optional, retried)
         self.assertEqual(fan.last_missing_required_params, set())
         self.assertLessEqual(missing_optional, fan.last_missing_optional_params)
+
+    def test_vento_optional_backoff_diagnostics_do_not_claim_retry(self):
+        fan = Fan("192.0.2.1")
+        missing_optional = {0x0006}
+
+        def send_command(func, param, value="", retries=10):
+            requested = {
+                int(param[i : i + 4], 16) for i in range(0, len(param), 4)
+            }
+            if len(param) > 4:
+                fan._last_response_param_ids = requested - missing_optional
+                return True
+            return False
+
+        fan.send_command = send_command
+
+        self.assertTrue(fan.quick_update())
+        with self.assertLogs("fan_protocol", level="DEBUG") as logs:
+            self.assertTrue(fan.quick_update())
+
+        messages = "\n".join(logs.output)
+        self.assertIn("missing from bulk response: 0x0006", messages)
+        self.assertIn("individual retries attempted: none", messages)
+        self.assertIn("Optional parameter 0x0006 still unavailable", messages)
 
     def test_vento_init_device_allows_missing_optional_poll_params(self):
         fan = Fan("192.0.2.1")

@@ -163,7 +163,7 @@ class PacketBuilderTest(unittest.TestCase):
         fan.send_command = send_command
 
         with self.assertLogs("fan_protocol", level="DEBUG") as logs:
-            self.assertFalse(fan.update())
+            self.assertFalse(fan._read_params("000100020025"))
 
         messages = "\n".join(logs.output)
         self.assertIn("missing required parameters: 0x0002, 0x0025", messages)
@@ -554,6 +554,169 @@ class PacketBuilderTest(unittest.TestCase):
 
         self.assertTrue(fan.update())
         self.assertIn("0025", "".join(param for param, _ in calls))
+
+    def test_vento_update_allows_missing_optional_poll_params(self):
+        fan = Fan("192.0.2.1")
+        required = fan.device_profile.poll_required_params
+        self.assertEqual(
+            required,
+            {
+                0x0001,
+                0x0002,
+                0x0044,
+            },
+        )
+        missing_optional = {0x0025, 0x0083, 0x0304, 0x0305}
+        calls = []
+
+        def send_command(func, param, value="", retries=10):
+            calls.append((param, retries))
+            requested = {
+                int(param[i : i + 4], 16) for i in range(0, len(param), 4)
+            }
+            if len(param) > 4:
+                fan._last_response_param_ids = requested - missing_optional
+                return True
+            param_id = int(param, 16)
+            if param_id in missing_optional:
+                return False
+            fan._last_response_param_ids = {param_id}
+            return True
+
+        fan.send_command = send_command
+
+        self.assertTrue(fan.update())
+        retried = {int(param, 16) for param, retries in calls if retries == 1}
+        self.assertLessEqual(missing_optional, retried)
+        self.assertEqual(fan.last_missing_required_params, set())
+        self.assertLessEqual(missing_optional, fan.last_missing_optional_params)
+
+    def test_vento_quick_update_allows_missing_optional_poll_params(self):
+        fan = Fan("192.0.2.1")
+        missing_optional = {0x0006, 0x002D, 0x0304, 0x0305}
+        calls = []
+
+        def send_command(func, param, value="", retries=10):
+            calls.append((param, retries))
+            requested = {
+                int(param[i : i + 4], 16) for i in range(0, len(param), 4)
+            }
+            if len(param) > 4:
+                fan._last_response_param_ids = requested - missing_optional
+                return True
+            param_id = int(param, 16)
+            if param_id in missing_optional:
+                return False
+            fan._last_response_param_ids = {param_id}
+            return True
+
+        fan.send_command = send_command
+
+        self.assertTrue(fan.quick_update())
+        retried = {int(param, 16) for param, retries in calls if retries == 1}
+        self.assertLessEqual(missing_optional, retried)
+        self.assertEqual(fan.last_missing_required_params, set())
+        self.assertLessEqual(missing_optional, fan.last_missing_optional_params)
+
+    def test_vento_init_device_allows_missing_optional_poll_params(self):
+        fan = Fan("192.0.2.1")
+        missing_optional = {0x0025, 0x0083, 0x0304, 0x0305}
+        calls = []
+
+        def send_command(func, param, value="", retries=10):
+            calls.append((param, retries))
+            requested = {
+                int(param[i : i + 4], 16) for i in range(0, len(param), 4)
+            }
+            if requested == {0x007C}:
+                fan.device_search = "56454e544f2d4944"
+                fan._last_response_param_ids = requested
+                return True
+            if requested == {0x00B9}:
+                fan.unit_type = "0300"
+                fan._last_response_param_ids = requested
+                return True
+            if len(param) > 4:
+                fan._last_response_param_ids = requested - missing_optional
+                return True
+            param_id = int(param, 16)
+            if param_id in missing_optional:
+                return False
+            fan._last_response_param_ids = {param_id}
+            return True
+
+        fan.send_command = send_command
+
+        self.assertTrue(fan.init_device())
+        self.assertEqual(fan.id, "VENTO-ID")
+        self.assertEqual(fan.profile_key, "vento")
+        self.assertEqual(fan.last_missing_required_params, set())
+        self.assertLessEqual(missing_optional, fan.last_missing_optional_params)
+        self.assertEqual(calls[:2], [("007c", 10), ("00b9", 10)])
+
+    def test_vento_update_allows_unsupported_optional_poll_params(self):
+        fan = Fan("192.0.2.1")
+        unsupported_optional = {0x0025, 0x0083, 0x0304, 0x0305}
+
+        def send_command(func, param, value="", retries=10):
+            requested = {
+                int(param[i : i + 4], 16) for i in range(0, len(param), 4)
+            }
+            fan._last_response_param_ids = requested - unsupported_optional
+            fan._last_unsupported_param_ids = requested & unsupported_optional
+            return True
+
+        fan.send_command = send_command
+
+        self.assertTrue(fan.update())
+        self.assertEqual(fan.last_missing_required_params, set())
+        self.assertLessEqual(unsupported_optional, fan.last_missing_optional_params)
+        self.assertLessEqual(unsupported_optional, fan.last_unsupported_params)
+
+    def test_vento_update_fails_when_core_poll_param_is_unsupported(self):
+        for unsupported_param in (0x0001, 0x0002, 0x0044):
+            with self.subTest(unsupported=f"0x{unsupported_param:04X}"):
+                fan = Fan("192.0.2.1")
+
+                def send_command(func, param, value="", retries=10):
+                    requested = {
+                        int(param[i : i + 4], 16)
+                        for i in range(0, len(param), 4)
+                    }
+                    fan._last_response_param_ids = requested - {unsupported_param}
+                    fan._last_unsupported_param_ids = requested & {unsupported_param}
+                    return True
+
+                fan.send_command = send_command
+
+                self.assertFalse(fan.update())
+                self.assertEqual(fan.last_missing_required_params, {unsupported_param})
+                self.assertEqual(fan.last_unsupported_params, {unsupported_param})
+
+    def test_vento_full_and_quick_polls_fail_when_core_rows_are_absent(self):
+        for method_name, missing_param in (
+            ("update", 0x0001),
+            ("update", 0x0002),
+            ("update", 0x0044),
+            ("quick_update", 0x0044),
+        ):
+            with self.subTest(method=method_name, missing=f"0x{missing_param:04X}"):
+                fan = Fan("192.0.2.1")
+
+                def send_command(func, param, value="", retries=10):
+                    requested = {
+                        int(param[i : i + 4], 16)
+                        for i in range(0, len(param), 4)
+                    }
+                    if len(param) == 4 and missing_param in requested:
+                        return False
+                    fan._last_response_param_ids = requested - {missing_param}
+                    return bool(fan._last_response_param_ids) or len(param) > 4
+
+                fan.send_command = send_command
+
+                self.assertFalse(getattr(fan, method_name)())
+                self.assertEqual(fan.last_missing_required_params, {missing_param})
 
     def test_breezy_quick_update_reads_humidity_and_all_four_temperatures(self):
         fan = Fan("192.0.2.1")

@@ -33,6 +33,16 @@ DEVICE_PROFILES = {
         supports_direction=True,
         supports_oscillation=True,
         supports_preset_speed_settings=True,
+        poll_required_params=frozenset(
+            {
+                # Some Vento Expert units omit optional diagnostics from normal
+                # polls. Treat the core fan/control rows as the availability
+                # signal so missing sensors do not block setup.
+                0x0001,
+                0x0002,
+                0x0044,
+            }
+        ),
     ),
     "extract_fan": DeviceProfile(
         key="extract_fan",

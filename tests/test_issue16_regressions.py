@@ -31,10 +31,13 @@ class Issue16RegressionTest(unittest.TestCase):
             tree, "EcoVentCoordinator", "_should_refresh_schedule_week"
         )
         post_init = _class_method(tree, "EcoVentCoordinator", "_async_post_init_setup")
+        should_refresh_source = ast.get_source_segment(source, should_refresh)
 
-        self.assertIn("not self._weekly_schedule", source)
-        self.assertIn('weekly_schedule_state == "on"', source)
-        self.assertIn("self.updateCounter % 10 == 0", source)
+        self.assertIn("not self._weekly_schedule", should_refresh_source)
+        self.assertIn("state = self._fan.weekly_schedule_state", should_refresh_source)
+        self.assertIn('state not in ("on", "off")', should_refresh_source)
+        self.assertIn('state == "on"', should_refresh_source)
+        self.assertIn("self.updateCounter % 10 == 0", should_refresh_source)
         self.assertTrue(
             any(
                 isinstance(node, ast.Attribute)

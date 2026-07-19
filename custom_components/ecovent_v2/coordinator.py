@@ -132,11 +132,20 @@ class EcoVentCoordinator(DataUpdateCoordinator):
 
     def _should_refresh_schedule_week(self) -> bool:
         """Return whether full weekly schedule reads are useful right now."""
-        return self._fan.supports_parameter("weekly_schedule_setup") and (
-            not self._weekly_schedule
-            or (
-                self._fan.weekly_schedule_state == "on" and self.updateCounter % 10 == 0
+        if not self._fan.supports_parameter("weekly_schedule_setup"):
+            return False
+
+        state = self._fan.weekly_schedule_state
+        if state not in ("on", "off"):
+            _LOGGER.debug(
+                "EcoVentCoordinator: skipping weekly schedule read for %s "
+                "because schedule state is unavailable",
+                self._fan.name,
             )
+            return False
+
+        return not self._weekly_schedule or (
+            state == "on" and self.updateCounter % 10 == 0
         )
 
     def _load_schedule_week(self) -> None:

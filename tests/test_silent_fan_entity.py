@@ -209,6 +209,33 @@ class SilentFanEntityTest(unittest.TestCase):
         self.assertIn("03b702", calls[0])
         self.assertNotIn("fe036f", calls[0])
 
+    def test_missing_airflow_reports_unknown_direction_and_oscillation(self):
+        entity, fan, _calls = _silent_entity(speed="low", man_speed=63)
+        fan._airflow = None
+
+        self.assertIsNone(entity.current_direction)
+        self.assertIsNone(entity.oscillating)
+
+    def test_unmapped_airflow_reports_unknown_direction_and_oscillation(self):
+        entity, fan, _calls = _silent_entity(speed="low", man_speed=63)
+        fan._airflow = "Unknown airflow 3"
+
+        self.assertIsNone(entity.current_direction)
+        self.assertIsNone(entity.oscillating)
+
+    def test_missing_preset_setpoints_do_not_report_manual_speed_percentage(self):
+        entity, fan, _calls = _silent_entity(speed="low", man_speed=63)
+        fan._airflow = "ventilation"
+        fan._supply_speed_low = None
+        fan._exhaust_speed_low = None
+
+        self.assertIsNone(entity.percentage)
+
+    def test_manual_mode_still_reports_manual_speed_percentage(self):
+        entity, _fan, _calls = _silent_entity(speed="manual", man_speed=63)
+
+        self.assertEqual(entity.percentage, 63)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -333,6 +333,37 @@ class Issue35RegressionTest(unittest.TestCase):
         self.assertIn("hidden_by=None", init_source)
         self.assertNotIn('f"switch.{device_slug}_weekly_schedule"', init_source)
 
+    def test_switch_none_state_remains_unknown(self):
+        switch_source = SWITCH_PATH.read_text()
+        tree = _tree(SWITCH_PATH)
+        is_on = ast.get_source_segment(
+            switch_source, _class_method(tree, "VentoSwitch", "is_on")
+        )
+
+        self.assertIn("value = self._method()", is_on)
+        self.assertIn("None if value is None else value == \"on\"", is_on)
+
+    def test_weekly_schedule_summary_none_state_remains_unknown(self):
+        sensor_source = SENSOR_PATH.read_text()
+        tree = _tree(SENSOR_PATH)
+        native_value = ast.get_source_segment(
+            sensor_source,
+            _class_method(tree, "WeeklyScheduleSummarySensor", "native_value"),
+        )
+        attrs = ast.get_source_segment(
+            sensor_source,
+            _class_method(
+                tree, "WeeklyScheduleSummarySensor", "extra_state_attributes"
+            ),
+        )
+
+        self.assertIn("state = self._fan.weekly_schedule_state", native_value)
+        self.assertIn('if state == "on"', native_value)
+        self.assertIn('if state == "off"', native_value)
+        self.assertIn("return None", native_value)
+        self.assertIn("enabled = state == \"on\" if state in", attrs)
+        self.assertIn('"weekly_schedule_enabled": enabled', attrs)
+
     def test_reported_legacy_entity_migrations_are_listed(self):
         init_source = INIT_PATH.read_text()
 

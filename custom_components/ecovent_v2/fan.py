@@ -135,14 +135,18 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         return self._fan.id
 
     @property
-    def is_on(self) -> bool:
+    def is_on(self) -> bool | None:
         """Return state."""
-        return self._fan.state == "on"
+        state = self._fan.state
+        return None if state is None else state == "on"
 
     @property
     def percentage(self) -> int | None:
         """Return the current speed."""
-        if self._fan.state == "off":
+        state = self._fan.state
+        if state is None:
+            return None
+        if state == "off":
             return 0
         return self._fan.preset_speed_percent(self._fan.speed)
 
@@ -371,16 +375,24 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         """Fan direction."""
         if not self._fan.supports_direction:
             return None
-        if self._fan.airflow == "air_supply":
+        airflow = self._fan.airflow
+        if airflow is None:
+            return None
+        if airflow == "air_supply":
             return "reverse"
-        return "forward"
+        if airflow in ("ventilation", "heat_recovery"):
+            return "forward"
+        return None
 
     @property
-    def oscillating(self) -> bool:
+    def oscillating(self) -> bool | None:
         """Oscillating."""
         if not self._fan.supports_oscillation:
             return False
-        return self._fan.airflow == "heat_recovery"
+        airflow = self._fan.airflow
+        if airflow not in ("ventilation", "heat_recovery", "air_supply"):
+            return None
+        return airflow == "heat_recovery"
 
     @property
     def boost_time(self) -> int:

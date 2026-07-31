@@ -232,6 +232,108 @@ class PacketBuilderTest(unittest.TestCase):
         )
         self.assertIn(0x0025, fan.last_missing_optional_params)
 
+    def test_freshbox_update_allows_missing_alarm_list_param(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0200"
+        required = fan.device_profile.poll_required_params
+        self.assertEqual(
+            required,
+            {
+                0x0002,
+                0x0006,
+            },
+        )
+        calls = []
+
+        def send_command(func, param, value="", retries=10):
+            calls.append((param, retries))
+            requested = {
+                int(param[i : i + 4], 16) for i in range(0, len(param), 4)
+            }
+            if len(param) > 4:
+                fan._last_response_param_ids = requested - {0x0001, 0x007F}
+                return True
+            if requested <= {0x0001, 0x007F}:
+                return False
+            fan._last_response_param_ids = requested
+            return True
+
+        fan.send_command = send_command
+
+        with self.assertLogs("fan_protocol", level="DEBUG") as logs:
+            self.assertTrue(fan.update())
+
+        retried = {int(param, 16) for param, retries in calls if retries == 1}
+        self.assertIn(0x007F, retried)
+        self.assertIn(0x0001, retried)
+        self.assertEqual(fan.last_missing_required_params, set())
+        self.assertEqual(fan.last_missing_optional_params, {0x0001, 0x007F})
+        messages = "\n".join(logs.output)
+        self.assertIn("profile=freshbox", messages)
+        self.assertIn("missing required parameters: none", messages)
+        self.assertIn("optional unavailable parameters: 0x0001, 0x007F", messages)
+        self.assertIn("result: available", messages)
+
+    def test_freshbox_init_device_allows_missing_noncritical_poll_params(self):
+        fan = Fan("192.0.2.1")
+        missing_optional = {0x0001, 0x007F}
+        calls = []
+
+        def send_command(func, param, value="", retries=10):
+            calls.append((param, retries))
+            requested = {
+                int(param[i : i + 4], 16) for i in range(0, len(param), 4)
+            }
+            if requested == {0x007C}:
+                fan.device_search = "4d494352412d4944"
+                fan._last_response_param_ids = requested
+                return True
+            if requested == {0x00B9}:
+                fan.unit_type = "0200"
+                fan._last_response_param_ids = requested
+                return True
+            if len(param) > 4:
+                fan._last_response_param_ids = requested - missing_optional
+                return True
+            if requested <= missing_optional:
+                return False
+            fan._last_response_param_ids = requested
+            return True
+
+        fan.send_command = send_command
+
+        self.assertTrue(fan.init_device())
+        self.assertEqual(fan.id, "MICRA-ID")
+        self.assertEqual(fan.profile_key, "freshbox")
+        self.assertEqual(fan.last_missing_required_params, set())
+        self.assertEqual(fan.last_missing_optional_params, missing_optional)
+        self.assertEqual(calls[:2], [("007c", 10), ("00b9", 10)])
+
+    def test_freshbox_full_and_quick_polls_fail_when_core_rows_are_absent(self):
+        for method_name, missing_param in (
+            ("update", 0x0002),
+            ("update", 0x0006),
+            ("quick_update", 0x0006),
+        ):
+            with self.subTest(method=method_name, missing=f"0x{missing_param:04X}"):
+                fan = Fan("192.0.2.1")
+                fan.unit_type = "0200"
+
+                def send_command(func, param, value="", retries=10):
+                    requested = {
+                        int(param[i : i + 4], 16)
+                        for i in range(0, len(param), 4)
+                    }
+                    if len(param) == 4 and missing_param in requested:
+                        return False
+                    fan._last_response_param_ids = requested - {missing_param}
+                    return bool(fan._last_response_param_ids) or len(param) > 4
+
+                fan.send_command = send_command
+
+                self.assertFalse(getattr(fan, method_name)())
+                self.assertEqual(fan.last_missing_required_params, {missing_param})
+
     def test_freshpoint_update_clears_optional_unsupported_param_without_retrying(self):
         fan = Fan("192.0.2.1")
         fan.unit_type = "1100"

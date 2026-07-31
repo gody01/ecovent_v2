@@ -126,6 +126,16 @@ DEVICE_PROFILES = {
         ),
         speed_percent_scale="percent",
         supports_percentage_control=False,
+        poll_required_params=frozenset(
+            {
+                # VENTS Micra 100 WiFi units have been observed never
+                # answering alarm_list (0x007F), with occasional lossy drops
+                # of other rows. Keep only the rows that proved stable across
+                # the full and quick poll paths fatal for availability.
+                0x0002,
+                0x0006,
+            }
+        ),
     ),
     "arc": DeviceProfile(
         key="arc",

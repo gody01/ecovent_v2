@@ -333,6 +333,34 @@ class Issue35RegressionTest(unittest.TestCase):
         self.assertIn("hidden_by=None", init_source)
         self.assertNotIn('f"switch.{device_slug}_weekly_schedule"', init_source)
 
+    def test_unsupported_optional_entities_are_hidden_not_removed(self):
+        init_source = INIT_PATH.read_text()
+        tree = _tree(INIT_PATH)
+        helper = ast.get_source_segment(
+            init_source,
+            _module_function(tree, "_async_update_unsupported_optional_poll_entities"),
+        )
+
+        self.assertIn("hidden_by=er.RegistryEntryHider.INTEGRATION", helper)
+        self.assertIn("hidden_by=None", helper)
+        self.assertNotIn("async_remove", helper)
+
+    def test_hardware_profile_repairs_issue_is_unloaded_cleanly(self):
+        init_source = INIT_PATH.read_text()
+        coordinator_source = (COMPONENT_PATH / "coordinator.py").read_text()
+        init_tree = _tree(INIT_PATH)
+        unload = ast.get_source_segment(
+            init_source,
+            _module_function(init_tree, "async_unload_entry"),
+        )
+
+        self.assertIn("async_delete_hardware_profile_mismatch_issue", unload)
+        self.assertIn("hardware_profile_mismatch_issue_id", coordinator_source)
+        self.assertIn(
+            '"unsupported_optional_params": unsupported_params', coordinator_source
+        )
+        self.assertNotIn('"unsupported_optional_params": list(', coordinator_source)
+
     def test_switch_none_state_remains_unknown(self):
         switch_source = SWITCH_PATH.read_text()
         tree = _tree(SWITCH_PATH)

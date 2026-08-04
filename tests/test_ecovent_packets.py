@@ -411,6 +411,71 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertEqual(fan.last_missing_required_params, set())
         self.assertEqual(fan.last_unsupported_params, set())
 
+    def test_unsupported_optional_poll_rows_hide_generated_entities(self):
+        fan = Fan("192.0.2.1")
+        fan._set_device_profile("breezy")
+        fan._unsupported_optional_poll_params = {0x001F, 0x0027, 0x0320}
+
+        self.assertFalse(fan.supports_parameter("outdoor_temperature"))
+        self.assertFalse(
+            fan.supports_entity(
+                required_params=("outdoor_temperature",),
+                required_capabilities=("temperature_probes",),
+            )
+        )
+        self.assertTrue(fan.supports_parameter("co2_treshold"))
+        self.assertFalse(fan.supports_capability("co2"))
+        self.assertFalse(
+            fan.supports_entity(
+                required_params=("co2_treshold",),
+                required_capabilities=("co2",),
+            )
+        )
+        self.assertFalse(
+            fan.supports_entity(
+                required_params=("co2_sensor_state",),
+                required_capabilities=("co2",),
+            )
+        )
+        self.assertTrue(fan.supports_parameter("voc_treshold"))
+        self.assertFalse(fan.supports_capability("voc"))
+        self.assertFalse(
+            fan.supports_entity(
+                required_params=("voc_treshold",),
+                required_capabilities=("voc",),
+            )
+        )
+        self.assertFalse(
+            fan.supports_entity(
+                required_params=("voc_sensor_state",),
+                required_capabilities=("voc",),
+            )
+        )
+        self.assertTrue(fan.supports_parameter("state"))
+        self.assertTrue(
+            fan.supports_entity(
+                required_params=("state", "speed", "man_speed"),
+            )
+        )
+
+    def test_unsupported_single_temperature_probe_keeps_sibling_probe_entities(self):
+        fan = Fan("192.0.2.1")
+        fan._set_device_profile("breezy")
+        fan._unsupported_optional_poll_params = {0x001F}
+
+        self.assertFalse(
+            fan.supports_entity(
+                required_params=("outdoor_temperature",),
+                required_capabilities=("temperature_probes",),
+            )
+        )
+        self.assertTrue(
+            fan.supports_entity(
+                required_params=("supply_temperature",),
+                required_capabilities=("temperature_probes",),
+            )
+        )
+
     def test_freshpoint_optional_param_recovers_from_bulk_read_during_backoff(self):
         fan = Fan("192.0.2.1")
         fan.unit_type = "1100"

@@ -58,6 +58,12 @@
             "description": "Nastavi uro naprave na lokalni čas Home Assistant."
         }
     },
+    "issues": {
+        "hardware_profile_mismatch": {
+            "title": "Zaznano neujemanje strojnega profila EcoVent",
+            "description": "{name} se prijavlja kot {unit_type} s profilom {profile}, vendar je izrecno zavrnila izbirne registre, ki jih ta profil pričakuje: {unsupported_params}. EcoVent V2 je skril ustrezne ustvarjene entitete in bo ventilator ohranil razpoložljiv. Uporabite povezavo z več informacijami, da odprete vnaprej izpolnjeno GitHub prijavo s temi zaznanimi podrobnostmi, nato dodajte natančen prodajni model, fotografije nalepke, firmware in nameščene strojne možnosti."
+        }
+    },
     "entity": {
         "sensor": {
             "airflow": {

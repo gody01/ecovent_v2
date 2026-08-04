@@ -25,7 +25,10 @@ from .const import (
     TRANSPORT_BGCP_UDP,
     UPDATE_INTERVAL,
 )
-from .coordinator import EcoVentCoordinator
+from .coordinator import (
+    EcoVentCoordinator,
+    async_delete_hardware_profile_mismatch_issue,
+)
 from .entity_naming import stable_entity_id
 from .frontend import async_register_frontend
 
@@ -374,6 +377,111 @@ def _async_migrate_entity_registry(
                 "Removed EcoVent V2 legacy schedule helper entity %s", entity_id
             )
 
+    _async_update_unsupported_optional_poll_entities(registry, fan)
+
+
+def _async_update_unsupported_optional_poll_entities(registry, fan) -> None:
+    """Hide or restore generated entities for rows this hardware rejects."""
+    from .binary_sensor import BINARY_SENSOR_SPECS
+    from .number import NUMBER_SPECS
+    from .select import SELECT_SPECS
+    from .sensor_specs import SENSOR_SPECS
+    from .switch import SWITCH_SPECS
+
+    entity_specs = (
+        *(
+            (
+                Platform.SENSOR,
+                fan.id + spec.key,
+                spec.method,
+                fan.supports_entity(
+                    required_params=spec.required_params or (spec.method,),
+                    required_capabilities=spec.required_capabilities,
+                    excluded_params=spec.excluded_params,
+                    excluded_capabilities=spec.excluded_capabilities,
+                ),
+            )
+            for spec in SENSOR_SPECS
+        ),
+        *(
+            (
+                Platform.BINARY_SENSOR,
+                fan.id + spec.key,
+                spec.method,
+                fan.supports_entity(
+                    required_params=(spec.method,),
+                    required_capabilities=spec.required_capabilities,
+                ),
+            )
+            for spec in BINARY_SENSOR_SPECS
+        ),
+        *(
+            (
+                Platform.SWITCH,
+                fan.id + spec.key,
+                spec.method,
+                fan.supports_entity(
+                    required_params=(spec.method,),
+                    required_capabilities=spec.required_capabilities,
+                ),
+            )
+            for spec in SWITCH_SPECS
+        ),
+        *(
+            (
+                Platform.NUMBER,
+                fan.id + spec.method,
+                spec.method,
+                fan.supports_entity(
+                    required_params=(spec.method,),
+                    required_capabilities=spec.required_capabilities,
+                ),
+            )
+            for spec in NUMBER_SPECS
+        ),
+        *(
+            (
+                Platform.SELECT,
+                fan.id + spec.key,
+                spec.method,
+                fan.supports_entity(
+                    required_params=(spec.method,),
+                    required_capabilities=spec.required_capabilities,
+                ),
+            )
+            for spec in SELECT_SPECS
+        ),
+    )
+    for platform, unique_id, method, supported in entity_specs:
+        entity_id = registry.async_get_entity_id(platform, DOMAIN, unique_id)
+        if entity_id is None:
+            continue
+
+        entry = registry.async_get(entity_id)
+        if entry is None:
+            continue
+
+        if not supported:
+            if entry.hidden_by is None:
+                registry.async_update_entity(
+                    entity_id,
+                    hidden_by=er.RegistryEntryHider.INTEGRATION,
+                )
+                _LOGGER.info(
+                    "Hidden EcoVent V2 entity %s because this hardware rejected %s",
+                    entity_id,
+                    method,
+                )
+            continue
+
+        if entry.hidden_by == er.RegistryEntryHider.INTEGRATION:
+            registry.async_update_entity(entity_id, hidden_by=None)
+            _LOGGER.info(
+                "Restored EcoVent V2 entity %s because %s is supported again",
+                entity_id,
+                method,
+            )
+
 
 async def _async_migrate_statistics_metadata(
     hass: HomeAssistant, coordinator: EcoVentCoordinator
@@ -474,6 +582,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, _PLATFORMS)
     if unload_ok:
+        async_delete_hardware_profile_mismatch_issue(hass, entry.entry_id)
         coordinator = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
         close = getattr(getattr(coordinator, "_fan", None), "close", None)
         if close is not None:

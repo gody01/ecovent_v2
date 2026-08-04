@@ -96,6 +96,12 @@
             "description": "Set the device clock to Home Assistant local time."
         }
     },
+    "issues": {
+        "hardware_profile_mismatch": {
+            "title": "EcoVent hardware profile mismatch detected",
+            "description": "{name} reports itself as {unit_type} using the {profile} profile, but it explicitly rejected optional registers expected by that profile: {unsupported_params}. EcoVent V2 hid matching generated entities and will keep the fan available. Use the learn-more link to open a GitHub issue prefilled with these detected details, then add the exact marketing model, label photos, firmware, and installed hardware options."
+        }
+    },
     "entity": {
         "sensor": {
             "airflow": {

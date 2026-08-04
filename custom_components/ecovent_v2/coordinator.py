@@ -33,10 +33,31 @@ except ImportError:
 
 
 from .const import CONF_AUTO_CLOCK_SYNC, CONF_SILENT_MODE, DOMAIN
+from .protocol_diagnostics import (
+    hardware_profile_mismatch_issue_url,
+    unsupported_optional_poll_parameter_summary,
+)
 
 _LOGGER = logging.getLogger(__name__)
 CLOCK_SYNC_DRIFT = timedelta(minutes=1)
 CLOCK_SYNC_INTERVAL = timedelta(minutes=5)
+
+
+def hardware_profile_mismatch_issue_id(entry_id: str) -> str:
+    """Return the per-entry Repairs issue id for hardware profile mismatches."""
+    return f"hardware_profile_mismatch_{entry_id}"
+
+
+def async_delete_hardware_profile_mismatch_issue(
+    hass: HomeAssistant, entry_id: str
+) -> None:
+    """Delete the hardware profile mismatch Repairs issue for one entry."""
+    try:
+        from homeassistant.helpers import issue_registry as ir
+    except ImportError:
+        return
+
+    ir.async_delete_issue(hass, DOMAIN, hardware_profile_mismatch_issue_id(entry_id))
 
 
 class EcoVentCoordinator(DataUpdateCoordinator):
@@ -60,6 +81,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         self._silent_preset_mode: str | None = None
         self._last_clock_sync = None
         self._last_clock_sync_check = None
+        self._reported_unsupported_optional_params = None
         self._fan.extra_write_parameters_callback = self._clock_sync_params_if_needed
         _LOGGER.debug(
             "EcoVentCoordinator initialized with update rate: %d", update_seconds
@@ -107,6 +129,8 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                 f"Incomplete protocol response from EcoVent device {self._fan.name}"
             )
 
+        self._update_hardware_profile_mismatch_repair_issue()
+
         if self._should_refresh_schedule_week():
             await self.hass.async_add_executor_job(self._load_schedule_week)
 
@@ -115,8 +139,64 @@ class EcoVentCoordinator(DataUpdateCoordinator):
 
     async def _async_post_init_setup(self) -> None:
         """Load slow one-off state after device discovery."""
+        self._update_hardware_profile_mismatch_repair_issue()
         if self._should_refresh_schedule_week():
             await self.hass.async_add_executor_job(self._load_schedule_week)
+
+    def _hardware_profile_mismatch_issue_id(self) -> str:
+        """Return the per-entry Repairs issue id for hardware profile mismatches."""
+        return hardware_profile_mismatch_issue_id(self.config_entry.entry_id)
+
+    def _update_hardware_profile_mismatch_repair_issue(self) -> None:
+        """Show a Repairs issue when this hardware omits profile-declared rows."""
+        unsupported = self._fan.unsupported_optional_poll_parameter_ids()
+        if unsupported == self._reported_unsupported_optional_params:
+            return
+
+        self._reported_unsupported_optional_params = unsupported
+
+        try:
+            from homeassistant.helpers import issue_registry as ir
+        except ImportError:
+            _LOGGER.debug(
+                "EcoVentCoordinator: Repairs issue registry unavailable; "
+                "skipping hardware profile mismatch issue"
+            )
+            return
+
+        issue_id = self._hardware_profile_mismatch_issue_id()
+        if not unsupported:
+            async_delete_hardware_profile_mismatch_issue(
+                self.hass, self.config_entry.entry_id
+            )
+            return
+
+        unsupported_params = unsupported_optional_poll_parameter_summary(self._fan)
+        issue_url = hardware_profile_mismatch_issue_url(self._fan)
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            issue_id,
+            is_fixable=False,
+            is_persistent=True,
+            learn_more_url=issue_url,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="hardware_profile_mismatch",
+            translation_placeholders={
+                "name": self._fan.name,
+                "unit_type": self._fan.unit_type or "unknown",
+                "profile": self._fan.profile_key,
+                "unsupported_params": unsupported_params,
+            },
+            data={
+                "entry_id": self.config_entry.entry_id,
+                "profile": self._fan.profile_key,
+                "unit_type": self._fan.unit_type,
+                "unit_type_id": getattr(self._fan, "_unit_type_id", None),
+                "unsupported_optional_params": unsupported_params,
+                "github_issue_url": issue_url,
+            },
+        )
 
     def _defer_startup_clock_sync(self) -> None:
         """Avoid clock-only writes during Home Assistant startup discovery."""

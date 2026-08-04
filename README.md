@@ -519,5 +519,8 @@ Version 1.2.21
 * Remember optional Breezy/Freshpoint poll registers that the device explicitly
   reports as unsupported and stop requesting them in later automatic polls.
   Required fan availability rows still fail the update when absent or
-  unsupported, while permanently unsupported optional sensors stay unknown
-  without making the fan entity unavailable again.
+  unsupported, while generated entities for permanently unsupported optional
+  rows are hidden instead of staying as eternal unknown sensors.
+* Raise a Home Assistant Repairs warning for hardware/profile mismatches, with a
+  prefilled GitHub issue link and config-entry diagnostics carrying the detected
+  profile, unit type, firmware, and unsupported register details.

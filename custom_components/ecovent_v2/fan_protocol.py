@@ -412,6 +412,8 @@ class FanProtocolMixin:
             ignored_optional_params = set()
         else:
             required_param_ids = requested_params & set(required_params)
+            if not required_param_ids:
+                required_param_ids = requested_params
             ignored_optional_params = (
                 (requested_params - required_param_ids)
                 & self._unsupported_optional_poll_param_ids()

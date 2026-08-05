@@ -781,8 +781,6 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertEqual(
             required,
             {
-                0x0001,
-                0x0002,
                 0x0044,
             },
         )
@@ -927,8 +925,38 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertLessEqual(unsupported_optional, fan.last_missing_optional_params)
         self.assertLessEqual(unsupported_optional, fan.last_unsupported_params)
 
-    def test_vento_update_fails_when_core_poll_param_is_unsupported(self):
-        for unsupported_param in (0x0001, 0x0002, 0x0044):
+    def test_vento_update_allows_issue76_missing_state_and_speed_rows(self):
+        fan = Fan("192.0.2.1")
+        missing_optional = {0x0001, 0x0002}
+
+        def send_command(func, param, value="", retries=10):
+            requested = {
+                int(param[i : i + 4], 16) for i in range(0, len(param), 4)
+            }
+            if len(param) > 4:
+                fan._last_response_param_ids = requested - missing_optional
+                return True
+            param_id = int(param, 16)
+            if param_id in missing_optional:
+                return False
+            fan._last_response_param_ids = {param_id}
+            return True
+
+        fan.send_command = send_command
+
+        with self.assertLogs("fan_protocol", level="DEBUG") as logs:
+            self.assertTrue(fan.update())
+
+        messages = "\n".join(logs.output)
+        self.assertIn("required availability parameters: 0x0044", messages)
+        self.assertIn("optional unavailable parameters: 0x0001, 0x0002", messages)
+        self.assertIn("missing required parameters: none", messages)
+        self.assertIn("result: available", messages)
+        self.assertEqual(fan.last_missing_required_params, set())
+        self.assertLessEqual(missing_optional, fan.last_missing_optional_params)
+
+    def test_vento_update_fails_when_required_poll_param_is_unsupported(self):
+        for unsupported_param in (0x0044,):
             with self.subTest(unsupported=f"0x{unsupported_param:04X}"):
                 fan = Fan("192.0.2.1")
 
@@ -947,10 +975,8 @@ class PacketBuilderTest(unittest.TestCase):
                 self.assertEqual(fan.last_missing_required_params, {unsupported_param})
                 self.assertEqual(fan.last_unsupported_params, {unsupported_param})
 
-    def test_vento_full_and_quick_polls_fail_when_core_rows_are_absent(self):
+    def test_vento_full_and_quick_polls_fail_when_required_rows_are_absent(self):
         for method_name, missing_param in (
-            ("update", 0x0001),
-            ("update", 0x0002),
             ("update", 0x0044),
             ("quick_update", 0x0044),
         ):

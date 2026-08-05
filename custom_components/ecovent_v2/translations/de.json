@@ -58,6 +58,12 @@
             "description": "Setzt die Geräteuhr auf die lokale Home Assistant-Zeit."
         }
     },
+    "issues": {
+        "hardware_profile_mismatch": {
+            "title": "EcoVent-Hardwareprofil stimmt nicht überein",
+            "description": "{name} meldet sich als {unit_type} mit dem Profil {profile}, hat aber optionale Register, die dieses Profil erwartet, ausdrücklich abgelehnt: {unsupported_params}. EcoVent V2 hat passende erzeugte Entitäten ausgeblendet und hält den Lüfter verfügbar. Öffnen Sie über den Link mit weiteren Informationen ein vorausgefülltes GitHub-Issue mit diesen erkannten Details und ergänzen Sie das genaue Verkaufsmodell, Fotos des Typenschilds, Firmware und installierte Hardwareoptionen."
+        }
+    },
     "entity": {
         "sensor": {
             "airflow": {

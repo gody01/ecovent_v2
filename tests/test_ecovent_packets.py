@@ -364,6 +364,118 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertEqual(fan.last_missing_optional_params, {0x0025})
         self.assertEqual(fan.last_unsupported_params, {0x0025})
 
+        calls.clear()
+        self.assertTrue(fan.update())
+        self.assertEqual(calls, [("000100020044", 3)])
+        self.assertEqual(fan.last_missing_optional_params, set())
+        self.assertEqual(fan.last_unsupported_params, set())
+
+    def test_freshpoint_poll_skips_issue74_unsupported_sensor_rows(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        issue74_sensor_rows = {
+            0x001F,
+            0x0020,
+            0x0021,
+            0x0022,
+            0x0025,
+            0x0027,
+            0x0129,
+            0x0320,
+        }
+        calls = []
+
+        def send_command(func, param, value="", retries=10):
+            calls.append((param, retries))
+            requested = {
+                int(param[i : i + 4], 16) for i in range(0, len(param), 4)
+            }
+            fan._last_response_param_ids = requested - issue74_sensor_rows
+            fan._last_unsupported_param_ids = requested & issue74_sensor_rows
+            return True
+
+        fan.send_command = send_command
+
+        self.assertTrue(fan.update())
+        self.assertLessEqual(issue74_sensor_rows, fan.last_unsupported_params)
+        calls.clear()
+
+        self.assertTrue(fan.update())
+        requested_after_learning = {
+            int(param[i : i + 4], 16)
+            for param, _ in calls
+            for i in range(0, len(param), 4)
+        }
+        self.assertFalse(issue74_sensor_rows & requested_after_learning)
+        self.assertLessEqual({0x0001, 0x0002, 0x0044}, requested_after_learning)
+        self.assertEqual(fan.last_missing_required_params, set())
+        self.assertEqual(fan.last_unsupported_params, set())
+
+    def test_unsupported_optional_poll_rows_hide_generated_entities(self):
+        fan = Fan("192.0.2.1")
+        fan._set_device_profile("breezy")
+        fan._unsupported_optional_poll_params = {0x001F, 0x0027, 0x0320}
+
+        self.assertFalse(fan.supports_parameter("outdoor_temperature"))
+        self.assertFalse(
+            fan.supports_entity(
+                required_params=("outdoor_temperature",),
+                required_capabilities=("temperature_probes",),
+            )
+        )
+        self.assertTrue(fan.supports_parameter("co2_treshold"))
+        self.assertFalse(fan.supports_capability("co2"))
+        self.assertFalse(
+            fan.supports_entity(
+                required_params=("co2_treshold",),
+                required_capabilities=("co2",),
+            )
+        )
+        self.assertFalse(
+            fan.supports_entity(
+                required_params=("co2_sensor_state",),
+                required_capabilities=("co2",),
+            )
+        )
+        self.assertTrue(fan.supports_parameter("voc_treshold"))
+        self.assertFalse(fan.supports_capability("voc"))
+        self.assertFalse(
+            fan.supports_entity(
+                required_params=("voc_treshold",),
+                required_capabilities=("voc",),
+            )
+        )
+        self.assertFalse(
+            fan.supports_entity(
+                required_params=("voc_sensor_state",),
+                required_capabilities=("voc",),
+            )
+        )
+        self.assertTrue(fan.supports_parameter("state"))
+        self.assertTrue(
+            fan.supports_entity(
+                required_params=("state", "speed", "man_speed"),
+            )
+        )
+
+    def test_unsupported_single_temperature_probe_keeps_sibling_probe_entities(self):
+        fan = Fan("192.0.2.1")
+        fan._set_device_profile("breezy")
+        fan._unsupported_optional_poll_params = {0x001F}
+
+        self.assertFalse(
+            fan.supports_entity(
+                required_params=("outdoor_temperature",),
+                required_capabilities=("temperature_probes",),
+            )
+        )
+        self.assertTrue(
+            fan.supports_entity(
+                required_params=("supply_temperature",),
+                required_capabilities=("temperature_probes",),
+            )
+        )
+
     def test_freshpoint_optional_param_recovers_from_bulk_read_during_backoff(self):
         fan = Fan("192.0.2.1")
         fan.unit_type = "1100"

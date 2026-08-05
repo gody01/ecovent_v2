@@ -514,3 +514,13 @@ Version 1.2.19
   version 2. Home Assistant cannot load those entries with older 1.2.15 code;
   delete and re-add the integration entries or restore a full Home Assistant
   backup before downgrading to 1.2.15.
+
+Version 1.2.21
+* Remember optional Breezy/Freshpoint poll registers that the device explicitly
+  reports as unsupported and stop requesting them in later automatic polls.
+  Required fan availability rows still fail the update when absent or
+  unsupported, while generated entities for permanently unsupported optional
+  rows are hidden instead of staying as eternal unknown sensors.
+* Raise a Home Assistant Repairs warning for hardware/profile mismatches, with a
+  prefilled GitHub issue link and config-entry diagnostics carrying the detected
+  profile, unit type, firmware, and unsupported register details.

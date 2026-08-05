@@ -10,6 +10,11 @@ except ImportError:
 
 _LOGGER = logging.getLogger(__name__)
 
+_CAPABILITY_PROBE_PARAMETERS = {
+    "co2": ("co2",),
+    "voc": ("voc",),
+}
+
 
 class FanCapabilitiesMixin:
     @property
@@ -54,11 +59,21 @@ class FanCapabilitiesMixin:
 
     def supports_capability(self, capability):
         """Return whether the active profile declares a named capability."""
-        return capability in self.device_profile.capabilities
+        if capability not in self.device_profile.capabilities:
+            return False
+
+        probe_parameters = _CAPABILITY_PROBE_PARAMETERS.get(capability, ())
+        return not any(
+            self.is_optional_poll_parameter_unsupported(parameter)
+            for parameter in probe_parameters
+        )
 
     def supports_parameter(self, parameter):
         """Return whether the active protocol profile knows a parameter."""
-        return self.get_params_index(parameter) is not None
+        index = self.get_params_index(parameter)
+        if index is None:
+            return False
+        return index not in self.unsupported_optional_poll_parameter_ids()
 
     def supports_entity(
         self,
@@ -80,6 +95,28 @@ class FanCapabilitiesMixin:
                 self.supports_capability(capability)
                 for capability in excluded_capabilities
             )
+        )
+
+    def unsupported_optional_poll_parameter_ids(self):
+        """Return optional poll registers this device explicitly rejected."""
+        unsupported = getattr(self, "_unsupported_optional_poll_params", set())
+        return frozenset(unsupported)
+
+    def unsupported_optional_poll_parameters(self):
+        """Return parameter names explicitly unsupported by this hardware."""
+        parameters = []
+        for param_id in sorted(self.unsupported_optional_poll_parameter_ids()):
+            definition = self.params.get(param_id)
+            if definition is not None:
+                parameters.append(definition[0])
+        return tuple(parameters)
+
+    def is_optional_poll_parameter_unsupported(self, parameter):
+        """Return whether a known parameter was rejected in automatic polling."""
+        index = self.get_params_index(parameter)
+        return (
+            index is not None
+            and index in self.unsupported_optional_poll_parameter_ids()
         )
 
     def parameter_options(self, parameter):

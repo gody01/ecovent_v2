@@ -58,6 +58,12 @@
             "description": "Ustawia zegar urządzenia na lokalny czas Home Assistant."
         }
     },
+    "issues": {
+        "hardware_profile_mismatch": {
+            "title": "Wykryto niezgodność profilu sprzętowego EcoVent",
+            "description": "{name} zgłasza się jako {unit_type} z profilem {profile}, ale jawnie odrzuciło opcjonalne rejestry oczekiwane przez ten profil: {unsupported_params}. EcoVent V2 ukrył pasujące wygenerowane encje i pozostawi wentylator dostępny. Użyj linku z dodatkowymi informacjami, aby otworzyć wstępnie wypełnione zgłoszenie GitHub z wykrytymi szczegółami, a następnie dodaj dokładny model handlowy, zdjęcia tabliczki, firmware i zainstalowane opcje sprzętowe."
+        }
+    },
     "entity": {
         "sensor": {
             "airflow": {

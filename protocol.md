@@ -16,6 +16,7 @@ Source PDFs:
 
 - [Connection to a "Smart Home" system - connection guide (B133-4-1EN-02)](https://blaubergventilatoren.net/download/vento-inhome-manual-14758.pdf)
 - [Smart Wi-Fi connection guide B168-1EN-01](https://blaubergventilatoren.net/download/smart-wi-fi-manual-8533.pdf)
+- [Vento Expert A50-1 W V.2 manual 7521](https://blaubergventilatoren.net/download/vento-expert-a50-1-s10-w-v2-manual-7521.pdf)
 - [TwinFresh Style Wi-Fi manual 19765](https://ventilation-system.com/download/twinfresh-style-wi-fi-manual-19765.pdf)
 - [TwinFresh Style Wi-Fi mini manual 19765](https://ventilation-system.com/download/twinfresh-style-wi-fi-mini-manual-19765.pdf)
 - [Breezy Eco manual 21433](https://ventilation-system.com/download/breezy-eco-manual-21433.pdf)
@@ -36,6 +37,7 @@ reports and earlier compatibility fixes show these differences:
 | Area | PDF / implementation expectation | Observed device behavior | Integration policy |
 | -- | -- | -- | -- |
 | Vento/TwinFresh availability rows | The Vento-family map documents `0x0001` (`state`), `0x0002` (`speed`), and, in the B133 Vento guide, `0x0044` (`man_speed`). | Issue #76 shows Vento Expert / TwinFresh Expert full polls returning many valid rows including `0x0044`, while `0x0001` and `0x0002` remain absent after individual retry. The maintainer also reported this on an original Vento 50 with firmware `0.4 2019-12-20`. | Treat `0x0044` as the full-poll Vento availability row, matching the existing quick-poll control proof. Missing `0x0001` / `0x0002` is logged and surfaced as unavailable data rather than making the coordinator fail. |
+| Vento Expert A50-1 W V.2 option rows | The Vento-family maps include preset-speed and filter-timer rows such as `0x003A` through `0x003F` and `0x0063`. | Issue #78 reports a Blauberg Vento Expert A50-1 W V.2 on firmware `0.4 2019-12-20` with no extra sensor modules where those rows are explicitly rejected. | Keep the rows in the Vento entity map because other Vento-family devices may support them, but treat their `0xFD` replies as unsupported optional data. Do not use those optional rows as proof that the device itself is unavailable. |
 | TwinFresh manual-speed row | The B133 Vento guide explicitly lists parameter `0x0044`; the TwinFresh Style PDFs reference manual speed mode `255` using parameter 68 but omit a separate `0x0044` table row. | TwinFresh-family devices and the Home Assistant silent manual-speed path use the manual-speed row successfully. | Keep `0x0044` in the shared `vento` profile because both document the manual-speed mode path, even though one PDF omits the row from its table. |
 | Breezy/Freshpoint standard sensor rows | Freshpoint product documents describe relative humidity and four built-in temperature sensors on standard and Pro units; only the Pro package adds tVOC/CO2eq air-quality sensing. | Issue #74 reports a Freshpoint 160 whose humidity, built-in temperature, CO2, VOC, recovery-efficiency, and schedule entities stay unknown while the fan still works. Earlier reports also showed optional rows omitted or explicitly rejected. | Keep `0x0001`, `0x0002`, and `0x0044` as Breezy/Freshpoint availability rows. Missing or unsupported non-critical sensor/feature rows are retried, backed off, cleared, and hidden when permanently unsupported instead of flickering the fan entity unavailable. |
 | Explicit `0xFD` unsupported markers | Source tables list readable rows, but the protocol can still answer an individual row with an unsupported marker. | Some firmware acknowledges a request with `0xFD` instead of returning fresh data. | Treat `0xFD` as "controller answered, but this row has no fresh value." Required rows still fail; optional rows become unavailable and may be removed from later automatic polls. |
@@ -52,6 +54,9 @@ controllers and firmware variants may omit, reject, or defer documented rows.
 The integration should therefore use documented maps for entity discovery and
 profile selection, but use observed stable control rows for coordinator
 availability.
+
+For practical maintainer steps when fixing these reports, see
+[`docs/protocol-fix-howto.md`](docs/protocol-fix-howto.md).
 
 Cross-brand and candidate OEM research sources:
 

@@ -524,3 +524,14 @@ Version 1.2.21
 * Raise a Home Assistant Repairs warning for hardware/profile mismatches, with a
   prefilled GitHub issue link and config-entry diagnostics carrying the detected
   profile, unit type, firmware, and unsupported register details.
+
+Version 1.2.23
+* Add regression coverage and protocol notes for Blauberg Vento Expert A50-1 W
+  V.2 firmware `0.4` and Vento Expert DUO A30-1 S10 W V.2 firmware `0.7` units
+  that reject optional preset-speed and filter-timer rows. The integration
+  keeps the Vento/TwinFresh profile map, hides the unsupported generated
+  entities, and no longer opens a hardware/profile mismatch Repair when these
+  known unit-type variants reject only those optional rows.
+* Clarify hardware/profile mismatch Repairs and prefilled issue titles so mixed
+  installations report distinct model, firmware, and unsupported-register sets
+  separately instead of collapsing a device zoo into one ambiguous report.

@@ -35,6 +35,7 @@ except ImportError:
 from .const import CONF_AUTO_CLOCK_SYNC, CONF_SILENT_MODE, DOMAIN
 from .protocol_diagnostics import (
     hardware_profile_mismatch_issue_url,
+    reportable_hardware_profile_mismatch_param_ids,
     unsupported_optional_poll_parameter_summary,
 )
 
@@ -149,7 +150,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
 
     def _update_hardware_profile_mismatch_repair_issue(self) -> None:
         """Show a Repairs issue when this hardware omits profile-declared rows."""
-        unsupported = self._fan.unsupported_optional_poll_parameter_ids()
+        unsupported = reportable_hardware_profile_mismatch_param_ids(self._fan)
         if unsupported == self._reported_unsupported_optional_params:
             return
 
@@ -171,8 +172,10 @@ class EcoVentCoordinator(DataUpdateCoordinator):
             )
             return
 
-        unsupported_params = unsupported_optional_poll_parameter_summary(self._fan)
-        issue_url = hardware_profile_mismatch_issue_url(self._fan)
+        unsupported_params = unsupported_optional_poll_parameter_summary(
+            self._fan, unsupported
+        )
+        issue_url = hardware_profile_mismatch_issue_url(self._fan, unsupported)
         ir.async_create_issue(
             self.hass,
             DOMAIN,

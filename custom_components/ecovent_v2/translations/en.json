@@ -93,7 +93,7 @@
     "issues": {
         "hardware_profile_mismatch": {
             "title": "EcoVent hardware profile mismatch detected",
-            "description": "{name} reports itself as {unit_type} using the {profile} profile, but it explicitly rejected optional registers expected by that profile: {unsupported_params}. EcoVent V2 hid matching generated entities and will keep the fan available. Use the learn-more link to open a GitHub issue prefilled with these detected details, then add the exact marketing model, label photos, firmware, and installed hardware options."
+            "description": "{name} reports itself as {unit_type} using the {profile} profile, but it explicitly rejected optional registers expected by that profile: {unsupported_params}. EcoVent V2 hid matching generated entities and will keep the fan available. This Repair is for this one EcoVent config entry; if several devices show it, report each distinct model, firmware, and rejected-register set separately. Use the learn-more link to open a GitHub issue prefilled with these detected details, then add the exact marketing model, label photos, firmware, installed hardware options, and whether identical devices share the same result."
         }
     },
     "entity": {

@@ -27,6 +27,32 @@ Source PDFs:
 - [Arc Smart Smart House CO2 connection guide](https://ventilation-system.com/download/arc-smart-manual-21863.pdf)
 - [O2 Supreme Smart Home connection guide B255-1EN-01](https://blaubergventilatoren.net/download/o2-supreme-manual-15274.pdf)
 
+### Spec and observed firmware differences
+
+The manufacturer PDFs are treated as parameter-map evidence, not as a guarantee
+that every firmware answers every documented row in every poll. Current issue
+reports and earlier compatibility fixes show these differences:
+
+| Area | PDF / implementation expectation | Observed device behavior | Integration policy |
+| -- | -- | -- | -- |
+| Vento/TwinFresh availability rows | The Vento-family map documents `0x0001` (`state`), `0x0002` (`speed`), and, in the B133 Vento guide, `0x0044` (`man_speed`). | Issue #76 shows Vento Expert / TwinFresh Expert full polls returning many valid rows including `0x0044`, while `0x0001` and `0x0002` remain absent after individual retry. The maintainer also reported this on an original Vento 50 with firmware `0.4 2019-12-20`. | Treat `0x0044` as the full-poll Vento availability row, matching the existing quick-poll control proof. Missing `0x0001` / `0x0002` is logged and surfaced as unavailable data rather than making the coordinator fail. |
+| TwinFresh manual-speed row | The B133 Vento guide explicitly lists parameter `0x0044`; the TwinFresh Style PDFs reference manual speed mode `255` using parameter 68 but omit a separate `0x0044` table row. | TwinFresh-family devices and the Home Assistant silent manual-speed path use the manual-speed row successfully. | Keep `0x0044` in the shared `vento` profile because both document the manual-speed mode path, even though one PDF omits the row from its table. |
+| Breezy/Freshpoint standard sensor rows | Freshpoint product documents describe relative humidity and four built-in temperature sensors on standard and Pro units; only the Pro package adds tVOC/CO2eq air-quality sensing. | Issue #74 reports a Freshpoint 160 whose humidity, built-in temperature, CO2, VOC, recovery-efficiency, and schedule entities stay unknown while the fan still works. Earlier reports also showed optional rows omitted or explicitly rejected. | Keep `0x0001`, `0x0002`, and `0x0044` as Breezy/Freshpoint availability rows. Missing or unsupported non-critical sensor/feature rows are retried, backed off, cleared, and hidden when permanently unsupported instead of flickering the fan entity unavailable. |
+| Explicit `0xFD` unsupported markers | Source tables list readable rows, but the protocol can still answer an individual row with an unsupported marker. | Some firmware acknowledges a request with `0xFD` instead of returning fresh data. | Treat `0xFD` as "controller answered, but this row has no fresh value." Required rows still fail; optional rows become unavailable and may be removed from later automatic polls. |
+| Weekly schedule rows | Vento/TwinFresh and Breezy/Freshpoint tables document `0x0072` (`weekly_schedule_state`) and `0x0077` (`weekly_schedule_setup`). | Some variants do not answer schedule rows during setup/reload, and probing all schedule records can cause delays. | Load the full schedule cache only after `0x0072` reports a known `on`/`off` state. If `0x0072` is unavailable, keep the fan available and leave schedule entities unavailable. |
+| Packet completeness | The guides impose a 256-byte packet limit, while older integration versions could accept a valid but partial response as a complete refresh. | Firmware can return a valid response that omits requested rows without using `0xFD`. | Split full polls into protocol-safe chunks, verify returned parameter ids, retry omitted rows individually, and distinguish required rows from optional rows. |
+| Shared parameter numbers across families | Several manuals reuse the same parameter ids for different device families. | `0x0002`, `0x0014`, `0x0068`, `0x0401`, and other rows do not always have the same semantics between Vento, extract-fan, Breezy/Freshpoint, Freshbox, and Arc profiles. | Keep profile-specific parameter maps instead of treating one PDF as a universal superset. |
+| A21 / Modbus controllers | VENTS A21 documents Modbus TCP/RTU and a controller identity at input register `37`. | A21 does not publish a BGCP `0x00B9` unit type and does not use the UDP BGCP parameter map. | Implement A21 as a separate Modbus transport. Do not infer BGCP compatibility from physical/OEM similarity alone. |
+| Unit-type parsing | The PDFs list unit-type values read from BGCP parameter `0x00B9`. | This parser stores those two response bytes as parser keys such as `0x0300`, and no reviewed PDF documents device type `7` / parser key `0x0700`. | Keep the byte-swapped parser keys documented next to the PDF values. Rows such as `0x0007` are parameters, not unit-type values. |
+| Vento-family `0x0306` | The Vento/TwinFresh schedule table uses schedule speed values. | A response such as `0x0306=03` can be confused with an unrelated beeper/status row if the wrong family table is applied. | Treat `0x0306` as `schedule_speed` for the Vento-family profile; Breezy/Freshpoint has its own beeper row at `0x0401`. |
+
+These differences do not currently prove that the PDFs are being read upside
+down. They show that the PDFs describe the broad protocol surface, while real
+controllers and firmware variants may omit, reject, or defer documented rows.
+The integration should therefore use documented maps for entity discovery and
+profile selection, but use observed stable control rows for coordinator
+availability.
+
 Cross-brand and candidate OEM research sources:
 
 - [ECONOPRIME DF 270 Connect product page](https://www.econology.fr/df-270-connect-econoprime-vmc-double-flux.html)

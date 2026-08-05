@@ -35,11 +35,10 @@ DEVICE_PROFILES = {
         supports_preset_speed_settings=True,
         poll_required_params=frozenset(
             {
-                # Some Vento Expert units omit optional diagnostics from normal
-                # polls. Treat the core fan/control rows as the availability
-                # signal so missing sensors do not block setup.
-                0x0001,
-                0x0002,
+                # Some Vento Expert units intermittently omit the state/speed
+                # rows from otherwise healthy full polls. The quick poll has
+                # always used the manual-speed row as its availability signal,
+                # so keep the same stable control row for full polls too.
                 0x0044,
             }
         ),

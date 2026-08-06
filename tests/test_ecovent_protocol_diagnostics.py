@@ -59,6 +59,16 @@ class ProtocolDiagnosticsTest(unittest.TestCase):
     def test_issue78_vento_a50_rows_do_not_request_mismatch_report(self):
         fan = Fan("192.0.2.1")
         fan.unit_type = "0300"
+
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan), frozenset()
+        )
+
+    def test_issue82_vento_a50_humidity_variant_is_known(self):
+        """The reported 0x0300 firmware variant must not reopen a Repair."""
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0300"
+        fan._firmware = "0.7 2021-10-04"
         fan._unsupported_optional_poll_params = {
             0x003A,
             0x003B,

@@ -42,6 +42,7 @@ reports and earlier compatibility fixes show these differences:
 | Issue #76 | `0x0300` | Blauberg VENTO Expert / VENTS TwinFresh Expert; reporter also noted original Vento 50 | `0.4 2019-12-20` on maintainer devices | Full polls can return valid rows including `0x0044` while `0x0001`/`0x0002` remain absent after retry; optional omissions must not make the fan unavailable. |
 | Issue #78 | `0x0300` | Blauberg Vento Expert A50-1 W V.2, no extra sensor modules | `0.4 2019-12-20` | Explicitly rejects optional preset-speed rows `0x003A`..`0x003F` and filter-timer setpoint `0x0063`. |
 | Issue #78 comment | `0x0300` | Blauberg VENTO Expert A50-1 S10 W V.2 | `0.8 2023-11-04`, `0.9 2024-07-08` | Reporter did not see the same hardware/profile mismatch, so the rows may still exist on newer A50 firmware. |
+| Issue #82 | `0x0300` | Blauberg VENTO Expert A50-1 S8 W V.3 with humidity sensor | `0.7 2021-10-04` | Explicitly rejects the same optional preset-speed rows `0x003A`..`0x003F` and filter-timer setpoint `0x0063`; this is the same known Vento option-row variant as Issue #78. |
 | Issue #80 | `0x0400` | Blauberg VENTO Expert DUO A30-1 S10 W V.2 | `0.7 2021-10-04` | Explicitly rejects the same optional preset-speed rows `0x003A`..`0x003F` and filter-timer setpoint `0x0063`. |
 
 | Area | PDF / implementation expectation | Observed device behavior | Integration policy |

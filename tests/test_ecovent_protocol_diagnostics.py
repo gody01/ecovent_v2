@@ -83,6 +83,34 @@ class ProtocolDiagnosticsTest(unittest.TestCase):
             reportable_hardware_profile_mismatch_param_ids(fan), frozenset()
         )
 
+    def test_issue84_newer_vento_firmware_only_rejects_speed_rows(self):
+        """The newer reported firmware keeps the filter timer supported."""
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0300"
+        fan._firmware = "0.9 2024-07-08"
+        fan._unsupported_optional_poll_params = {
+            0x003A,
+            0x003B,
+            0x003C,
+            0x003D,
+            0x003E,
+            0x003F,
+        }
+
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan), frozenset()
+        )
+
+    def test_unknown_filter_timer_rejection_still_requests_mismatch_report(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0300"
+        fan._firmware = "0.9 2024-07-08"
+        fan._unsupported_optional_poll_params = {0x0063}
+
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan), frozenset({0x0063})
+        )
+
     def test_issue80_vento_duo_a30_rows_do_not_request_mismatch_report(self):
         fan = Fan("192.0.2.1")
         fan.unit_type = "0400"

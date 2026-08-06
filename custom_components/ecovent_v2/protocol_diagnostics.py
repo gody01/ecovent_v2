@@ -6,9 +6,12 @@ from urllib.parse import urlencode
 
 GITHUB_NEW_ISSUE_URL = "https://github.com/gody01/ecovent_v2/issues/new"
 
-_VENTO_EXPERT_SPEED_FILTER_OPTION_ROWS = frozenset(
-    {0x003A, 0x003B, 0x003C, 0x003D, 0x003E, 0x003F, 0x0063}
+_VENTO_EXPERT_SPEED_OPTION_ROWS = frozenset(
+    {0x003A, 0x003B, 0x003C, 0x003D, 0x003E, 0x003F}
 )
+_VENTO_EXPERT_SPEED_FILTER_OPTION_ROWS = _VENTO_EXPERT_SPEED_OPTION_ROWS | {
+    0x0063
+}
 
 _KNOWN_VARIANT_UNSUPPORTED_OPTIONAL_PARAMS = {
     # Blauberg VENTO Expert A50-1 W V.2 firmware 0.4 and VENTO Expert DUO
@@ -16,8 +19,16 @@ _KNOWN_VARIANT_UNSUPPORTED_OPTIONAL_PARAMS = {
     # preset-speed/filter-timer rows. Keep hiding the generated entities, but do
     # not ask users to file another mismatch report when these are the only
     # unsupported optional rows for the exact unit-type family.
-    ("vento", 0x0300): _VENTO_EXPERT_SPEED_FILTER_OPTION_ROWS,
+    # Newer 0x0300 firmware can support the filter timer while still omitting
+    # the preset-speed rows; keep that row reportable unless the firmware is a
+    # known old variant that rejects the complete set.
+    ("vento", 0x0300): _VENTO_EXPERT_SPEED_OPTION_ROWS,
     ("vento", 0x0400): _VENTO_EXPERT_SPEED_FILTER_OPTION_ROWS,
+}
+
+_KNOWN_VARIANT_FIRMWARE_UNSUPPORTED_OPTIONAL_PARAMS = {
+    ("vento", 0x0300, "0.4 2019-12-20"): _VENTO_EXPERT_SPEED_FILTER_OPTION_ROWS,
+    ("vento", 0x0300, "0.7 2021-10-04"): _VENTO_EXPERT_SPEED_FILTER_OPTION_ROWS,
 }
 
 
@@ -29,8 +40,11 @@ def reportable_hardware_profile_mismatch_param_ids(fan) -> frozenset[int]:
     """Return unsupported optional rows that still need a hardware report."""
     unsupported = fan.unsupported_optional_poll_parameter_ids()
     unit_type_id = getattr(fan, "_unit_type_id", None)
-    known_variant = _KNOWN_VARIANT_UNSUPPORTED_OPTIONAL_PARAMS.get(
-        (fan.profile_key, unit_type_id), frozenset()
+    known_variant = _KNOWN_VARIANT_FIRMWARE_UNSUPPORTED_OPTIONAL_PARAMS.get(
+        (fan.profile_key, unit_type_id, fan.firmware),
+        _KNOWN_VARIANT_UNSUPPORTED_OPTIONAL_PARAMS.get(
+            (fan.profile_key, unit_type_id), frozenset()
+        ),
     )
     return frozenset(unsupported - known_variant)
 

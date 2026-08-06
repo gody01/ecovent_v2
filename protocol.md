@@ -43,6 +43,7 @@ reports and earlier compatibility fixes show these differences:
 | Issue #78 | `0x0300` | Blauberg Vento Expert A50-1 W V.2, no extra sensor modules | `0.4 2019-12-20` | Explicitly rejects optional preset-speed rows `0x003A`..`0x003F` and filter-timer setpoint `0x0063`. |
 | Issue #78 comment | `0x0300` | Blauberg VENTO Expert A50-1 S10 W V.2 | `0.8 2023-11-04`, `0.9 2024-07-08` | Reporter did not see the same hardware/profile mismatch, so the rows may still exist on newer A50 firmware. |
 | Issue #82 | `0x0300` | Blauberg VENTO Expert A50-1 S8 W V.3 with humidity sensor | `0.7 2021-10-04` | Explicitly rejects the same optional preset-speed rows `0x003A`..`0x003F` and filter-timer setpoint `0x0063`; this is the same known Vento option-row variant as Issue #78. |
+| Issue #84 | `0x0300` | Blauberg VENTO Expert A50-1 S10 Pro / W V.2 | `0.7 2021-10-04`; another unit `0.9 2024-07-08` | Firmware `0.7` rejects preset-speed rows `0x003A`..`0x003F` and filter timer `0x0063`; firmware `0.9` rejects only the preset-speed rows and accepts `0x0063`. |
 | Issue #80 | `0x0400` | Blauberg VENTO Expert DUO A30-1 S10 W V.2 | `0.7 2021-10-04` | Explicitly rejects the same optional preset-speed rows `0x003A`..`0x003F` and filter-timer setpoint `0x0063`. |
 
 | Area | PDF / implementation expectation | Observed device behavior | Integration policy |

@@ -130,6 +130,10 @@ class ParseResponseTest(unittest.TestCase):
             Fan.device_models[0x0E00].name,
             "VENTS TwinFresh Style Wi-Fi",
         )
+        self.assertEqual(Fan.device_models[0x0300].profile_key, "vento")
+        self.assertEqual(Fan.device_models[0x0300].parser_key, 0x0300)
+        self.assertEqual(Fan.device_models[0x0400].profile_key, "vento")
+        self.assertEqual(Fan.device_models[0x0400].parser_key, 0x0400)
         style_names = {
             marketing.model for marketing in Fan.device_models[0x0E00].official_names
         }

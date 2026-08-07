@@ -535,3 +535,9 @@ Version 1.2.23
 * Clarify hardware/profile mismatch Repairs and prefilled issue titles so mixed
   installations report distinct model, firmware, and unsupported-register sets
   separately instead of collapsing a device zoo into one ambiguous report.
+
+Version 1.2.24
+* Fix intermittent Vento/TwinFresh partial polls where the device omits
+  `0x0044` (or another individual row) despite returning other tracked rows.
+  Vento availability now requires a valid tracked response, not one row that
+  firmware variants may omit.

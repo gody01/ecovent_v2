@@ -33,15 +33,10 @@ DEVICE_PROFILES = {
         supports_direction=True,
         supports_oscillation=True,
         supports_preset_speed_settings=True,
-        poll_required_params=frozenset(
-            {
-                # Some Vento Expert units intermittently omit the state/speed
-                # rows from otherwise healthy full polls. The quick poll has
-                # always used the manual-speed row as its availability signal,
-                # so keep the same stable control row for full polls too.
-                0x0044,
-            }
-        ),
+        # Vento Expert firmware can omit any one of the state, speed, or
+        # manual-speed rows during a valid poll. Require a tracked response
+        # instead of choosing one row as universally stable.
+        poll_required_params=frozenset(),
     ),
     "extract_fan": DeviceProfile(
         key="extract_fan",

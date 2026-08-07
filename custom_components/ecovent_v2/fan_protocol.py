@@ -412,8 +412,6 @@ class FanProtocolMixin:
             ignored_optional_params = set()
         else:
             required_param_ids = requested_params & set(required_params)
-            if not required_param_ids:
-                required_param_ids = requested_params
             ignored_optional_params = (
                 (requested_params - required_param_ids)
                 & self._unsupported_optional_poll_param_ids()
@@ -553,6 +551,13 @@ class FanProtocolMixin:
         self._last_missing_required_params = frozenset(missing_required_params)
         self._last_missing_optional_params = frozenset(missing_optional_params)
         self._last_unsupported_params = frozenset(unsupported_params)
+        # Profiles with no universally stable availability row (currently
+        # Vento) still need evidence that the controller returned at least one
+        # requested parameter. A transport-level success alone can be an empty
+        # or untracked response and must not keep a dead device available.
+        if required_params is not None and not required_param_ids:
+            complete = complete and bool(received_params)
+        available = complete and received_response
         if missing_required_params or missing_optional_params or unsupported_params:
             log_level = logging.WARNING if missing_required_params else logging.DEBUG
             _LOGGER.log(
@@ -578,9 +583,9 @@ class FanProtocolMixin:
                 _format_param_ids(individual_retry_params),
                 _format_param_ids(no_response_params),
                 untracked_response_chunks,
-                "available" if complete and received_response else "unavailable",
+                "available" if available else "unavailable",
             )
-        return complete and received_response
+        return available
 
     def set_param(self, param, value):
         valpar = self.get_params_values(param, value)

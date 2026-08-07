@@ -109,6 +109,9 @@ class DeviceProfile:
     uses_operating_mode_presets: bool = False
     speed_percent_scale: str = "byte"
     supports_percentage_control: bool = True
+    # Parameters that must be returned by a poll.  An explicitly empty set
+    # means that the profile has no universally stable row; the poll is still
+    # valid only when at least one requested row is tracked in the response.
     poll_required_params: frozenset[int] | None = None
 
 

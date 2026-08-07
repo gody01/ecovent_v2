@@ -42,6 +42,23 @@ writes, or hardware/profile mismatch Repairs.
   Runtime mappings need either source documentation for that protocol or a
   reporter/live-device observation.
 
+### New brands, relabels, and reseller trails
+
+- Preserve the reporter's exact marketing spelling and record it in the search
+  index alongside the manufacturer and model names.
+- Search the manufacturer's catalogue for sibling products and record them in
+  the structured model catalogue and README search list. Keep related products
+  as `candidates` until a device report or compatible protocol documentation
+  proves their unit type; do not turn catalogue similarity into a parser alias.
+- Search independent compatibility/reseller pages for other names sold on the
+  same protocol platform. Record the source URL and evidence level beside each
+  name so future issue triage can find Blauberg, VENTS, Flexit, DUKA, SIKU, and
+  other cross-brand reports without asserting an unproved OEM relationship.
+- Add a regression test that keeps confirmed relabels separate from candidates.
+  When a hardware Repair generates a GitHub issue body, include the EcoVent
+  integration version as well as device firmware so reports remain reproducible
+  after protocol behavior changes.
+
 ## Home Assistant Behavior
 
 - Startup, reload, and discovery should be read-only unless a user explicitly

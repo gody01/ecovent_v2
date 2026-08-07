@@ -60,8 +60,9 @@ External relabels and OEM names tracked as evidence or candidates:
 * SIKU RV, SIKU RV 50 W Pro WiFi V2, SIKU RV 50 W PRO WIFI V2,
   SIKU RV 30 DW Pro Duo WiFi V2, SIKU RV 30 DW PRO DUO WIFI V2,
   SIKU RV 25 W Pro WiFi V2
-* Flexit Roomie One WiFi V2, Roomie One Wifi V2, Flexit Roomie Dual Wifi,
-  Roomie Dual Wifi, Roomie Dual WiFi V2, Flexit Aura, Flexit Muto
+* Flexit Roomie One WiFi V2, Romventilator Roomie One WiFi V2,
+  Roomie One Wifi V2, Flexit Roomie Dual Wifi, Roomie Dual Wifi,
+  Roomie Dual WiFi V2, Flexit Aura One WiFi, Flexit Aura, Flexit Muto
 * DUKA One, DUKA One S6W, DUKA One S6BW, DUKA One S4 Wi-Fi,
   DUKA One S6 Wi-Fi, DUKA One Pro 25 S Wi-Fi, DUKA One Pro 50 S Wi-Fi
 * RL Raumklima, RL PRO-Serie, RL 50RVW, RL 30DVW, RL 25RVW
@@ -541,3 +542,6 @@ Version 1.2.24
   `0x0044` (or another individual row) despite returning other tracked rows.
   Vento availability now requires a valid tracked response, not one row that
   firmware variants may omit.
+* Record the EcoVent integration version in generated hardware-mismatch reports
+  and add the reporter-confirmed Flexit/Romventilator Roomie One V2 relabel plus
+  related Flexit search-index candidates.

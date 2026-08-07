@@ -46,6 +46,7 @@ reports and earlier compatibility fixes show these differences:
 | Issue #82 | `0x0300` | Blauberg VENTO Expert A50-1 S8 W V.3 with humidity sensor | `0.7 2021-10-04` | Explicitly rejects the same optional preset-speed rows `0x003A`..`0x003F` and filter-timer setpoint `0x0063`; this is the same known Vento option-row variant as Issue #78. |
 | Issue #84 | `0x0300` | Blauberg VENTO Expert A50-1 S10 Pro / W V.2 | `0.7 2021-10-04`; another unit `0.9 2024-07-08` | Firmware `0.7` rejects preset-speed rows `0x003A`..`0x003F` and filter timer `0x0063`; firmware `0.9` rejects only the preset-speed rows and accepts `0x0063`. |
 | Issue #80 | `0x0400` | Blauberg VENTO Expert DUO A30-1 S10 W V.2 | `0.7 2021-10-04` | Explicitly rejects the same optional preset-speed rows `0x003A`..`0x003F` and filter-timer setpoint `0x0063`. |
+| Issue #86 | `0x0300` | Flexit Roomie One WiFi V2, reported as `Romventilator Roomie One WiFi V2` | `0.7 2021-10-04` | Reporter confirms the Flexit/Romventilator marketing variant on the shared Vento profile; it rejects the known optional rows `0x003A`..`0x003F` and `0x0063`. |
 
 | Area | PDF / implementation expectation | Observed device behavior | Integration policy |
 | -- | -- | -- | -- |
@@ -105,8 +106,8 @@ The code keeps these layers separate:
 - `device_type`: native BGCP value from parameter `0x00B9`.
 - `parser_key`: byte-swapped integer used by this parser.
 - `evidence`: `official_group`, `official_listing`, `protocol_pdf`,
-  `community_tested`, `observed`, `app_by_blauberg`, `documentary_match`, or
-  `candidate`. A `documentary_match` remains a candidate until its BGCP unit
+  `community_tested`, `observed`, `app_by_blauberg`, `documentary_match`,
+  `catalog_label`, or `candidate`. A `documentary_match` remains a candidate until its BGCP unit
   type is captured or documented.
 
 Only concise primary names and explicit compatibility aliases are used for the
@@ -119,7 +120,7 @@ candidates are not shown as confirmed model names until a device reports
 | -- | -- | -- | -- |
 | `0x0100` | ECONOPRIME DF270 Connect | ECONOPRIME DF270; ECONOPRIME DF270 Connect | A reported unit identifies as `256` and works with the `vento` profile. Detailed first-party product/manual/A22 evidence makes VENTS VUT 270 V5B EC A21 a `documentary_match`, but A21 publishes Modbus rather than a BGCP `0x00B9` bridge. |
 | `0x0200` | Blauberg Freshbox 100 WiFi / VENTS Micra 100 WiFi | Freshbox 100 WiFi/ERV/E/E2 variants; Vents Micra 100 WiFi/ERV/E/E2 variants | Dedicated `freshbox` AHU profile |
-| `0x0300` | Blauberg VENTO Expert / VENTS TwinFresh Expert | VENTO Expert A50/A85/A100 V.2; VENTO Expert A50 V.3; TwinFresh Expert RW1-50/85/100 V.2; TwinFresh Expert RW1-50 V.3 | SIKU RV 50, DUKA One S6W, RL 50RVW, and Winzel RW1-50 are tracked as relabels; Flexit Roomie One, DUKA One Pro 50, and NIBE DVC 10-50W remain candidates |
+| `0x0300` | Blauberg VENTO Expert / VENTS TwinFresh Expert | VENTO Expert A50/A85/A100 V.2; VENTO Expert A50 V.3; TwinFresh Expert RW1-50/85/100 V.2; TwinFresh Expert RW1-50 V.3 | SIKU RV 50, DUKA One S6W, RL 50RVW, Winzel RW1-50, and reporter-confirmed Flexit Roomie One WiFi V2 / Romventilator Roomie One WiFi V2 are tracked relabels; Flexit Roomie Dual, Aura One WiFi, Muto, DUKA One Pro 50, and NIBE DVC 10-50W remain candidates |
 | `0x0400` | Blauberg VENTO Expert Duo / VENTS TwinFresh Expert Duo | VENTO Expert DUO A30 V.2; TwinFresh Expert Duo RW1-30 V.2 | SIKU RV 30 DW, Flexit Roomie Dual, DUKA One S6BW, and RL 30DVW are tracked as relabel/candidate evidence |
 | `0x0500` | Blauberg VENTO Expert A30 / VENTS TwinFresh Expert RW-30 | VENTO Expert A30 V.2; TwinFresh Expert RW-30 V.2 | SIKU RV 25 and RL 25RVW remain candidates until live `0x00B9` evidence |
 | `0x0600` | Blauberg Smart Wi-Fi / VENTS iFan Wi-Fi | Smart Wi-Fi; Smart IR Wi-Fi; Vents iFan Wi-Fi; Vents iFan Move Wi-Fi | Dedicated `extract_fan` profile |
@@ -136,6 +137,18 @@ candidates are not shown as confirmed model names until a device reports
 No reviewed manufacturer PDF documents device type `7` / parser key `0x0700`.
 Rows such as `0x0007` in the source tables are timer/status parameters, not
 unit-type values.
+
+### Flexit / Romventilator search-index trail
+
+Issue #86 confirms `Flexit Roomie One WiFi V2` on unit type `0x0300`; the
+reported `Romventilator Roomie One WiFi V2` spelling is indexed alongside it.
+Flexit's catalogue also lists Roomie Dual WiFi V2, Roomie Dual,
+Aura One WiFi, and Muto, while its older catalogue includes Roomie One Wifi,
+Roomie Dual Wifi, Eq2, O2, and BR100. These names are indexed for discovery,
+but only Roomie One is promoted to a confirmed relabel. An independent
+compatibility listing groups Blauberg Expert WiFi v2, VENTS TwinFresh WiFi v2,
+Flexit Roomie One WiFi v2, and DUKA One S6W/S6BW; this is reseller evidence for
+search and triage, not a blanket runtime mapping.
 
 ### ECONOPRIME / Econology catalogue research
 

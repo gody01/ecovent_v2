@@ -4,7 +4,17 @@ from __future__ import annotations
 
 from urllib.parse import urlencode
 
+try:
+    from .ecoventv2 import __version__ as _ECOVENT_VERSION
+except ImportError:
+    from ecoventv2 import __version__ as _ECOVENT_VERSION
+
 GITHUB_NEW_ISSUE_URL = "https://github.com/gody01/ecovent_v2/issues/new"
+
+
+def _report_version() -> str:
+    """Return the user-facing EcoVent version without the local-build marker."""
+    return _ECOVENT_VERSION.removeprefix("loc_")
 
 _VENTO_EXPERT_SPEED_OPTION_ROWS = frozenset(
     {0x003A, 0x003B, 0x003C, 0x003D, 0x003E, 0x003F}
@@ -106,6 +116,7 @@ def hardware_profile_mismatch_issue_body(
             "### Detected device context",
             "",
             f"- Integration profile: `{fan.profile_key}`",
+            f"- EcoVent V2 integration version: `{_report_version()}`",
             f"- Reported unit type: `{fan.unit_type}`",
             f"- Unit type id: `{unit_type_text}`",
             f"- Firmware: `{fan.firmware}`",

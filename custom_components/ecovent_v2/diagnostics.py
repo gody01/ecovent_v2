@@ -8,6 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
+from .protocol_diagnostics import _report_version
 from .protocol_diagnostics import (
     hardware_profile_mismatch_issue_url,
     unsupported_optional_poll_parameter_details,
@@ -29,6 +30,7 @@ async def async_get_config_entry_diagnostics(
             "title": entry.title,
         },
         "device": {
+            "integration_version": _report_version(),
             "name": fan.name,
             "profile": fan.profile_key,
             "unit_type": fan.unit_type,

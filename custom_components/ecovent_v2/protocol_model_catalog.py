@@ -3,10 +3,14 @@
 try:
     from .protocol_metadata import (
         ARC_SMART_MANUAL_URL,
+        BITK_BLAUBERG_WIFI_COMPATIBILITY_URL,
         ECONOPRIME_A22_WIFI_PANEL_URL,
         ECONOPRIME_DF_CONNECT_APP_MANUAL_URL,
         ECONOPRIME_DF270_MANUAL_URL,
         ECONOPRIME_DF270_PRODUCT_URL,
+        FLEXIT_ROOMIE_BROCHURE_URL,
+        FLEXIT_ROOMIE_CATEGORY_URL,
+        FLEXIT_ROOMIE_ONE_URL,
         O2_SUPREME_MANUAL_URL,
         TWINFRESH_STYLE_MANUAL_URL,
         TWINFRESH_STYLE_MINI_MANUAL_URL,
@@ -22,10 +26,14 @@ try:
 except ImportError:
     from protocol_metadata import (
         ARC_SMART_MANUAL_URL,
+        BITK_BLAUBERG_WIFI_COMPATIBILITY_URL,
         ECONOPRIME_A22_WIFI_PANEL_URL,
         ECONOPRIME_DF_CONNECT_APP_MANUAL_URL,
         ECONOPRIME_DF270_MANUAL_URL,
         ECONOPRIME_DF270_PRODUCT_URL,
+        FLEXIT_ROOMIE_BROCHURE_URL,
+        FLEXIT_ROOMIE_CATEGORY_URL,
+        FLEXIT_ROOMIE_ONE_URL,
         O2_SUPREME_MANUAL_URL,
         TWINFRESH_STYLE_MANUAL_URL,
         TWINFRESH_STYLE_MINI_MANUAL_URL,
@@ -185,11 +193,28 @@ DEVICE_MODELS = {
                 "Blauberg Winzel Expert WiFi RW1-50 P",
                 "app_by_blauberg",
             ),
+            MarketingName(
+                "Flexit",
+                "Roomie One",
+                "Flexit Roomie One WiFi V2",
+                "community_tested",
+                (
+                    FLEXIT_ROOMIE_ONE_URL,
+                    BITK_BLAUBERG_WIFI_COMPATIBILITY_URL,
+                ),
+            ),
+            MarketingName(
+                "Romventilator",
+                "Roomie One",
+                "Romventilator Roomie One WiFi V2",
+                "catalog_label",
+                (
+                    FLEXIT_ROOMIE_ONE_URL,
+                    BITK_BLAUBERG_WIFI_COMPATIBILITY_URL,
+                ),
+            ),
         ),
         candidates=(
-            MarketingName(
-                "Flexit", "Roomie One", "Flexit Roomie One WiFi V2", "candidate"
-            ),
             MarketingName("DUKA", "DUKA One", "DUKA One Pro 50 S Wi-Fi", "candidate"),
             MarketingName("NIBE", "DVC 10", "NIBE DVC 10", "candidate"),
             MarketingName("NIBE", "DVC 10", "NIBE DVC 10-50W", "candidate"),
@@ -238,15 +263,37 @@ DEVICE_MODELS = {
                 "official_listing",
             ),
             MarketingName(
-                "Flexit", "Roomie Dual", "Flexit Roomie Dual Wifi", "community_tested"
+                "Flexit",
+                "Roomie Dual",
+                "Flexit Roomie Dual Wifi",
+                "community_tested",
+                (FLEXIT_ROOMIE_CATEGORY_URL, FLEXIT_ROOMIE_BROCHURE_URL),
             ),
             MarketingName("DUKA", "DUKA One", "DUKA One S6BW", "community_tested"),
             MarketingName("RL Raumklima", "RL PRO-Serie", "RL 30DVW", "community_tested"),
         ),
         candidates=(
-            MarketingName("Flexit", "Roomie Dual", "Roomie Dual WiFi V2", "candidate"),
-            MarketingName("Flexit", "Aura", "Flexit Aura", "candidate"),
-            MarketingName("Flexit", "Muto", "Flexit Muto", "candidate"),
+            MarketingName(
+                "Flexit",
+                "Roomie Dual",
+                "Roomie Dual WiFi V2",
+                "candidate",
+                (FLEXIT_ROOMIE_CATEGORY_URL, FLEXIT_ROOMIE_BROCHURE_URL),
+            ),
+            MarketingName(
+                "Flexit",
+                "Aura One",
+                "Flexit Aura One WiFi",
+                "candidate",
+                (FLEXIT_ROOMIE_CATEGORY_URL, FLEXIT_ROOMIE_BROCHURE_URL),
+            ),
+            MarketingName(
+                "Flexit",
+                "Muto",
+                "Flexit Muto",
+                "candidate",
+                (FLEXIT_ROOMIE_CATEGORY_URL, FLEXIT_ROOMIE_BROCHURE_URL),
+            ),
             MarketingName("NIBE", "DVC 10", "NIBE DVC 10-D30W", "candidate"),
         ),
         source_documents=(

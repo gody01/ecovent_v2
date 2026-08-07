@@ -85,6 +85,19 @@ MICRA_100_WIFI_MANUAL_URL = (
 ARC_SMART_MANUAL_URL = (
     "https://ventilation-system.com/download/arc-smart-manual-21863.pdf"
 )
+FLEXIT_ROOMIE_ONE_URL = (
+    "https://www.flexit.no/produkter/base/34230/roomie-one-wifi-v2/"
+)
+FLEXIT_ROOMIE_CATEGORY_URL = (
+    "https://www.flexit.no/kategorier/2129/romventilator-for-enkeltrom/"
+)
+FLEXIT_ROOMIE_BROCHURE_URL = (
+    "https://www.flexit.no/globalassets/catalog/documents/bro_116318en_2964.pdf"
+)
+BITK_BLAUBERG_WIFI_COMPATIBILITY_URL = (
+    "https://blomkvistitk.no/produkt/control-and-monitor-software-for-"
+    "blauberg-wifi-v-2-units-kopi/?lang=en"
+)
 O2_SUPREME_MANUAL_URL = (
     "https://blaubergventilatoren.net/download/o2-supreme-manual-15274.pdf"
 )
@@ -109,6 +122,9 @@ class DeviceProfile:
     uses_operating_mode_presets: bool = False
     speed_percent_scale: str = "byte"
     supports_percentage_control: bool = True
+    # Parameters that must be returned by a poll.  An explicitly empty set
+    # means that the profile has no universally stable row; the poll is still
+    # valid only when at least one requested row is tracked in the response.
     poll_required_params: frozenset[int] | None = None
 
 

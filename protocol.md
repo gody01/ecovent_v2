@@ -40,15 +40,17 @@ reports and earlier compatibility fixes show these differences:
 | Source | Unit type | Marketing model / family | Firmware | Observed behavior |
 | -- | -- | -- | -- | -- |
 | Issue #76 | `0x0300` | Blauberg VENTO Expert / VENTS TwinFresh Expert; reporter also noted original Vento 50 | `0.4 2019-12-20` on maintainer devices | Full polls can return valid rows including `0x0044` while `0x0001`/`0x0002` remain absent after retry; optional omissions must not make the fan unavailable. |
+| Issue #85 | `0x0300` | Blauberg VENTO Expert / VENTS TwinFresh Expert | reporter firmware not supplied | Quick polls can return valid tracked rows while `0x0044` is absent even after an individual retry; a single manual-speed row is not universally stable. |
 | Issue #78 | `0x0300` | Blauberg Vento Expert A50-1 W V.2, no extra sensor modules | `0.4 2019-12-20` | Explicitly rejects optional preset-speed rows `0x003A`..`0x003F` and filter-timer setpoint `0x0063`. |
 | Issue #78 comment | `0x0300` | Blauberg VENTO Expert A50-1 S10 W V.2 | `0.8 2023-11-04`, `0.9 2024-07-08` | Reporter did not see the same hardware/profile mismatch, so the rows may still exist on newer A50 firmware. |
 | Issue #82 | `0x0300` | Blauberg VENTO Expert A50-1 S8 W V.3 with humidity sensor | `0.7 2021-10-04` | Explicitly rejects the same optional preset-speed rows `0x003A`..`0x003F` and filter-timer setpoint `0x0063`; this is the same known Vento option-row variant as Issue #78. |
 | Issue #84 | `0x0300` | Blauberg VENTO Expert A50-1 S10 Pro / W V.2 | `0.7 2021-10-04`; another unit `0.9 2024-07-08` | Firmware `0.7` rejects preset-speed rows `0x003A`..`0x003F` and filter timer `0x0063`; firmware `0.9` rejects only the preset-speed rows and accepts `0x0063`. |
 | Issue #80 | `0x0400` | Blauberg VENTO Expert DUO A30-1 S10 W V.2 | `0.7 2021-10-04` | Explicitly rejects the same optional preset-speed rows `0x003A`..`0x003F` and filter-timer setpoint `0x0063`. |
+| Issue #86 | `0x0300` | Flexit Roomie One WiFi V2, reported as `Romventilator Roomie One WiFi V2` | `0.7 2021-10-04` | Reporter confirms the Flexit/Romventilator marketing variant on the shared Vento profile; it rejects the known optional rows `0x003A`..`0x003F` and `0x0063`. |
 
 | Area | PDF / implementation expectation | Observed device behavior | Integration policy |
 | -- | -- | -- | -- |
-| Vento/TwinFresh availability rows | The Vento-family map documents `0x0001` (`state`), `0x0002` (`speed`), and, in the B133 Vento guide, `0x0044` (`man_speed`). | Issue #76 shows Vento Expert / TwinFresh Expert full polls returning many valid rows including `0x0044`, while `0x0001` and `0x0002` remain absent after individual retry. The maintainer also reported this on an original Vento 50 with firmware `0.4 2019-12-20`. | Treat `0x0044` as the full-poll Vento availability row, matching the existing quick-poll control proof. Missing `0x0001` / `0x0002` is logged and surfaced as unavailable data rather than making the coordinator fail. |
+| Vento/TwinFresh availability rows | The Vento-family map documents `0x0001` (`state`), `0x0002` (`speed`), and, in the B133 Vento guide, `0x0044` (`man_speed`). | Issue #76 shows `0x0001`/`0x0002` can be absent; Issue #85 shows `0x0044` can also be absent while other requested rows are tracked. | Do not treat one row as universally stable. A Vento full/quick poll is available when the device returns at least one tracked requested row; omitted rows are logged, cleared, and retried with the existing backoff path. An empty or untracked response still fails the poll. |
 | Vento Expert A50-1 / DUO A30 option rows | The Vento-family maps include preset-speed and filter-timer rows such as `0x003A` through `0x003F` and `0x0063`. | The observation table above shows the same rejected-row set on old A50 and DUO A30 firmware, but not on newer A50 firmware. | Keep the rows in the Vento entity map because other Vento-family devices and newer firmware may support them, but treat their `0xFD` replies as unsupported optional data for the known `0x0300`/`0x0400` variants. Do not use those optional rows as proof that the device itself is unavailable or as a repeated hardware/profile report by themselves. |
 | TwinFresh manual-speed row | The B133 Vento guide explicitly lists parameter `0x0044`; the TwinFresh Style PDFs reference manual speed mode `255` using parameter 68 but omit a separate `0x0044` table row. | TwinFresh-family devices and the Home Assistant silent manual-speed path use the manual-speed row successfully. | Keep `0x0044` in the shared `vento` profile because both document the manual-speed mode path, even though one PDF omits the row from its table. |
 | Breezy/Freshpoint standard sensor rows | Freshpoint product documents describe relative humidity and four built-in temperature sensors on standard and Pro units; only the Pro package adds tVOC/CO2eq air-quality sensing. | Issue #74 reports a Freshpoint 160 whose humidity, built-in temperature, CO2, VOC, recovery-efficiency, and schedule entities stay unknown while the fan still works. Earlier reports also showed optional rows omitted or explicitly rejected. | Keep `0x0001`, `0x0002`, and `0x0044` as Breezy/Freshpoint availability rows. Missing or unsupported non-critical sensor/feature rows are retried, backed off, cleared, and hidden when permanently unsupported instead of flickering the fan entity unavailable. |
@@ -104,8 +106,8 @@ The code keeps these layers separate:
 - `device_type`: native BGCP value from parameter `0x00B9`.
 - `parser_key`: byte-swapped integer used by this parser.
 - `evidence`: `official_group`, `official_listing`, `protocol_pdf`,
-  `community_tested`, `observed`, `app_by_blauberg`, `documentary_match`, or
-  `candidate`. A `documentary_match` remains a candidate until its BGCP unit
+  `community_tested`, `observed`, `app_by_blauberg`, `documentary_match`,
+  `catalog_label`, or `candidate`. A `documentary_match` remains a candidate until its BGCP unit
   type is captured or documented.
 
 Only concise primary names and explicit compatibility aliases are used for the
@@ -118,7 +120,7 @@ candidates are not shown as confirmed model names until a device reports
 | -- | -- | -- | -- |
 | `0x0100` | ECONOPRIME DF270 Connect | ECONOPRIME DF270; ECONOPRIME DF270 Connect | A reported unit identifies as `256` and works with the `vento` profile. Detailed first-party product/manual/A22 evidence makes VENTS VUT 270 V5B EC A21 a `documentary_match`, but A21 publishes Modbus rather than a BGCP `0x00B9` bridge. |
 | `0x0200` | Blauberg Freshbox 100 WiFi / VENTS Micra 100 WiFi | Freshbox 100 WiFi/ERV/E/E2 variants; Vents Micra 100 WiFi/ERV/E/E2 variants | Dedicated `freshbox` AHU profile |
-| `0x0300` | Blauberg VENTO Expert / VENTS TwinFresh Expert | VENTO Expert A50/A85/A100 V.2; VENTO Expert A50 V.3; TwinFresh Expert RW1-50/85/100 V.2; TwinFresh Expert RW1-50 V.3 | SIKU RV 50, DUKA One S6W, RL 50RVW, and Winzel RW1-50 are tracked as relabels; Flexit Roomie One, DUKA One Pro 50, and NIBE DVC 10-50W remain candidates |
+| `0x0300` | Blauberg VENTO Expert / VENTS TwinFresh Expert | VENTO Expert A50/A85/A100 V.2; VENTO Expert A50 V.3; TwinFresh Expert RW1-50/85/100 V.2; TwinFresh Expert RW1-50 V.3 | SIKU RV 50, DUKA One S6W, RL 50RVW, Winzel RW1-50, and reporter-confirmed Flexit Roomie One WiFi V2 / Romventilator Roomie One WiFi V2 are tracked relabels; Flexit Roomie Dual, Aura One WiFi, Muto, DUKA One Pro 50, and NIBE DVC 10-50W remain candidates |
 | `0x0400` | Blauberg VENTO Expert Duo / VENTS TwinFresh Expert Duo | VENTO Expert DUO A30 V.2; TwinFresh Expert Duo RW1-30 V.2 | SIKU RV 30 DW, Flexit Roomie Dual, DUKA One S6BW, and RL 30DVW are tracked as relabel/candidate evidence |
 | `0x0500` | Blauberg VENTO Expert A30 / VENTS TwinFresh Expert RW-30 | VENTO Expert A30 V.2; TwinFresh Expert RW-30 V.2 | SIKU RV 25 and RL 25RVW remain candidates until live `0x00B9` evidence |
 | `0x0600` | Blauberg Smart Wi-Fi / VENTS iFan Wi-Fi | Smart Wi-Fi; Smart IR Wi-Fi; Vents iFan Wi-Fi; Vents iFan Move Wi-Fi | Dedicated `extract_fan` profile |
@@ -135,6 +137,18 @@ candidates are not shown as confirmed model names until a device reports
 No reviewed manufacturer PDF documents device type `7` / parser key `0x0700`.
 Rows such as `0x0007` in the source tables are timer/status parameters, not
 unit-type values.
+
+### Flexit / Romventilator search-index trail
+
+Issue #86 confirms `Flexit Roomie One WiFi V2` on unit type `0x0300`; the
+reported `Romventilator Roomie One WiFi V2` spelling is indexed alongside it.
+Flexit's catalogue also lists Roomie Dual WiFi V2, Roomie Dual,
+Aura One WiFi, and Muto, while its older catalogue includes Roomie One Wifi,
+Roomie Dual Wifi, Eq2, O2, and BR100. These names are indexed for discovery,
+but only Roomie One is promoted to a confirmed relabel. An independent
+compatibility listing groups Blauberg Expert WiFi v2, VENTS TwinFresh WiFi v2,
+Flexit Roomie One WiFi v2, and DUKA One S6W/S6BW; this is reseller evidence for
+search and triage, not a blanket runtime mapping.
 
 ### ECONOPRIME / Econology catalogue research
 

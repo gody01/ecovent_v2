@@ -37,6 +37,9 @@ class PacketBuilderTest(unittest.TestCase):
 
         def send_command(func, param, value="", retries=10):
             calls.append((func, param, value))
+            fan._last_response_param_ids = {
+                int(param[i : i + 4], 16) for i in range(0, len(param), 4)
+            }
             return True
 
         fan.send_command = send_command
@@ -54,6 +57,9 @@ class PacketBuilderTest(unittest.TestCase):
 
         def send_command(func, param, value="", retries=10):
             calls.append((func, param, value))
+            fan._last_response_param_ids = {
+                int(param[i : i + 4], 16) for i in range(0, len(param), 4)
+            }
             return True
 
         fan.send_command = send_command
@@ -118,7 +124,10 @@ class PacketBuilderTest(unittest.TestCase):
 
         def send_command(func, param, value="", retries=10):
             calls.append((param, retries))
-            return len(param) == 4
+            if len(param) == 4:
+                fan._last_response_param_ids = {int(param, 16)}
+                return True
+            return False
 
         fan.params = {0x0001: ["state", fan.states], 0x0002: ["speed", fan.speeds]}
         fan.send_command = send_command
@@ -141,10 +150,10 @@ class PacketBuilderTest(unittest.TestCase):
         fan.params = {0x0001: ["state", fan.states], 0x0002: ["speed", fan.speeds]}
         fan.send_command = send_command
 
-        self.assertFalse(fan.update())
+        self.assertTrue(fan.update())
         self.assertEqual(calls, [("00010002", 3), ("0002", 1)])
-        self.assertEqual(fan.last_missing_required_params, {0x0002})
-        self.assertEqual(fan.last_missing_optional_params, set())
+        self.assertEqual(fan.last_missing_required_params, set())
+        self.assertEqual(fan.last_missing_optional_params, {0x0002})
 
     def test_update_logs_missing_required_param_addresses(self):
         fan = Fan("192.0.2.1", name="Freshpoint MBR")
@@ -768,6 +777,9 @@ class PacketBuilderTest(unittest.TestCase):
 
         def send_command(func, param, value="", retries=10):
             calls.append((param, retries))
+            fan._last_response_param_ids = {
+                int(param[i : i + 4], 16) for i in range(0, len(param), 4)
+            }
             return True
 
         fan.send_command = send_command
@@ -778,12 +790,7 @@ class PacketBuilderTest(unittest.TestCase):
     def test_vento_update_allows_missing_optional_poll_params(self):
         fan = Fan("192.0.2.1")
         required = fan.device_profile.poll_required_params
-        self.assertEqual(
-            required,
-            {
-                0x0044,
-            },
-        )
+        self.assertEqual(required, frozenset())
         missing_optional = {0x0025, 0x0083, 0x0304, 0x0305}
         calls = []
 
@@ -836,7 +843,7 @@ class PacketBuilderTest(unittest.TestCase):
         messages = "\n".join(logs.output)
         self.assertIn("EcoVent quick poll incomplete", messages)
         self.assertIn("profile=vento", messages)
-        self.assertIn("required availability parameters: 0x0044", messages)
+        self.assertIn("required availability parameters: none", messages)
         self.assertIn("optional unavailable parameters: 0x0006, 0x002D, 0x0304, 0x0305", messages)
         self.assertIn("missing from bulk response: 0x0006, 0x002D, 0x0304, 0x0305", messages)
         self.assertIn("individual retries attempted: 0x0006, 0x002D, 0x0304, 0x0305", messages)
@@ -955,7 +962,7 @@ class PacketBuilderTest(unittest.TestCase):
                     self.assertTrue(fan.update())
 
                 messages = "\n".join(logs.output)
-                self.assertIn("required availability parameters: 0x0044", messages)
+                self.assertIn("required availability parameters: none", messages)
                 self.assertIn("unsupported parameters: 0x003A", messages)
                 self.assertIn("missing required parameters: none", messages)
                 self.assertIn("result: available", messages)
@@ -988,14 +995,14 @@ class PacketBuilderTest(unittest.TestCase):
             self.assertTrue(fan.update())
 
         messages = "\n".join(logs.output)
-        self.assertIn("required availability parameters: 0x0044", messages)
+        self.assertIn("required availability parameters: none", messages)
         self.assertIn("optional unavailable parameters: 0x0001, 0x0002", messages)
         self.assertIn("missing required parameters: none", messages)
         self.assertIn("result: available", messages)
         self.assertEqual(fan.last_missing_required_params, set())
         self.assertLessEqual(missing_optional, fan.last_missing_optional_params)
 
-    def test_vento_update_fails_when_required_poll_param_is_unsupported(self):
+    def test_vento_update_accepts_an_unsupported_row_when_other_rows_return(self):
         for unsupported_param in (0x0044,):
             with self.subTest(unsupported=f"0x{unsupported_param:04X}"):
                 fan = Fan("192.0.2.1")
@@ -1011,11 +1018,11 @@ class PacketBuilderTest(unittest.TestCase):
 
                 fan.send_command = send_command
 
-                self.assertFalse(fan.update())
-                self.assertEqual(fan.last_missing_required_params, {unsupported_param})
+                self.assertTrue(fan.update())
+                self.assertEqual(fan.last_missing_required_params, set())
                 self.assertEqual(fan.last_unsupported_params, {unsupported_param})
 
-    def test_vento_full_and_quick_polls_fail_when_required_rows_are_absent(self):
+    def test_vento_full_and_quick_polls_accept_missing_individual_rows(self):
         for method_name, missing_param in (
             ("update", 0x0044),
             ("quick_update", 0x0044),
@@ -1035,8 +1042,22 @@ class PacketBuilderTest(unittest.TestCase):
 
                 fan.send_command = send_command
 
-                self.assertFalse(getattr(fan, method_name)())
-                self.assertEqual(fan.last_missing_required_params, {missing_param})
+                self.assertTrue(getattr(fan, method_name)())
+                self.assertEqual(fan.last_missing_required_params, set())
+
+    def test_vento_poll_rejects_untracked_response_without_any_rows(self):
+        fan = Fan("192.0.2.1")
+
+        def send_command(func, param, value="", retries=10):
+            fan._last_response_param_ids = None
+            fan._last_unsupported_param_ids = None
+            return True
+
+        fan.send_command = send_command
+
+        self.assertFalse(fan.quick_update())
+        self.assertEqual(fan.last_missing_required_params, set())
+        self.assertEqual(fan.last_missing_optional_params, set())
 
     def test_breezy_quick_update_reads_humidity_and_all_four_temperatures(self):
         fan = Fan("192.0.2.1")

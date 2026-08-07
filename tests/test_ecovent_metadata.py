@@ -223,7 +223,10 @@ class ParseResponseTest(unittest.TestCase):
         self.assertEqual(relabels["SIKU RV 50 W Pro WiFi V2"], "official_listing")
         self.assertEqual(relabels["RL 50RVW"], "community_tested")
         self.assertEqual(relabels["Winzel Expert WiFi RW1-50 P"], "app_by_blauberg")
-        self.assertEqual(candidates["Flexit Roomie One WiFi V2"], "candidate")
+        self.assertEqual(relabels["Flexit Roomie One WiFi V2"], "community_tested")
+        self.assertEqual(
+            relabels["Romventilator Roomie One WiFi V2"], "catalog_label"
+        )
         self.assertEqual(candidates["NIBE DVC 10-50W"], "candidate")
         self.assertNotIn("Flexit Roomie One WiFi V2", expert.display_name)
 
@@ -233,6 +236,8 @@ class ParseResponseTest(unittest.TestCase):
         self.assertIn("Flexit Roomie Dual Wifi", duo_relabels)
         self.assertIn("Roomie Dual WiFi V2", duo_candidates)
         self.assertNotIn("Roomie Dual WiFi V2", duo_relabels)
+        self.assertIn("Flexit Aura One WiFi", duo_candidates)
+        self.assertIn("Flexit Muto", duo_candidates)
 
     def test_econoprime_documentary_matches_stay_candidate_only(self):
         econoprime = Fan.device_models[0x0100]

@@ -70,7 +70,8 @@
                 "state": {
                     "ventilation": "Wentylacja",
                     "heat_recovery": "Odzysk ciepła",
-                    "air_supply": "Nawiew"
+                    "air_supply": "Nawiew",
+                    "extract": "Wywiew"
                 }
             },
             "beeper": {

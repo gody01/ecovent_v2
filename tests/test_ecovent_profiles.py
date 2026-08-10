@@ -224,6 +224,68 @@ class ProfileParseTest(unittest.TestCase):
             [(fan.func["write_return"], "0007", "01", 10)],
         )
 
+    def test_breezy_freshpoint_profile_can_write_extract_airflow(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+
+        calls = []
+
+        def fake_send_command(func, param, value="", retries=10):
+            calls.append((func, param, value, retries))
+            return True
+
+        fan.send_command = fake_send_command
+
+        self.assertEqual(
+            fan.parameter_options("airflow"),
+            ["ventilation", "heat_recovery", "air_supply", "extract"],
+        )
+        self.assertTrue(fan.set_param("airflow", "extract"))
+        self.assertEqual(
+            calls,
+            [(fan.func["write_return"], "00b7", "03", 10)],
+        )
+
+    def test_breezy_freshpoint_profile_parses_extract_airflow(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        fan.airflow = "03"
+
+        self.assertEqual(fan.airflow, "extract")
+
+    def test_breezy_extract_airflow_uses_exhaust_preset_speed(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        fan._speed = "high"
+        fan._airflow = "extract"
+        fan._supply_speed_high = 70
+        fan._exhaust_speed_high = 43
+
+        self.assertEqual(fan.preset_speed_percent("high"), 43)
+
+    def test_breezy_balanced_airflow_averages_both_fan_setpoints(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        fan._speed = "high"
+        fan._supply_speed_high = 70
+        fan._exhaust_speed_high = 42
+
+        for airflow in ("ventilation", "heat_recovery"):
+            with self.subTest(airflow=airflow):
+                fan._airflow = airflow
+                self.assertEqual(fan.preset_speed_percent("high"), 56)
+
+    def test_vento_airflow_three_stays_unknown(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0300"
+        fan.airflow = "03"
+
+        self.assertEqual(fan.airflow, "Unknown airflow 3")
+        self.assertEqual(
+            fan.parameter_options("airflow"),
+            ["ventilation", "heat_recovery", "air_supply"],
+        )
+
     def test_breezy_freshpoint_profile_reads_weekly_schedule_setup(self):
         fan = Fan("192.0.2.1")
         self.assertTrue(

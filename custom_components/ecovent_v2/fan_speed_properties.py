@@ -118,14 +118,17 @@ class FanSpeedPropertiesMixin:
         airflow = self.airflow
         if (
             self.supports_parameter("airflow")
-            and airflow not in ("air_supply", "ventilation", "heat_recovery")
+            and airflow not in ("air_supply", "ventilation", "heat_recovery", "extract")
         ):
             return None
         if airflow == "air_supply" and supply_speed is not None:
             return supply_speed
-        if airflow == "ventilation" and exhaust_speed is not None:
+        if airflow == "extract" and exhaust_speed is not None:
             return exhaust_speed
 
+        # Home Assistant exposes one percentage, while balanced Freshpoint/Breezy
+        # modes can have separate supply and extract setpoints. Average them as
+        # a UI compromise until the integration has a richer two-fan surface.
         available_speeds = [
             speed for speed in (supply_speed, exhaust_speed) if speed is not None
         ]

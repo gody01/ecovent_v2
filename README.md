@@ -120,6 +120,15 @@ External relabels and OEM names tracked as evidence or candidates:
 * Direction
   - "forward" means 'ventilation' airflow
   - "reverse" means 'air_supply' airflow
+* Writable raw airflow selection on devices exposing `0x00B7`, including the
+  Freshpoint/Breezy `extract` value.
+  - reported `extract` airflow is exposed through this Select instead of the
+    built-in Home Assistant direction attribute, which only has forward/reverse
+    states.
+  - for balanced Freshpoint/Breezy modes with separate supply and extract fan
+    setpoints, the built-in Home Assistant percentage is only a single-value UI
+    compromise: it averages both setpoints until a richer two-fan control surface
+    exists.
 * Weekly schedule support on devices exposing `0x0072` / `0x0077`
   - one visible schedule entity for the weekly schedule
   - open the schedule entity's more-info dialog to edit the weekly schedule
@@ -545,3 +554,12 @@ Version 1.2.24
 * Record the EcoVent integration version in generated hardware-mismatch reports
   and add the reporter-confirmed Flexit/Romventilator Roomie One V2 relabel plus
   related Flexit search-index candidates.
+
+Version 1.2.25
+* Expose Freshpoint/Breezy protocol airflow enum value `3` as `extract` and
+  keep other unknown airflow values as `Unknown airflow <value>`.
+* Document the Freshpoint/Breezy two-fan percentage fallback as a Home Assistant
+  single-value compromise for balanced modes, not as a physical fan-speed
+  measurement.
+* Treat standard Freshpoint 160-E firmware `0.12 2025-09-01` CO2/VOC/display
+  rows as a known optional hardware variant instead of raising a Repair.

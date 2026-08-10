@@ -70,7 +70,8 @@
                 "state": {
                     "ventilation": "Lüftung",
                     "heat_recovery": "Wärmerückgewinnung",
-                    "air_supply": "Zuluft"
+                    "air_supply": "Zuluft",
+                    "extract": "Abluft"
                 }
             },
             "beeper": {

@@ -108,7 +108,8 @@
                 "state": {
                     "ventilation": "Ventilation",
                     "heat_recovery": "Heat recovery",
-                    "air_supply": "Air supply"
+                    "air_supply": "Air supply",
+                    "extract": "Extract"
                 }
             },
             "beeper": {

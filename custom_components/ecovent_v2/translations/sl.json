@@ -70,7 +70,8 @@
                 "state": {
                     "ventilation": "Prezračevanje",
                     "heat_recovery": "Rekuperacija toplote",
-                    "air_supply": "Dovod zraka"
+                    "air_supply": "Dovod zraka",
+                    "extract": "Odvod zraka"
                 }
             },
             "beeper": {

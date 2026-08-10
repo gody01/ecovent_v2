@@ -223,6 +223,13 @@ class SilentFanEntityTest(unittest.TestCase):
         self.assertIsNone(entity.current_direction)
         self.assertIsNone(entity.oscillating)
 
+    def test_breezy_extract_airflow_reports_no_direction_non_oscillating(self):
+        entity, fan, _calls = _silent_entity(speed="low", man_speed=63)
+        fan._airflow = "extract"
+
+        self.assertIsNone(entity.current_direction)
+        self.assertFalse(entity.oscillating)
+
     def test_missing_preset_setpoints_do_not_report_manual_speed_percentage(self):
         entity, fan, _calls = _silent_entity(speed="low", man_speed=63)
         fan._airflow = "ventilation"

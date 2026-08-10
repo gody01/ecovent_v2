@@ -82,7 +82,8 @@
                 "state": {
                     "ventilation": "Вентыляцыя",
                     "heat_recovery": "Рэкуперацыя цяпла",
-                    "air_supply": "Прыток паветра"
+                    "air_supply": "Прыток паветра",
+                    "extract": "Выцяжка"
                 }
             },
             "beeper": {

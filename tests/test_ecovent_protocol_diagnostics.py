@@ -112,6 +112,74 @@ class ProtocolDiagnosticsTest(unittest.TestCase):
             reportable_hardware_profile_mismatch_param_ids(fan), frozenset({0x0063})
         )
 
+    def test_issue88_freshpoint_160e_standard_rows_do_not_request_report(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        fan._firmware = "0.12 2025-09-01"
+        fan._unsupported_optional_poll_params = {
+            0x0011,
+            0x001A,
+            0x0025,
+            0x0027,
+            0x0129,
+            0x0315,
+            0x031F,
+            0x0320,
+            0x0403,
+            0x0404,
+            0x0405,
+        }
+
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan), frozenset()
+        )
+
+    def test_freshpoint_160e_unknown_firmware_still_requests_report(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        fan._firmware = "0.13 2026-01-01"
+        fan._unsupported_optional_poll_params = {
+            0x0011,
+            0x001A,
+            0x0025,
+            0x0027,
+            0x0129,
+            0x0315,
+            0x031F,
+            0x0320,
+            0x0403,
+            0x0404,
+            0x0405,
+        }
+
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan),
+            frozenset(fan._unsupported_optional_poll_params),
+        )
+
+    def test_freshpoint_160e_extra_rejection_still_requests_report(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        fan._firmware = "0.12 2025-09-01"
+        fan._unsupported_optional_poll_params = {
+            0x0011,
+            0x001A,
+            0x0025,
+            0x0027,
+            0x0129,
+            0x0315,
+            0x031F,
+            0x0320,
+            0x0403,
+            0x0404,
+            0x0405,
+            0x00B7,
+        }
+
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan), frozenset({0x00B7})
+        )
+
     def test_issue80_vento_duo_a30_rows_do_not_request_mismatch_report(self):
         fan = Fan("192.0.2.1")
         fan.unit_type = "0400"

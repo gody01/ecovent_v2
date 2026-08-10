@@ -53,6 +53,14 @@ SELECT_SPECS = (
         translation_key="timer_mode",
     ),
     SelectSpec(
+        "_airflow",
+        "Airflow (raw)",
+        "airflow",
+        "mdi:hvac",
+        ("airflow",),
+        translation_key="airflow",
+    ),
+    SelectSpec(
         "_screen_backlight_mode",
         "Screen backlight mode",
         "screen_backlight_mode",

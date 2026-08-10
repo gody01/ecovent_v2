@@ -8,7 +8,10 @@ class FanMiscPropertiesMixin:
     @airflow.setter
     def airflow(self, input):
         val = int(input, 16)
-        self._airflow = self._map_value(self.airflows, val, "airflow")
+        index = self.get_params_index("airflow")
+        param = self.params.get(index) if index is not None else None
+        mapping = param[1] if param and param[1] is not None else self.airflows
+        self._airflow = self._map_value(mapping, val, "airflow")
 
     @property
     def analogV_treshold(self):

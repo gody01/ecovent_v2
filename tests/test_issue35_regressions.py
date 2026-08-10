@@ -503,6 +503,7 @@ class Issue35RegressionTest(unittest.TestCase):
         self.assertIn('"Boost analog voltage"', switch_source)
         self.assertIn('"Boost mode on humidity"', select_source)
         self.assertIn('"Boost airflow on humidity"', select_source)
+        self.assertIn('"Airflow (raw)"', select_source)
         self.assertIn('"Boost humidity active"', binary_sensor_source)
         self.assertIn('"Boost relay sensor active"', binary_sensor_source)
         self.assertIn('"Boost analog voltage active"', binary_sensor_source)

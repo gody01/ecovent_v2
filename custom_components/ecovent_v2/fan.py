@@ -390,7 +390,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         if not self._fan.supports_oscillation:
             return False
         airflow = self._fan.airflow
-        if airflow not in ("ventilation", "heat_recovery", "air_supply"):
+        if airflow not in ("ventilation", "heat_recovery", "air_supply", "extract"):
             return None
         return airflow == "heat_recovery"
 

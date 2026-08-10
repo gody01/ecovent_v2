@@ -102,6 +102,7 @@
                 "state": {
                     "air_supply": "Air supply",
                     "heat_recovery": "Heat recovery",
+                    "extract": "Extract",
                     "ventilation": "Ventilation"
                 }
             },

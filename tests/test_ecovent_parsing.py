@@ -41,7 +41,7 @@ class ParseRobustnessTest(unittest.TestCase):
         self.assertEqual(fan.speed, "Unknown speed 153")
         self.assertEqual(fan.airflow, "Unknown airflow 68")
 
-    def test_airflow_enum_three_is_not_exposed_as_placeholder_text(self):
+    def test_default_airflow_enum_three_stays_unknown(self):
         fan = Fan("192.0.2.1")
         fan.airflow = "03"
         self.assertEqual(fan.airflow, "Unknown airflow 3")

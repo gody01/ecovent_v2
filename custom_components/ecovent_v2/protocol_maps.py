@@ -76,6 +76,7 @@ sound_emitter_states = {0: "off", 1: "on", 2: "toggle"}
 boost_statuses = {0: "off", 1: "on", 2: "delay"}
 
 airflows = {0: "ventilation", 1: "heat_recovery", 2: "air_supply"}
+breezy_airflows = {**airflows, 3: "extract"}
 
 alarms = {0: "no", 1: "alarm", 2: "warning"}
 
@@ -252,7 +253,7 @@ breezy_params = {
     0x0088: ["filter_replacement_status", statuses],
     0x009C: ["wifi_assigned_ip", None],
     0x00A3: ["current_wifi_ip", None],
-    0x00B7: ["airflow", airflows],
+    0x00B7: ["airflow", breezy_airflows],
     0x00B9: ["unit_type", unit_types],
     0x0129: ["recovery_efficiency", None],
     0x0302: ["night_mode_timer", None],

@@ -972,6 +972,47 @@ class PacketBuilderTest(unittest.TestCase):
                 )
                 self.assertLessEqual(unsupported_optional, fan.last_unsupported_params)
 
+    def test_vento_update_allows_issue90_a30_optional_rows(self):
+        unsupported_optional = {
+            0x0016,
+            0x002D,
+            0x003A,
+            0x003B,
+            0x003C,
+            0x003D,
+            0x003E,
+            0x003F,
+            0x004B,
+            0x0063,
+            0x00B8,
+            0x0305,
+        }
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0500"
+        fan._firmware = "0.3 2020-08-26"
+
+        def send_command(func, param, value="", retries=10):
+            requested = {
+                int(param[i : i + 4], 16) for i in range(0, len(param), 4)
+            }
+            fan._last_response_param_ids = requested - unsupported_optional
+            fan._last_unsupported_param_ids = requested & unsupported_optional
+            return True
+
+        fan.send_command = send_command
+
+        with self.assertLogs("fan_protocol", level="DEBUG") as logs:
+            self.assertTrue(fan.update())
+
+        messages = "\n".join(logs.output)
+        self.assertIn("required availability parameters: none", messages)
+        self.assertIn("unsupported parameters: 0x0016", messages)
+        self.assertIn("missing required parameters: none", messages)
+        self.assertIn("result: available", messages)
+        self.assertEqual(fan.last_missing_required_params, set())
+        self.assertLessEqual(unsupported_optional, fan.last_missing_optional_params)
+        self.assertLessEqual(unsupported_optional, fan.last_unsupported_params)
+
     def test_vento_update_allows_issue76_missing_state_and_speed_rows(self):
         fan = Fan("192.0.2.1")
         missing_optional = {0x0001, 0x0002}

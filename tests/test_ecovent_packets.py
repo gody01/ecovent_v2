@@ -1136,6 +1136,56 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertNotIn("0064", params)
         self.assertNotIn("0306", params)
 
+    def test_extract_fan_update_allows_unsupported_motion_rows(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0600"
+        unsupported_optional = {0x000B, 0x0012}
+
+        def send_command(func, param, value="", retries=10):
+            requested = {
+                int(param[i : i + 4], 16) for i in range(0, len(param), 4)
+            }
+            fan._last_response_param_ids = requested - unsupported_optional
+            fan._last_unsupported_param_ids = requested & unsupported_optional
+            return True
+
+        fan.send_command = send_command
+
+        with self.assertLogs("fan_protocol", level="DEBUG") as logs:
+            self.assertTrue(fan.update())
+
+        messages = "\n".join(logs.output)
+        self.assertIn("profile=extract_fan", messages)
+        self.assertIn("required availability parameters: 0x0001, 0x0004", messages)
+        self.assertIn("unsupported parameters: 0x000B, 0x0012", messages)
+        self.assertIn("missing required parameters: none", messages)
+        self.assertIn("result: available", messages)
+        self.assertEqual(fan.last_missing_required_params, set())
+        self.assertLessEqual(unsupported_optional, fan.last_missing_optional_params)
+        self.assertLessEqual(unsupported_optional, fan.last_unsupported_params)
+
+    def test_extract_fan_update_fails_when_core_rows_are_unsupported(self):
+        for unsupported_param in (0x0001, 0x0004):
+            with self.subTest(unsupported=f"0x{unsupported_param:04X}"):
+                fan = Fan("192.0.2.1")
+                fan.unit_type = "0600"
+
+                def send_command(func, param, value="", retries=10):
+                    requested = {
+                        int(param[i : i + 4], 16) for i in range(0, len(param), 4)
+                    }
+                    fan._last_response_param_ids = requested - {unsupported_param}
+                    fan._last_unsupported_param_ids = requested & {unsupported_param}
+                    return True
+
+                fan.send_command = send_command
+
+                self.assertFalse(fan.update())
+                self.assertEqual(
+                    fan.last_missing_required_params, {unsupported_param}
+                )
+                self.assertEqual(fan.last_unsupported_params, {unsupported_param})
+
     def test_extract_fan_speed_writes_pdf_setpoints(self):
         fan = Fan("192.0.2.1")
         fan.unit_type = "0600"

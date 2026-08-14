@@ -537,11 +537,13 @@ Version 1.2.21
 
 Version 1.2.23
 * Add regression coverage and protocol notes for Blauberg Vento Expert A50-1 W
-  V.2 firmware `0.4` and Vento Expert DUO A30-1 S10 W V.2 firmware `0.7` units
-  that reject optional preset-speed and filter-timer rows. The integration
-  keeps the Vento/TwinFresh profile map, hides the unsupported generated
-  entities, and no longer opens a hardware/profile mismatch Repair when these
-  known unit-type variants reject only those optional rows.
+  V.2 firmware `0.4`, Vento Expert A50-1 S8/S10 firmware `0.7`, and Vento
+  Expert DUO A30-1 S10 W V.2 firmware `0.7` units that reject optional
+  preset-speed and filter-timer rows. The integration keeps the Vento/TwinFresh
+  profile map, hides the unsupported generated entities, and no longer opens a
+  hardware/profile mismatch Repair when these known unit-type variants reject
+  only those optional rows. Newer A50 firmware that only rejects preset-speed
+  rows keeps filter-timer rejections reportable.
 * Clarify hardware/profile mismatch Repairs and prefilled issue titles so mixed
   installations report distinct model, firmware, and unsupported-register sets
   separately instead of collapsing a device zoo into one ambiguous report.
@@ -563,3 +565,8 @@ Version 1.2.25
   measurement.
 * Treat standard Freshpoint 160-E firmware `0.12 2025-09-01` CO2/VOC/display
   rows as a known optional hardware variant instead of raising a Repair.
+* Treat Blauberg VENTO Expert A30 / VENTS TwinFresh Expert RW-30 firmware
+  `0.3 2020-08-26` rejected option rows as a known optional Vento variant.
+* Restore Blauberg Smart Wi-Fi / VENTS iFan Wi-Fi extract-fan availability when
+  firmware `2.2 2022-06-16` rejects optional motion rows `0x000B`/`0x0012`;
+  state `0x0001` and fan speed `0x0004` remain the liveness rows.

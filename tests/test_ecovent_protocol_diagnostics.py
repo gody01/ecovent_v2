@@ -38,7 +38,7 @@ class ProtocolDiagnosticsTest(unittest.TestCase):
 
         body = hardware_profile_mismatch_issue_body(fan)
         self.assertIn("Integration profile: `breezy`", body)
-        self.assertIn("EcoVent V2 integration version: `1.2.24`", body)
+        self.assertIn("EcoVent V2 integration version: `1.2.25`", body)
         self.assertIn("Firmware: `1.2.3`", body)
         self.assertIn("`0x0027` `co2`", body)
         self.assertIn("this one EcoVent config entry", body)
@@ -178,6 +178,37 @@ class ProtocolDiagnosticsTest(unittest.TestCase):
 
         self.assertEqual(
             reportable_hardware_profile_mismatch_param_ids(fan), frozenset({0x00B7})
+        )
+
+    def test_issue92_extract_fan_motion_rows_do_not_request_report(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0600"
+        fan._firmware = "2.2 2022-06-16"
+        fan._unsupported_optional_poll_params = {0x000B, 0x0012}
+
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan), frozenset()
+        )
+
+    def test_extract_fan_unknown_firmware_still_requests_report(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0600"
+        fan._firmware = "2.3 2026-01-01"
+        fan._unsupported_optional_poll_params = {0x000B, 0x0012}
+
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan),
+            frozenset({0x000B, 0x0012}),
+        )
+
+    def test_extract_fan_extra_rejection_still_requests_report(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0600"
+        fan._firmware = "2.2 2022-06-16"
+        fan._unsupported_optional_poll_params = {0x000B, 0x0012, 0x000C}
+
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan), frozenset({0x000C})
         )
 
     def test_issue80_vento_duo_a30_rows_do_not_request_mismatch_report(self):

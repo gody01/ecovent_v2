@@ -22,6 +22,22 @@ _VENTO_EXPERT_SPEED_OPTION_ROWS = frozenset(
 _VENTO_EXPERT_SPEED_FILTER_OPTION_ROWS = _VENTO_EXPERT_SPEED_OPTION_ROWS | {
     0x0063
 }
+_VENTO_EXPERT_A30_MINI_AIR_UNSUPPORTED_OPTIONAL_ROWS = frozenset(
+    {
+        0x0016,
+        0x002D,
+        0x003A,
+        0x003B,
+        0x003C,
+        0x003D,
+        0x003E,
+        0x003F,
+        0x004B,
+        0x0063,
+        0x00B8,
+        0x0305,
+    }
+)
 _FRESHPOINT_160E_STANDARD_UNSUPPORTED_OPTIONAL_ROWS = frozenset(
     {
         0x0011,
@@ -37,7 +53,7 @@ _FRESHPOINT_160E_STANDARD_UNSUPPORTED_OPTIONAL_ROWS = frozenset(
         0x0405,
     }
 )
-
+_EXTRACT_FAN_SMART_WIFI_UNSUPPORTED_OPTIONAL_ROWS = frozenset({0x000B, 0x0012})
 _KNOWN_VARIANT_UNSUPPORTED_OPTIONAL_PARAMS = {
     # Blauberg VENTO Expert A50-1 W V.2 firmware 0.4 and VENTO Expert DUO
     # A30-1 S10 W V.2 firmware 0.7 devices explicitly reject these optional
@@ -53,12 +69,23 @@ _KNOWN_VARIANT_UNSUPPORTED_OPTIONAL_PARAMS = {
 
 _KNOWN_VARIANT_FIRMWARE_UNSUPPORTED_OPTIONAL_PARAMS = {
     ("vento", 0x0300, "0.4 2019-12-20"): _VENTO_EXPERT_SPEED_FILTER_OPTION_ROWS,
+    ("vento", 0x0300, "0.6 2021-05-17"): frozenset({0x0063}),
     ("vento", 0x0300, "0.7 2021-10-04"): _VENTO_EXPERT_SPEED_FILTER_OPTION_ROWS,
+    (
+        "vento",
+        0x0500,
+        "0.3 2020-08-26",
+    ): _VENTO_EXPERT_A30_MINI_AIR_UNSUPPORTED_OPTIONAL_ROWS,
     (
         "breezy",
         0x1100,
         "0.12 2025-09-01",
     ): _FRESHPOINT_160E_STANDARD_UNSUPPORTED_OPTIONAL_ROWS,
+    (
+        "extract_fan",
+        0x0600,
+        "2.2 2022-06-16",
+    ): _EXTRACT_FAN_SMART_WIFI_UNSUPPORTED_OPTIONAL_ROWS,
 }
 
 

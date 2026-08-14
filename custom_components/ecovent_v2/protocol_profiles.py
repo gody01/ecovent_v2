@@ -56,6 +56,15 @@ DEVICE_PROFILES = {
             }
         ),
         uses_operating_mode_presets=True,
+        poll_required_params=frozenset(
+            {
+                # Smart Wi-Fi / iFan firmware variants can omit optional
+                # sensor-feature rows such as motion status while the fan is
+                # otherwise reachable and controllable.
+                0x0001,
+                0x0004,
+            }
+        ),
     ),
     "breezy": DeviceProfile(
         key="breezy",

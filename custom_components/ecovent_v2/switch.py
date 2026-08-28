@@ -291,18 +291,22 @@ class VentoSwitch(StableObjectIdMixin, CoordinatorEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs):
         """Turn the switch on."""
+        success = await self.hass.async_add_executor_job(
+            self._fan.set_param, self._func, "on"
+        )
+        if not success:
+            raise RuntimeError(f"Failed to turn on {self._func} for {self._fan.name}")
         self._attr_is_on = True
-        await self.hass.async_add_executor_job(self._fan.set_param, self._func, "on")
-        # self._fan.set_param(self._func, "on")
-        # self.schedule_update_ha_state()
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs):
         """Turn the device off."""
+        success = await self.hass.async_add_executor_job(
+            self._fan.set_param, self._func, "off"
+        )
+        if not success:
+            raise RuntimeError(f"Failed to turn off {self._func} for {self._fan.name}")
         self._attr_is_on = False
-        await self.hass.async_add_executor_job(self._fan.set_param, self._func, "off")
-        # self._fan.set_param(self._func, "off")
-        # self.schedule_update_ha_state()
         self.async_write_ha_state()
 
     def humidity_sensor_state(self):

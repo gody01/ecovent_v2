@@ -90,6 +90,18 @@ class Issue16RegressionTest(unittest.TestCase):
             )
         )
 
+    def test_schedule_state_write_reports_transport_failure(self):
+        source = COORDINATOR_PATH.read_text()
+        write_schedule = _class_method(
+            ast.parse(source), "EcoVentCoordinator", "async_write_schedule"
+        )
+        method_source = ast.get_source_segment(source, write_schedule)
+
+        self.assertIn("written = await self.hass.async_add_executor_job", method_source)
+        self.assertIn('"weekly_schedule_state"', method_source)
+        self.assertIn("if not written", method_source)
+        self.assertIn("Failed to write weekly schedule state", method_source)
+
 
 if __name__ == "__main__":
     unittest.main()

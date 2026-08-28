@@ -187,6 +187,22 @@ class SilentFanEntityTest(unittest.TestCase):
         self.assertNotIn("fe036f", calls[0])
         self.assertEqual(entity.coordinator.silent_preset_mode, "manual")
 
+    def test_failed_silent_write_does_not_change_preset_facade(self):
+        entity, fan, _calls = _silent_entity(speed="manual", man_speed=63)
+        fan.set_parameters = lambda *_args, **_kwargs: False
+
+        with self.assertRaisesRegex(RuntimeError, "Failed to write"):
+            entity.set_preset_mode("medium")
+
+        self.assertIsNone(entity.coordinator.silent_preset_mode)
+
+    def test_failed_single_parameter_write_fails_the_fan_command(self):
+        entity, fan, _calls = _silent_entity(speed="manual", man_speed=63)
+        fan.set_param = lambda *_args, **_kwargs: False
+
+        with self.assertRaisesRegex(RuntimeError, "Failed to write state"):
+            entity._set_param_if_changed("state", "off")
+
     def test_steady_state_silent_zero_percentage_keeps_manual_mode_on(self):
         entity, fan, calls = _silent_entity(speed="manual", man_speed=11)
 

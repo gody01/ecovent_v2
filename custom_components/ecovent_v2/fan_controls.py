@@ -79,10 +79,15 @@ class FanControlsMixin:
         """Set speed setpoints used by autonomous operating modes."""
         target = max(30, min(100, int(percentage)))
         value = hex(target).replace("0x", "").zfill(2)
-        self.set_param("max_speed_setpoint", value)
-        self.set_param("interval_ventilation_speed_setpoint", value)
-        self.set_param("all_day_mode", "on")
-        self.set_param("silent_mode_state", "off")
+        for name, write_value in (
+            ("max_speed_setpoint", value),
+            ("interval_ventilation_speed_setpoint", value),
+            ("all_day_mode", "on"),
+            ("silent_mode_state", "off"),
+        ):
+            if not self.set_param(name, write_value):
+                return False
+        return True
 
     def set_operating_mode_preset(self, preset_mode):
         """Activate one autonomous operating mode and disable the others."""
@@ -112,4 +117,4 @@ class FanControlsMixin:
             raise ValueError(f"Invalid operating-mode preset: {preset_mode}")
 
         reset.update(target)
-        self.set_parameters(reset)
+        return self.set_parameters(reset)

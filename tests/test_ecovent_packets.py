@@ -1229,7 +1229,7 @@ class PacketBuilderTest(unittest.TestCase):
             return True
 
         fan.send_command = send_command
-        fan.set_speed_setpoint_percent(45)
+        self.assertTrue(fan.set_speed_setpoint_percent(45))
 
         self.assertEqual(
             calls,
@@ -1240,6 +1240,13 @@ class PacketBuilderTest(unittest.TestCase):
                 ("001e", "00"),
             ],
         )
+
+    def test_extract_fan_speed_setpoint_reports_failed_write(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0600"
+        fan.send_command = lambda *_args, **_kwargs: False
+
+        self.assertFalse(fan.set_speed_setpoint_percent(45))
 
     def test_manual_speed_and_airflow_can_be_batched_in_one_write(self):
         fan = Fan("192.0.2.1")
@@ -1333,10 +1340,12 @@ class PacketBuilderTest(unittest.TestCase):
     def test_opportunistic_clock_sync_is_batched_into_existing_writes(self):
         fan = Fan("192.0.2.1")
         calls = []
+        results = []
         fan.extra_write_parameters_callback = lambda: {
             "rtc_time": "1e2d13",
             "rtc_date": "1704041a",
         }
+        fan.extra_write_parameters_result_callback = results.append
 
         def send(data):
             calls.append(data)
@@ -1349,6 +1358,22 @@ class PacketBuilderTest(unittest.TestCase):
 
         self.assertEqual(len(calls), 1)
         self.assertIn("030101fe036f1e2d13fe04701704041a", calls[0])
+        self.assertEqual(results, [True])
+
+    def test_failed_write_does_not_confirm_opportunistic_clock_sync(self):
+        fan = Fan("192.0.2.1")
+        results = []
+        fan.extra_write_parameters_callback = lambda: {
+            "rtc_time": "1e2d13",
+            "rtc_date": "1704041a",
+        }
+        fan.extra_write_parameters_result_callback = results.append
+        fan.send = lambda _data: True
+        fan.receive = lambda: False
+
+        self.assertFalse(fan.set_param("state", "on"))
+
+        self.assertEqual(results, [False])
 
     def test_explicit_clock_sync_does_not_reappend_opportunistic_clock_rows(self):
         fan = Fan("192.0.2.1")
@@ -1383,7 +1408,7 @@ class PacketBuilderTest(unittest.TestCase):
             return True
 
         fan.send_encoded_command = send_encoded_command
-        fan.set_operating_mode_preset("silent")
+        self.assertTrue(fan.set_operating_mode_preset("silent"))
 
         self.assertEqual(len(calls), 1)
         func, params = calls[0]
@@ -1392,6 +1417,13 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertIn("0300", params)
         self.assertIn("0f00", params)
         self.assertIn("0500", params)
+
+    def test_extract_fan_operating_preset_reports_failed_write(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0600"
+        fan.set_parameters = lambda *_args, **_kwargs: False
+
+        self.assertFalse(fan.set_operating_mode_preset("silent"))
 
     def test_extract_fan_boost_invert_value_stays_in_declared_options(self):
         fan = Fan("192.0.2.1")

@@ -196,8 +196,15 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             )
             return False
 
-        self._fan.set_param(name, target)
+        self._set_param(name, target)
         return True
+
+    def _set_param(self, name: str, target: Any) -> None:
+        """Write a device parameter and fail the HA command on transport failure."""
+        if not self._fan.set_param(name, target):
+            raise RuntimeError(
+                f"Failed to write {name}={target!r} for {self._fan.name}"
+            )
 
     def _set_parameters_if_changed(
         self,
@@ -222,10 +229,13 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         if not changed:
             return False
 
-        self._fan.set_parameters(
+        if not self._fan.set_parameters(
             changed,
             include_extra_write_parameters=include_extra_write_parameters,
-        )
+        ):
+            raise RuntimeError(
+                f"Failed to write {sorted(changed)} for {self._fan.name}"
+            )
         return True
 
     def _set_manual_percentage_if_changed(self, percentage: int) -> bool:
@@ -239,7 +249,11 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             )
             return False
 
-        self._fan.set_man_speed_percent(target_percentage)
+        if not self._fan.set_man_speed_percent(target_percentage):
+            raise RuntimeError(
+                "Failed to write manual speed "
+                f"{target_percentage}% for {self._fan.name}"
+            )
         return True
 
     def _manual_speed_value(self, percentage: int) -> str:
@@ -486,7 +500,10 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         if self._fan.uses_operating_mode_presets:
             if turn_on:
                 self._set_param_if_changed("state", "on")
-            self._fan.set_operating_mode_preset(preset_mode)
+            if not self._fan.set_operating_mode_preset(preset_mode):
+                raise RuntimeError(
+                    f"Failed to set preset {preset_mode!r} for {self._fan.name}"
+                )
             return
 
         if preset_mode in self.preset_modes:
@@ -533,7 +550,10 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         if self._fan.uses_operating_mode_presets:
             if turn_on:
                 self._set_param_if_changed("state", "on")
-            self._fan.set_speed_setpoint_percent(percentage)
+            if not self._fan.set_speed_setpoint_percent(percentage):
+                raise RuntimeError(
+                    f"Failed to set speed {percentage}% for {self._fan.name}"
+                )
             return
 
         if self._silent_mode_controls_manual_speed:
@@ -616,14 +636,16 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
     async def async_reset_filter_timer(self, fan_target) -> None:
         """Reset Fan's filter timer."""
         await self.hass.async_add_executor_job(
-            self._fan.set_param, "filter_timer_reset", ""
+            self._set_param, "filter_timer_reset", ""
         )
         await self.coordinator.async_refresh()
 
     # Reset alarms
     async def async_reset_alarms(self, fan_target) -> None:
         """Reset Fan's Alarms."""
-        await self.hass.async_add_executor_job(self._fan.set_param, "reset_alarms", "")
+        await self.hass.async_add_executor_job(
+            self._set_param, "reset_alarms", ""
+        )
         await self.coordinator.async_refresh()
 
     async def async_sync_device_clock(self, fan_target) -> None:

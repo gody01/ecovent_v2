@@ -862,12 +862,21 @@ class A21ModbusDevice(Fan):
         include_extra_write_parameters: bool = True,
     ) -> bool:
         targets = dict(values)
+        extra_parameters = {}
         if include_extra_write_parameters and self.extra_write_parameters_callback:
-            for key, value in self.extra_write_parameters_callback().items():
+            extra_parameters = self.extra_write_parameters_callback()
+            for key, value in extra_parameters.items():
                 targets.setdefault(key, value)
         if not targets:
             return False
-        return all(self.set_param(key, value) for key, value in targets.items())
+        success = all(self.set_param(key, value) for key, value in targets.items())
+        if extra_parameters and (
+            result_callback := getattr(
+                self, "extra_write_parameters_result_callback", None
+            )
+        ):
+            result_callback(success)
+        return success
 
     set_params = set_parameters
 

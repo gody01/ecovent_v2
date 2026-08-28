@@ -385,6 +385,24 @@ def test_semantic_writes_schedule_and_rtc_preserve_a21_encoding():
     assert client.holding_registers[61:65] == [0x2238, 12, 0x1004, 0x071A]
 
 
+def test_opportunistic_a21_write_reports_transport_result():
+    fan = device()
+    results = []
+    fan.extra_write_parameters_callback = lambda: {
+        "rtc_time": "1e2d13",
+        "rtc_date": "1704041a",
+    }
+    fan.extra_write_parameters_result_callback = results.append
+    fan.set_param = lambda _key, _value: False
+
+    assert not fan.set_parameters({"state": "on"})
+    assert results == [False]
+
+    fan.set_param = lambda _key, _value: True
+    assert fan.set_parameters({"state": "on"})
+    assert results == [False, True]
+
+
 def test_short_or_error_response_is_not_accepted_as_success():
     class ShortClient(FakeModbusClient):
         def read_input_registers(self, address, *, count, device_id):

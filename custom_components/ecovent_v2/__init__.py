@@ -348,7 +348,11 @@ def _async_migrate_entity_registry(
         )
         if schedule_switch_entity_id is not None:
             schedule_switch_entry = registry.async_get(schedule_switch_entity_id)
-            if schedule_switch_entry.hidden_by is not None:
+            if (
+                schedule_switch_entry is not None
+                and schedule_switch_entry.hidden_by
+                == er.RegistryEntryHider.INTEGRATION
+            ):
                 registry.async_update_entity(
                     schedule_switch_entity_id,
                     hidden_by=None,
@@ -451,6 +455,12 @@ def _async_update_unsupported_optional_poll_entities(registry, fan) -> None:
             )
             for spec in SELECT_SPECS
         ),
+        (
+            Platform.SENSOR,
+            fan.id + "_schedule",
+            "weekly_schedule_setup",
+            fan.supports_parameter("weekly_schedule_setup"),
+        ),
     )
     for platform, unique_id, method, supported in entity_specs:
         entity_id = registry.async_get_entity_id(platform, DOMAIN, unique_id)
@@ -490,14 +500,39 @@ def _async_register_optional_poll_entity_sync(
 ) -> None:
     """Keep generated entity visibility aligned with learned capabilities."""
     registry = er.async_get(hass)
+    loaded_identity = (
+        coordinator._fan.profile_key,
+        getattr(coordinator._fan, "_unit_type_id", None),
+        coordinator._fan.firmware,
+    )
     last_capability_state = None
+    reload_requested = False
 
     def _async_sync_entity_registry() -> None:
-        nonlocal last_capability_state
-        capability_state = (
+        nonlocal last_capability_state, reload_requested
+        if not coordinator.last_update_success:
+            return
+
+        current_identity = (
             coordinator._fan.profile_key,
             getattr(coordinator._fan, "_unit_type_id", None),
             coordinator._fan.firmware,
+        )
+        if current_identity != loaded_identity:
+            if not reload_requested:
+                _LOGGER.info(
+                    "Reloading EcoVent V2 config entry %s after device identity "
+                    "changed from %s to %s",
+                    entry.entry_id,
+                    loaded_identity,
+                    current_identity,
+                )
+                hass.config_entries.async_schedule_reload(entry.entry_id)
+                reload_requested = True
+            return
+
+        capability_state = (
+            *current_identity,
             coordinator._fan.unsupported_optional_poll_parameter_ids(),
         )
         if capability_state == last_capability_state:
@@ -610,7 +645,15 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, _PLATFORMS)
     if unload_ok:
-        async_delete_hardware_profile_mismatch_issue(hass, entry.entry_id)
+        try:
+            async_delete_hardware_profile_mismatch_issue(hass, entry.entry_id)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning(
+                "Unable to remove EcoVent V2 hardware profile Repair for %s: %s",
+                entry.entry_id,
+                err,
+                exc_info=True,
+            )
         coordinator = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
         close = getattr(getattr(coordinator, "_fan", None), "close", None)
         if close is not None:

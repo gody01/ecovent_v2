@@ -64,6 +64,7 @@ class Issue49RegressionTest(unittest.TestCase):
         self.assertIn("get_host_info", source)
         self.assertIn("is_hassio", source)
         self.assertIn("extra_write_parameters_callback", source)
+        self.assertIn("extra_write_parameters_result_callback", source)
         self.assertTrue(
             any(
                 isinstance(node, ast.Attribute)
@@ -95,6 +96,9 @@ class Issue49RegressionTest(unittest.TestCase):
         )
         sync_params = _class_method(
             tree, "EcoVentCoordinator", "_clock_sync_params_if_needed"
+        )
+        sync_completed = _class_method(
+            tree, "EcoVentCoordinator", "_clock_sync_write_completed"
         )
         clock_needed = _class_method(tree, "EcoVentCoordinator", "_clock_sync_needed")
         device_clock = _class_method(
@@ -137,6 +141,10 @@ class Issue49RegressionTest(unittest.TestCase):
             maybe_sync_source.index("_device_clock_datetime"),
             maybe_sync_source.index("set_rtc_datetime"),
         )
+        self.assertLess(
+            maybe_sync_source.index("if not written"),
+            maybe_sync_source.index("_record_clock_sync"),
+        )
         refresh_source = ast.get_source_segment(
             COORDINATOR_PATH.read_text(), refresh_clock
         )
@@ -146,6 +154,18 @@ class Issue49RegressionTest(unittest.TestCase):
             any(
                 isinstance(node, ast.Attribute) and node.attr == "rtc_datetime_params"
                 for node in ast.walk(sync_params)
+            )
+        )
+        self.assertFalse(
+            any(
+                isinstance(node, ast.Attribute) and node.attr == "_record_clock_sync"
+                for node in ast.walk(sync_params)
+            )
+        )
+        self.assertTrue(
+            any(
+                isinstance(node, ast.Attribute) and node.attr == "_record_clock_sync"
+                for node in ast.walk(sync_completed)
             )
         )
 
@@ -170,6 +190,10 @@ class Issue49RegressionTest(unittest.TestCase):
         tree = _tree(FAN_PATH)
         setup = _module_function(tree, "async_setup_entry")
         sync_method = _class_method(tree, "VentoExpertFan", "async_sync_device_clock")
+        coordinator_tree = _tree(COORDINATOR_PATH)
+        coordinator_sync = _class_method(
+            coordinator_tree, "EcoVentCoordinator", "async_sync_device_clock"
+        )
 
         self.assertTrue(
             any(
@@ -183,6 +207,13 @@ class Issue49RegressionTest(unittest.TestCase):
                 and node.attr == "async_sync_device_clock"
                 for node in ast.walk(sync_method)
             )
+        )
+        coordinator_sync_source = ast.get_source_segment(
+            COORDINATOR_PATH.read_text(), coordinator_sync
+        )
+        self.assertLess(
+            coordinator_sync_source.index("if not written"),
+            coordinator_sync_source.index("self._last_clock_sync = now"),
         )
 
 

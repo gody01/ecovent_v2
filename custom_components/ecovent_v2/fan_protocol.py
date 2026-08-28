@@ -258,8 +258,12 @@ class FanProtocolMixin:
         include_extra_write_parameters=True,
     ):
         """Execute a protocol command with an already encoded parameter payload."""
+        extra_write_parameters = ""
         if include_extra_write_parameters:
-            encoded_params += self._extra_write_parameters(command, encoded_params)
+            extra_write_parameters = self._extra_write_parameters(
+                command, encoded_params
+            )
+            encoded_params += extra_write_parameters
 
         if self._write_may_be_audible(command, encoded_params):
             self.audible_write_command_count += 1
@@ -275,11 +279,26 @@ class FanProtocolMixin:
             response = self.receive()
             if response:
                 if self.parse_response(response):
+                    self._notify_extra_write_parameters_result(
+                        extra_write_parameters, True
+                    )
                     return True
                 response = False
             if i >= retries:
                 # print ("EcoventV2: Timeout device: " + self._host + " bail out after " + str(i) + " retries" , file = sys.stderr )
+                self._notify_extra_write_parameters_result(
+                    extra_write_parameters, False
+                )
                 return False
+
+    def _notify_extra_write_parameters_result(self, extra_parameters, success):
+        """Report whether opportunistic parameters reached the controller."""
+        if not extra_parameters:
+            return
+
+        callback = getattr(self, "extra_write_parameters_result_callback", None)
+        if callback is not None:
+            callback(success)
 
     def _write_may_be_audible(self, command, encoded_params):
         """Return whether a write is expected to make the device acknowledge.

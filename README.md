@@ -575,7 +575,12 @@ Version 1.2.25
   when a device reports a different firmware or unit type, so capability state
   from the previous identity cannot hide entities or raise a stale Repair.
   Generated entities stay registered by hardware profile and are hidden or
-  restored after successful refreshes as learned row support changes.
+  restored only after successful refreshes as learned row support changes. A
+  confirmed identity change reloads the config entry so device metadata,
+  coordinator caches, and profile-specific entities are rebuilt together.
+* Report failed device writes back to Home Assistant instead of publishing an
+  optimistic switch, number, select, preset, schedule, or clock-sync state.
+  Opportunistic RTC writes suppress retries only after transport success.
 * Restore Blauberg Smart Wi-Fi / VENTS iFan Wi-Fi extract-fan availability when
   firmware `2.2 2022-06-16` rejects optional motion rows `0x000B`/`0x0012`;
   state `0x0001` and fan speed `0x0004` remain the liveness rows.

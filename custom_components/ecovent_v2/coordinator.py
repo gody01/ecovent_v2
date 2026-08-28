@@ -82,8 +82,12 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         self._silent_preset_mode: str | None = None
         self._last_clock_sync = None
         self._last_clock_sync_check = None
+        self._pending_clock_sync = None
         self._reported_hardware_profile_mismatch_state = None
         self._fan.extra_write_parameters_callback = self._clock_sync_params_if_needed
+        self._fan.extra_write_parameters_result_callback = (
+            self._clock_sync_write_completed
+        )
         _LOGGER.debug(
             "EcoVentCoordinator initialized with update rate: %d", update_seconds
         )
@@ -154,7 +158,6 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         if mismatch_state == self._reported_hardware_profile_mismatch_state:
             return
 
-        self._reported_hardware_profile_mismatch_state = mismatch_state
         unsupported = mismatch_state[-1]
 
         try:
@@ -167,40 +170,50 @@ class EcoVentCoordinator(DataUpdateCoordinator):
             return
 
         issue_id = self._hardware_profile_mismatch_issue_id()
-        if not unsupported:
-            async_delete_hardware_profile_mismatch_issue(
-                self.hass, self.config_entry.entry_id
+        try:
+            if not unsupported:
+                async_delete_hardware_profile_mismatch_issue(
+                    self.hass, self.config_entry.entry_id
+                )
+            else:
+                unsupported_params = unsupported_optional_poll_parameter_summary(
+                    self._fan, unsupported
+                )
+                issue_url = hardware_profile_mismatch_issue_url(self._fan, unsupported)
+                ir.async_create_issue(
+                    self.hass,
+                    DOMAIN,
+                    issue_id,
+                    is_fixable=False,
+                    is_persistent=True,
+                    learn_more_url=issue_url,
+                    severity=ir.IssueSeverity.WARNING,
+                    translation_key="hardware_profile_mismatch",
+                    translation_placeholders={
+                        "name": self._fan.name,
+                        "unit_type": self._fan.unit_type or "unknown",
+                        "profile": self._fan.profile_key,
+                        "unsupported_params": unsupported_params,
+                    },
+                    data={
+                        "entry_id": self.config_entry.entry_id,
+                        "profile": self._fan.profile_key,
+                        "unit_type": self._fan.unit_type,
+                        "unit_type_id": getattr(self._fan, "_unit_type_id", None),
+                        "unsupported_optional_params": unsupported_params,
+                        "github_issue_url": issue_url,
+                    },
+                )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning(
+                "Unable to update EcoVent V2 hardware profile Repair for %s: %s",
+                self._fan.name,
+                err,
+                exc_info=True,
             )
             return
 
-        unsupported_params = unsupported_optional_poll_parameter_summary(
-            self._fan, unsupported
-        )
-        issue_url = hardware_profile_mismatch_issue_url(self._fan, unsupported)
-        ir.async_create_issue(
-            self.hass,
-            DOMAIN,
-            issue_id,
-            is_fixable=False,
-            is_persistent=True,
-            learn_more_url=issue_url,
-            severity=ir.IssueSeverity.WARNING,
-            translation_key="hardware_profile_mismatch",
-            translation_placeholders={
-                "name": self._fan.name,
-                "unit_type": self._fan.unit_type or "unknown",
-                "profile": self._fan.profile_key,
-                "unsupported_params": unsupported_params,
-            },
-            data={
-                "entry_id": self.config_entry.entry_id,
-                "profile": self._fan.profile_key,
-                "unit_type": self._fan.unit_type,
-                "unit_type_id": getattr(self._fan, "_unit_type_id", None),
-                "unsupported_optional_params": unsupported_params,
-                "github_issue_url": issue_url,
-            },
-        )
+        self._reported_hardware_profile_mismatch_state = mismatch_state
 
     def _defer_startup_clock_sync(self) -> None:
         """Avoid clock-only writes during Home Assistant startup discovery."""
@@ -287,7 +300,15 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         if not self._clock_sync_needed(now):
             return
 
-        await self.hass.async_add_executor_job(self._fan.set_rtc_datetime, now)
+        written = await self.hass.async_add_executor_job(
+            self._fan.set_rtc_datetime, now
+        )
+        if not written:
+            _LOGGER.warning(
+                "EcoVentCoordinator: failed to synchronize device clock for %s",
+                self._fan.name,
+            )
+            return
         self._record_clock_sync(now)
 
     def _refresh_device_clock_state(self) -> bool:
@@ -325,8 +346,15 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         if not self._clock_sync_needed(now):
             return {}
 
-        self._record_clock_sync(now)
+        self._pending_clock_sync = now
         return self._fan.rtc_datetime_params(now)
+
+    def _clock_sync_write_completed(self, success: bool) -> None:
+        """Record an opportunistic RTC write only after transport success."""
+        pending = self._pending_clock_sync
+        self._pending_clock_sync = None
+        if success and pending is not None:
+            self._record_clock_sync(pending)
 
     def _device_clock_now(self):
         """Return the HA-local wall clock value the device RTC should store."""
@@ -384,7 +412,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         return True
 
     def _record_clock_sync(self, now) -> None:
-        """Remember a clock write attempt from either periodic or batched sync."""
+        """Remember a successful clock write from periodic or batched sync."""
         self._last_clock_sync = now
 
     def _recently_synced_clock(self, now) -> bool:
@@ -459,11 +487,16 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         if weekly_schedule_enabled is not None:
             target = "on" if weekly_schedule_enabled else "off"
             if self._fan.weekly_schedule_state != target:
-                await self.hass.async_add_executor_job(
+                written = await self.hass.async_add_executor_job(
                     self._fan.set_param,
                     "weekly_schedule_state",
                     target,
                 )
+                if not written:
+                    raise RuntimeError(
+                        "Failed to write weekly schedule state "
+                        f"{target!r} for {self._fan.name}"
+                    )
 
         if days:
             day_payloads = []
@@ -503,6 +536,12 @@ class EcoVentCoordinator(DataUpdateCoordinator):
     async def async_sync_device_clock(self) -> None:
         """Synchronize the device RTC with HA local time immediately."""
         now = self._device_clock_now()
-        await self.hass.async_add_executor_job(self._fan.set_rtc_datetime, now)
+        written = await self.hass.async_add_executor_job(
+            self._fan.set_rtc_datetime, now
+        )
+        if not written:
+            raise RuntimeError(
+                f"Failed to synchronize device clock for {self._fan.name}"
+            )
         self._last_clock_sync = now
         await self.async_refresh()

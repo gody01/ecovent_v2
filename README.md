@@ -569,8 +569,8 @@ Version 1.2.25
   `0.3 2020-08-26` and `0.5 2021-10-04` rejected option rows as known optional
   Vento variants.
 * Treat Blauberg VENTO Expert / VENTS TwinFresh Expert firmware
-  `0.6 2021-05-17` filter-timer row `0x0063` as a known optional Vento
-  variant when that is the only rejected row.
+  `0.6 2021-05-17` preset-speed rows `0x003A` through `0x003F` and filter-timer
+  row `0x0063` as known optional Vento rows instead of raising a Repair.
 * Restore Blauberg Smart Wi-Fi / VENTS iFan Wi-Fi extract-fan availability when
   firmware `2.2 2022-06-16` rejects optional motion rows `0x000B`/`0x0012`;
   state `0x0001` and fan speed `0x0004` remain the liveness rows.

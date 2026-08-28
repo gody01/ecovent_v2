@@ -122,6 +122,42 @@ class ProtocolDiagnosticsTest(unittest.TestCase):
             reportable_hardware_profile_mismatch_param_ids(fan), frozenset({0x00B7})
         )
 
+    def test_issue97_vento_old_firmware_speed_rows_are_known(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0300"
+        fan.firmware = "00061105E507"
+        fan._unsupported_optional_poll_params = {
+            0x003A,
+            0x003B,
+            0x003C,
+            0x003D,
+            0x003E,
+            0x003F,
+        }
+
+        self.assertEqual(fan.firmware, "0.6 2021-05-17")
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan), frozenset()
+        )
+
+    def test_issue97_vento_old_firmware_extra_row_still_requests_report(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0300"
+        fan.firmware = "00061105E507"
+        fan._unsupported_optional_poll_params = {
+            0x003A,
+            0x003B,
+            0x003C,
+            0x003D,
+            0x003E,
+            0x003F,
+            0x0083,
+        }
+
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan), frozenset({0x0083})
+        )
+
     def test_unknown_filter_timer_rejection_still_requests_mismatch_report(self):
         fan = Fan("192.0.2.1")
         fan.unit_type = "0300"

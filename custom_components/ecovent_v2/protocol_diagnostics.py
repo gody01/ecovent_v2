@@ -102,11 +102,10 @@ def reportable_hardware_profile_mismatch_param_ids(fan) -> frozenset[int]:
     """Return unsupported optional rows that still need a hardware report."""
     unsupported = fan.unsupported_optional_poll_parameter_ids()
     unit_type_id = getattr(fan, "_unit_type_id", None)
-    known_variant = _KNOWN_VARIANT_FIRMWARE_UNSUPPORTED_OPTIONAL_PARAMS.get(
-        (fan.profile_key, unit_type_id, fan.firmware),
-        _KNOWN_VARIANT_UNSUPPORTED_OPTIONAL_PARAMS.get(
-            (fan.profile_key, unit_type_id), frozenset()
-        ),
+    known_variant = _KNOWN_VARIANT_UNSUPPORTED_OPTIONAL_PARAMS.get(
+        (fan.profile_key, unit_type_id), frozenset()
+    ) | _KNOWN_VARIANT_FIRMWARE_UNSUPPORTED_OPTIONAL_PARAMS.get(
+        (fan.profile_key, unit_type_id, fan.firmware), frozenset()
     )
     return frozenset(unsupported - known_variant)
 

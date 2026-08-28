@@ -226,7 +226,7 @@ class ProtocolDiagnosticsTest(unittest.TestCase):
     def test_issue95_vento_a30_firmware_05_rows_do_not_request_report(self):
         fan = Fan("192.0.2.1")
         fan.unit_type = "0500"
-        fan._firmware = "0.5 2021-10-04"
+        fan.firmware = "0005040AE507"
         fan._unsupported_optional_poll_params = {
             0x0016,
             0x002D,
@@ -249,7 +249,7 @@ class ProtocolDiagnosticsTest(unittest.TestCase):
     def test_issue95_vento_a30_extra_row_still_requests_report(self):
         fan = Fan("192.0.2.1")
         fan.unit_type = "0500"
-        fan._firmware = "0.5 2021-10-04"
+        fan.firmware = "0005040AE507"
         fan._unsupported_optional_poll_params = {
             0x0016,
             0x002D,

@@ -110,6 +110,18 @@ def reportable_hardware_profile_mismatch_param_ids(fan) -> frozenset[int]:
     return frozenset(unsupported - known_variant)
 
 
+def hardware_profile_mismatch_state(
+    fan,
+) -> tuple[str, int | None, str | None, frozenset[int]]:
+    """Return the device identity and unsupported rows that define one Repair."""
+    return (
+        fan.profile_key,
+        getattr(fan, "_unit_type_id", None),
+        fan.firmware,
+        reportable_hardware_profile_mismatch_param_ids(fan),
+    )
+
+
 def unsupported_optional_poll_parameter_details(
     fan, param_ids: frozenset[int] | None = None
 ) -> tuple[dict[str, str], ...]:

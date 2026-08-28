@@ -34,8 +34,8 @@ except ImportError:
 
 from .const import CONF_AUTO_CLOCK_SYNC, CONF_SILENT_MODE, DOMAIN
 from .protocol_diagnostics import (
+    hardware_profile_mismatch_state,
     hardware_profile_mismatch_issue_url,
-    reportable_hardware_profile_mismatch_param_ids,
     unsupported_optional_poll_parameter_summary,
 )
 
@@ -82,7 +82,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         self._silent_preset_mode: str | None = None
         self._last_clock_sync = None
         self._last_clock_sync_check = None
-        self._reported_unsupported_optional_params = None
+        self._reported_hardware_profile_mismatch_state = None
         self._fan.extra_write_parameters_callback = self._clock_sync_params_if_needed
         _LOGGER.debug(
             "EcoVentCoordinator initialized with update rate: %d", update_seconds
@@ -150,11 +150,12 @@ class EcoVentCoordinator(DataUpdateCoordinator):
 
     def _update_hardware_profile_mismatch_repair_issue(self) -> None:
         """Show a Repairs issue when this hardware omits profile-declared rows."""
-        unsupported = reportable_hardware_profile_mismatch_param_ids(self._fan)
-        if unsupported == self._reported_unsupported_optional_params:
+        mismatch_state = hardware_profile_mismatch_state(self._fan)
+        if mismatch_state == self._reported_hardware_profile_mismatch_state:
             return
 
-        self._reported_unsupported_optional_params = unsupported
+        self._reported_hardware_profile_mismatch_state = mismatch_state
+        unsupported = mismatch_state[-1]
 
         try:
             from homeassistant.helpers import issue_registry as ir

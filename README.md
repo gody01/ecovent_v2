@@ -571,6 +571,11 @@ Version 1.2.25
 * Treat Blauberg VENTO Expert / VENTS TwinFresh Expert firmware
   `0.6 2021-05-17` preset-speed rows `0x003A` through `0x003F` and filter-timer
   row `0x0063` as known optional Vento rows instead of raising a Repair.
+* Reset learned unsupported rows, optional-read backoff, and bulk-read support
+  when a device reports a different firmware or unit type, so capability state
+  from the previous identity cannot hide entities or raise a stale Repair.
+  Generated entities stay registered by hardware profile and are hidden or
+  restored after successful refreshes as learned row support changes.
 * Restore Blauberg Smart Wi-Fi / VENTS iFan Wi-Fi extract-fan availability when
   firmware `2.2 2022-06-16` rejects optional motion rows `0x000B`/`0x0012`;
   state `0x0001` and fan speed `0x0004` remain the liveness rows.

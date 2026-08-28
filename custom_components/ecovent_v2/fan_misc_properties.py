@@ -29,6 +29,9 @@ class FanMiscPropertiesMixin:
     @unit_type.setter
     def unit_type(self, input):
         val = int(input, 16)
+        previous_unit_type_id = getattr(self, "_unit_type_id", None)
+        if previous_unit_type_id is not None and previous_unit_type_id != val:
+            self._reset_learned_protocol_capabilities()
         self._unit_type_id = val
         self._unit_type = self._map_value(self.unit_types, val, "model")
         self._apply_device_profile()

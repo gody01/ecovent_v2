@@ -349,6 +349,14 @@ class A21ModbusDevice(Fan):
     def supports_parameter(self, parameter: str) -> bool:
         return parameter in _SEMANTIC_REGISTERS
 
+    def profile_supports_capability(self, capability: str) -> bool:
+        """Return an A21 capability; Modbus support is not learned per poll."""
+        return self.supports_capability(capability)
+
+    def profile_supports_parameter(self, parameter: str) -> bool:
+        """Return an A21 parameter; Modbus support is not learned per poll."""
+        return self.supports_parameter(parameter)
+
     def parameter_range(self, parameter: str) -> tuple[int, int] | None:
         """Return the A21 limits for a semantic HA number parameter."""
         key = _SEMANTIC_REGISTERS.get(parameter)

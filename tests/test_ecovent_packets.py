@@ -425,6 +425,12 @@ class PacketBuilderTest(unittest.TestCase):
         fan._set_device_profile("breezy")
         fan._unsupported_optional_poll_params = {0x001F, 0x0027, 0x0320}
 
+        self.assertTrue(
+            fan.profile_has_entity_requirements(
+                required_params=("outdoor_temperature",),
+                required_capabilities=("temperature_probes",),
+            )
+        )
         self.assertFalse(fan.supports_parameter("outdoor_temperature"))
         self.assertFalse(
             fan.supports_entity(
@@ -432,7 +438,19 @@ class PacketBuilderTest(unittest.TestCase):
                 required_capabilities=("temperature_probes",),
             )
         )
+        self.assertTrue(
+            fan.supports_entity(
+                required_params=("supply_temperature",),
+                required_capabilities=("temperature_probes",),
+            )
+        )
         self.assertTrue(fan.supports_parameter("co2_treshold"))
+        self.assertTrue(
+            fan.profile_has_entity_requirements(
+                required_params=("co2_treshold",),
+                required_capabilities=("co2",),
+            )
+        )
         self.assertFalse(fan.supports_capability("co2"))
         self.assertFalse(
             fan.supports_entity(
@@ -478,10 +496,25 @@ class PacketBuilderTest(unittest.TestCase):
                 required_capabilities=("temperature_probes",),
             )
         )
+
+    def test_profile_keeps_excluded_row_alternative_available_for_restore(self):
+        fan = Fan("192.0.2.1")
+
+        self.assertTrue(
+            fan.profile_has_entity_requirements(required_params=("fan1_speed",))
+        )
+        self.assertFalse(
+            fan.supports_entity(
+                required_params=("fan1_speed",),
+                excluded_params=("fan2_speed",),
+            )
+        )
+
+        fan._unsupported_optional_poll_params = {0x004B}
         self.assertTrue(
             fan.supports_entity(
-                required_params=("supply_temperature",),
-                required_capabilities=("temperature_probes",),
+                required_params=("fan1_speed",),
+                excluded_params=("fan2_speed",),
             )
         )
 

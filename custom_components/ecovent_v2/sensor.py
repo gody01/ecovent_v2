@@ -89,11 +89,9 @@ async def async_setup_entry(
             suggested_display_precision=spec.suggested_display_precision,
         )
         for spec in SENSOR_SPECS
-        if coordinator._fan.supports_entity(
+        if coordinator._fan.profile_has_entity_requirements(
             required_params=spec.required_params or (spec.method,),
             required_capabilities=spec.required_capabilities,
-            excluded_params=spec.excluded_params,
-            excluded_capabilities=spec.excluded_capabilities,
         )
     ]
 

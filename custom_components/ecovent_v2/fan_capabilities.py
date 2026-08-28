@@ -59,7 +59,7 @@ class FanCapabilitiesMixin:
 
     def supports_capability(self, capability):
         """Return whether the active profile declares a named capability."""
-        if capability not in self.device_profile.capabilities:
+        if not self.profile_supports_capability(capability):
             return False
 
         probe_parameters = _CAPABILITY_PROBE_PARAMETERS.get(capability, ())
@@ -74,6 +74,28 @@ class FanCapabilitiesMixin:
         if index is None:
             return False
         return index not in self.unsupported_optional_poll_parameter_ids()
+
+    def profile_supports_capability(self, capability):
+        """Return whether the stable hardware profile declares a capability."""
+        return capability in self.device_profile.capabilities
+
+    def profile_supports_parameter(self, parameter):
+        """Return whether the stable hardware profile declares a parameter."""
+        return self.get_params_index(parameter) is not None
+
+    def profile_has_entity_requirements(
+        self,
+        *,
+        required_params=(),
+        required_capabilities=(),
+    ):
+        """Return whether a profile can host an entity across learned states."""
+        return all(
+            self.profile_supports_parameter(param) for param in required_params
+        ) and all(
+            self.profile_supports_capability(capability)
+            for capability in required_capabilities
+        )
 
     def supports_entity(
         self,
@@ -101,6 +123,12 @@ class FanCapabilitiesMixin:
         """Return optional poll registers this device explicitly rejected."""
         unsupported = getattr(self, "_unsupported_optional_poll_params", set())
         return frozenset(unsupported)
+
+    def _reset_learned_protocol_capabilities(self):
+        """Discard protocol capabilities learned for a previous identity."""
+        self._bulk_read_supported = None
+        self._optional_read_backoff = {}
+        self._unsupported_optional_poll_params = set()
 
     def unsupported_optional_poll_parameters(self):
         """Return parameter names explicitly unsupported by this hardware."""
@@ -200,8 +228,7 @@ class FanCapabilitiesMixin:
         self.write_params = getattr(type(self), profile.write_params_name).copy()
         self._write_only_params = set(self.write_params)
         if previous_profile != profile_key:
-            self._bulk_read_supported = None
-            self._optional_read_backoff = {}
+            self._reset_learned_protocol_capabilities()
 
     def _apply_device_profile(self):
         """Select parameter meanings after reading the model id."""

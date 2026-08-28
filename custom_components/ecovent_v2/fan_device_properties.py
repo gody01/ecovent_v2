@@ -82,7 +82,7 @@ class FanDevicePropertiesMixin:
     @firmware.setter
     def firmware(self, input):
         val = int(input, 16).to_bytes(6, "big")
-        self._firmware = (
+        firmware = (
             str(val[0])
             + "."
             + str(val[1])
@@ -93,6 +93,10 @@ class FanDevicePropertiesMixin:
             + "-"
             + str(val[2]).zfill(2)
         )
+        previous_firmware = getattr(self, "_firmware", None)
+        if previous_firmware is not None and previous_firmware != firmware:
+            self._reset_learned_protocol_capabilities()
+        self._firmware = firmware
 
     @property
     def filter_replacement_status(self):

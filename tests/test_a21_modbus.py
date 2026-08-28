@@ -231,6 +231,18 @@ def test_configured_device_id_survives_endpoint_reconfiguration():
     assert fan.id == "a21-original-endpoint-502-7"
 
 
+def test_profile_entity_requirements_use_modbus_semantics():
+    fan = device()
+
+    assert fan.profile_has_entity_requirements(
+        required_params=("temperature",),
+        required_capabilities=("a21_modbus",),
+    )
+    assert not fan.profile_has_entity_requirements(
+        required_params=("analogV",),
+    )
+
+
 def test_raw_api_uses_all_published_modbus_function_shapes():
     client = FakeModbusClient()
     fan = device(client)

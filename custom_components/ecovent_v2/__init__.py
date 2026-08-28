@@ -483,6 +483,33 @@ def _async_update_unsupported_optional_poll_entities(registry, fan) -> None:
             )
 
 
+def _async_register_optional_poll_entity_sync(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    coordinator: EcoVentCoordinator,
+) -> None:
+    """Keep generated entity visibility aligned with learned capabilities."""
+    registry = er.async_get(hass)
+    last_capability_state = None
+
+    def _async_sync_entity_registry() -> None:
+        nonlocal last_capability_state
+        capability_state = (
+            coordinator._fan.profile_key,
+            getattr(coordinator._fan, "_unit_type_id", None),
+            coordinator._fan.firmware,
+            coordinator._fan.unsupported_optional_poll_parameter_ids(),
+        )
+        if capability_state == last_capability_state:
+            return
+
+        _async_update_unsupported_optional_poll_entities(registry, coordinator._fan)
+        last_capability_state = capability_state
+
+    entry.async_on_unload(coordinator.async_add_listener(_async_sync_entity_registry))
+    _async_sync_entity_registry()
+
+
 async def _async_migrate_statistics_metadata(
     hass: HomeAssistant, coordinator: EcoVentCoordinator
 ) -> None:
@@ -574,6 +601,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _async_migrate_entity_registry(hass, coordinator)
     await _async_migrate_statistics_metadata_on_start(hass, coordinator)
     await hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)
+    _async_register_optional_poll_entity_sync(hass, entry, coordinator)
     return True
 
 

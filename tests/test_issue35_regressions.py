@@ -345,6 +345,35 @@ class Issue35RegressionTest(unittest.TestCase):
         self.assertIn("hidden_by=None", helper)
         self.assertNotIn("async_remove", helper)
 
+    def test_unsupported_optional_entities_remain_live_and_resync(self):
+        init_source = INIT_PATH.read_text()
+        init_tree = _tree(INIT_PATH)
+        setup = ast.get_source_segment(
+            init_source,
+            _module_function(init_tree, "async_setup_entry"),
+        )
+        register = ast.get_source_segment(
+            init_source,
+            _module_function(init_tree, "_async_register_optional_poll_entity_sync"),
+        )
+
+        for path in (
+            SENSOR_PATH,
+            BINARY_SENSOR_PATH,
+            SWITCH_PATH,
+            NUMBER_PATH,
+            SELECT_PATH,
+        ):
+            self.assertIn("profile_has_entity_requirements", path.read_text())
+
+        self.assertIn("coordinator.async_add_listener", register)
+        self.assertIn("entry.async_on_unload", register)
+        self.assertIn("_async_sync_entity_registry()", register)
+        self.assertGreater(
+            setup.index("_async_register_optional_poll_entity_sync"),
+            setup.index("async_forward_entry_setups"),
+        )
+
     def test_hardware_profile_repairs_issue_is_unloaded_cleanly(self):
         init_source = INIT_PATH.read_text()
         coordinator_source = (COMPONENT_PATH / "coordinator.py").read_text()

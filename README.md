@@ -581,6 +581,10 @@ Version 1.2.25
 * Report failed device writes back to Home Assistant instead of publishing an
   optimistic switch, number, select, preset, schedule, or clock-sync state.
   Opportunistic RTC writes suppress retries only after transport success.
+* Preserve the last complete weekly-schedule day when a transient read returns
+  fewer than all four periods instead of replacing good state with partial data.
+* Close and remove a coordinator when config-entry setup fails after opening its
+  transport, so a retry cannot leave a stale connection behind.
 * Restore Blauberg Smart Wi-Fi / VENTS iFan Wi-Fi extract-fan availability when
   firmware `2.2 2022-06-16` rejects optional motion rows `0x000B`/`0x0012`;
   state `0x0001` and fan speed `0x0004` remain the liveness rows.

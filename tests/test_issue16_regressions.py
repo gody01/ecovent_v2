@@ -2,6 +2,8 @@
 
 from pathlib import Path
 import ast
+import logging
+import types
 import unittest
 
 
@@ -101,6 +103,41 @@ class Issue16RegressionTest(unittest.TestCase):
         self.assertIn('"weekly_schedule_state"', method_source)
         self.assertIn("if not written", method_source)
         self.assertIn("Failed to write weekly schedule state", method_source)
+
+    def test_incomplete_schedule_read_preserves_last_complete_day(self):
+        source = COORDINATOR_PATH.read_text()
+        load_schedule_days = _class_method(
+            ast.parse(source), "EcoVentCoordinator", "_load_schedule_days"
+        )
+        namespace = {"_LOGGER": logging.getLogger(__name__)}
+        exec(
+            compile(
+                ast.fix_missing_locations(
+                    ast.Module(body=[load_schedule_days], type_ignores=[])
+                ),
+                str(COORDINATOR_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+
+        complete = {period: f"old-{period}" for period in range(1, 5)}
+        partial = {period: f"partial-{period}" for period in range(1, 4)}
+        fresh = {period: f"fresh-{period}" for period in range(1, 5)}
+        reads = iter((partial, fresh))
+        coordinator = types.SimpleNamespace(
+            _fan=types.SimpleNamespace(
+                name="Test fan",
+                read_weekly_schedule_day=lambda _day: next(reads),
+            ),
+            _weekly_schedule={1: complete},
+        )
+
+        namespace["_load_schedule_days"](coordinator, [1])
+        self.assertEqual(coordinator._weekly_schedule[1], complete)
+
+        namespace["_load_schedule_days"](coordinator, [1])
+        self.assertEqual(coordinator._weekly_schedule[1], fresh)
 
 
 if __name__ == "__main__":

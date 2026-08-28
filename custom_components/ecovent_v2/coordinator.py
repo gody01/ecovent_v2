@@ -252,7 +252,17 @@ class EcoVentCoordinator(DataUpdateCoordinator):
     def _load_schedule_days(self, days) -> None:
         """Read and cache selected weekly schedule days from the device."""
         for day in sorted(set(days)):
-            self._weekly_schedule[day] = self._fan.read_weekly_schedule_day(day)
+            records = self._fan.read_weekly_schedule_day(day)
+            if not records or set(records) != {1, 2, 3, 4}:
+                _LOGGER.warning(
+                    "EcoVentCoordinator: preserving cached schedule for %s day %s "
+                    "after an incomplete read (%s/4 periods)",
+                    self._fan.name,
+                    day,
+                    len(records or {}),
+                )
+                continue
+            self._weekly_schedule[day] = records
 
     def _supports_device_clock_sync(self) -> bool:
         """Return whether this device exposes writable RTC date and time rows."""

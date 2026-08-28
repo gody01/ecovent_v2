@@ -607,6 +607,24 @@ async def _async_migrate_statistics_metadata_on_start(
     hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _async_run_at_start)
 
 
+async def _async_close_coordinator(
+    hass: HomeAssistant, coordinator: EcoVentCoordinator | None
+) -> None:
+    """Close a coordinator transport without blocking setup or unload cleanup."""
+    close = getattr(getattr(coordinator, "_fan", None), "close", None)
+    if close is None:
+        return
+
+    try:
+        await hass.async_add_executor_job(close)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.warning(
+            "Unable to close EcoVent V2 transport during cleanup: %s",
+            err,
+            exc_info=True,
+        )
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up EcoVent_v2 from a config entry."""
 
@@ -628,16 +646,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass, entry, update_seconds=entry.runtime_data[UPDATE_INTERVAL]
     )
 
-    await coordinator.async_config_entry_first_refresh()
+    try:
+        await coordinator.async_config_entry_first_refresh()
 
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = coordinator
-    await async_register_frontend(hass)
-    _async_migrate_entity_registry(hass, coordinator)
-    await _async_migrate_statistics_metadata_on_start(hass, coordinator)
-    await hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)
-    _async_register_optional_poll_entity_sync(hass, entry, coordinator)
-    return True
+        hass.data.setdefault(DOMAIN, {})
+        hass.data[DOMAIN][entry.entry_id] = coordinator
+        await async_register_frontend(hass)
+        _async_migrate_entity_registry(hass, coordinator)
+        await _async_migrate_statistics_metadata_on_start(hass, coordinator)
+        await hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)
+        _async_register_optional_poll_entity_sync(hass, entry, coordinator)
+        return True
+    except Exception:
+        hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
+        await _async_close_coordinator(hass, coordinator)
+        raise
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -655,9 +678,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 exc_info=True,
             )
         coordinator = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
-        close = getattr(getattr(coordinator, "_fan", None), "close", None)
-        if close is not None:
-            await hass.async_add_executor_job(close)
+        await _async_close_coordinator(hass, coordinator)
     return unload_ok
 
 

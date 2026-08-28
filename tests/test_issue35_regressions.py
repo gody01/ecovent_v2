@@ -580,6 +580,70 @@ class Issue35RegressionTest(unittest.TestCase):
             ("vento", 0x0500, "0.5 2021-10-04", frozenset({0x0083})),
         )
 
+    def test_setup_failure_closes_and_removes_coordinator(self):
+        init_tree = _tree(INIT_PATH)
+        close_coordinator = _module_function(init_tree, "_async_close_coordinator")
+        setup_entry = _module_function(init_tree, "async_setup_entry")
+        namespace = {
+            "HomeAssistant": object,
+            "ConfigEntry": object,
+            "EcoVentCoordinator": object,
+            "CONF_IP_ADDRESS": "ip_address",
+            "CONF_PORT": "port",
+            "CONF_PASSWORD": "password",
+            "CONF_NAME": "name",
+            "UPDATE_INTERVAL": "update_interval",
+            "CONF_AUTO_CLOCK_SYNC": "auto_clock_sync",
+            "CONF_TRANSPORT": "transport",
+            "TRANSPORT_BGCP_UDP": "bgcp_udp",
+            "DOMAIN": "ecovent_v2",
+            "_LOGGER": types.SimpleNamespace(warning=lambda *_args, **_kwargs: None),
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(
+                    ast.Module(
+                        body=[close_coordinator, setup_entry],
+                        type_ignores=[],
+                    )
+                ),
+                str(INIT_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+
+        closed = []
+
+        class Coordinator:
+            def __init__(self, _hass, _entry, update_seconds):
+                self.update_seconds = update_seconds
+                self._fan = types.SimpleNamespace(close=lambda: closed.append("close"))
+
+            async def async_config_entry_first_refresh(self):
+                return None
+
+        async def fail_frontend(_hass):
+            raise RuntimeError("frontend setup failed")
+
+        namespace["EcoVentCoordinator"] = Coordinator
+        namespace["async_register_frontend"] = fail_frontend
+        hass = types.SimpleNamespace(
+            data={},
+            async_add_executor_job=lambda callback: asyncio.to_thread(callback),
+        )
+        entry = types.SimpleNamespace(
+            entry_id="entry-1",
+            data={"update_interval": 30},
+            runtime_data=None,
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "frontend setup failed"):
+            asyncio.run(namespace["async_setup_entry"](hass, entry))
+
+        self.assertEqual(closed, ["close"])
+        self.assertNotIn("entry-1", hass.data.get("ecovent_v2", {}))
+
     def test_switch_none_state_remains_unknown(self):
         switch_source = SWITCH_PATH.read_text()
         tree = _tree(SWITCH_PATH)

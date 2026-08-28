@@ -77,6 +77,11 @@ _KNOWN_VARIANT_FIRMWARE_UNSUPPORTED_OPTIONAL_PARAMS = {
         "0.3 2020-08-26",
     ): _VENTO_EXPERT_A30_MINI_AIR_UNSUPPORTED_OPTIONAL_ROWS,
     (
+        "vento",
+        0x0500,
+        "0.5 2021-10-04",
+    ): _VENTO_EXPERT_A30_MINI_AIR_UNSUPPORTED_OPTIONAL_ROWS,
+    (
         "breezy",
         0x1100,
         "0.12 2025-09-01",

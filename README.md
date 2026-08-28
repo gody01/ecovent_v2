@@ -566,7 +566,8 @@ Version 1.2.25
 * Treat standard Freshpoint 160-E firmware `0.12 2025-09-01` CO2/VOC/display
   rows as a known optional hardware variant instead of raising a Repair.
 * Treat Blauberg VENTO Expert A30 / VENTS TwinFresh Expert RW-30 firmware
-  `0.3 2020-08-26` rejected option rows as a known optional Vento variant.
+  `0.3 2020-08-26` and `0.5 2021-10-04` rejected option rows as known optional
+  Vento variants.
 * Treat Blauberg VENTO Expert / VENTS TwinFresh Expert firmware
   `0.6 2021-05-17` filter-timer row `0x0063` as a known optional Vento
   variant when that is the only rejected row.

@@ -541,6 +541,31 @@ def test_set_param_batches_callback_rtc_rows_and_reports_transport_failure():
     assert results == [False]
 
 
+def test_opportunistic_rtc_failure_does_not_fail_acknowledged_primary_write():
+    class RejectOnlyRtc(FakeModbusClient):
+        def write_registers(self, address, values, *, device_id):
+            self.calls.append(("write_registers", address, list(values), device_id))
+            if address == 61:
+                return Response(error=True)
+            return super().write_registers(
+                address, values, device_id=device_id
+            )
+
+    client = RejectOnlyRtc()
+    fan = device(client)
+    results = []
+    fan.extra_write_parameters_callback = lambda: {
+        "rtc_time": "1e2d13",
+        "rtc_date": "1704041a",
+    }
+    fan.extra_write_parameters_result_callback = results.append
+
+    assert fan.set_param("state", "on")
+    assert client.coils[0] is True
+    assert fan.state == "on"
+    assert results == [False]
+
+
 def test_preset_poll_decodes_values_and_evicts_them_after_transport_failure():
     client = FakeModbusClient()
     fan = device(client)

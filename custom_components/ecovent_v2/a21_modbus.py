@@ -1025,26 +1025,51 @@ class A21ModbusDevice(Fan):
         values: Mapping[str, Any],
         include_extra_write_parameters: bool = True,
     ) -> bool:
-        targets = dict(values)
+        primary_targets = dict(values)
         extra_parameters = {}
         if include_extra_write_parameters and self.extra_write_parameters_callback:
             extra_parameters = self.extra_write_parameters_callback()
-            for key, value in extra_parameters.items():
-                targets.setdefault(key, value)
-        if not targets:
+        if not primary_targets:
             return False
+
+        extra_targets = {
+            key: value
+            for key, value in extra_parameters.items()
+            if key not in primary_targets
+        }
+        # If RTC itself is the requested write, keep its adjacent counterpart in
+        # the same primary Modbus request. Otherwise RTC remains opportunistic
+        # and cannot turn an acknowledged user command into a false failure.
+        if {"rtc_time", "rtc_date"} & primary_targets.keys():
+            for key in ("rtc_time", "rtc_date"):
+                if key in extra_targets:
+                    primary_targets[key] = extra_targets.pop(key)
+
         try:
-            prepared = self._prepared_semantic_writes(targets)
-            success = self._write_prepared_groups(prepared)
+            prepared_primary = self._prepared_semantic_writes(primary_targets)
+            prepared_extra = self._prepared_semantic_writes(extra_targets)
         except (A21ModbusError, PermissionError, ValueError):
-            success = False
+            primary_success = False
+            extra_success = False
+        else:
+            try:
+                primary_success = self._write_prepared_groups(prepared_primary)
+            except (A21ModbusError, PermissionError, ValueError):
+                primary_success = False
+
+            extra_success = primary_success
+            if primary_success and prepared_extra:
+                try:
+                    extra_success = self._write_prepared_groups(prepared_extra)
+                except (A21ModbusError, PermissionError, ValueError):
+                    extra_success = False
         if extra_parameters and (
             result_callback := getattr(
                 self, "extra_write_parameters_result_callback", None
             )
         ):
-            result_callback(success)
-        return success
+            result_callback(extra_success)
+        return primary_success
 
     set_params = set_parameters
 

@@ -312,6 +312,61 @@ def test_failed_poll_cannot_evict_a_newer_typed_write():
     assert (Table.HOLDING_REGISTER, 44) not in fan.unavailable_addresses
 
 
+def test_failed_preset_poll_cannot_evict_a_newer_typed_write():
+    eviction_started = threading.Event()
+    release_eviction = threading.Event()
+
+    class FailingPresetClient(FakeModbusClient):
+        fail_preset = False
+
+        def read_holding_registers(self, address, *, count, device_id):
+            if self.fail_preset and address == 5:
+                raise ConnectionError("preset timeout")
+            return super().read_holding_registers(
+                address, count=count, device_id=device_id
+            )
+
+    client = FailingPresetClient()
+    fan = device(client)
+    fan.write_register("HR_SuSPEED1", 40)
+    client.fail_preset = True
+    original_evict = fan._evict_cached_range
+
+    def paused_evict(table, address, count):
+        if table is Table.HOLDING_REGISTER and address == 5:
+            eviction_started.set()
+            assert release_eviction.wait(timeout=1)
+        return original_evict(table, address, count)
+
+    fan._evict_cached_range = paused_evict
+    results = {}
+    poll = threading.Thread(
+        target=lambda: results.setdefault("poll", fan.update_preset_speed_settings())
+    )
+    write = threading.Thread(
+        target=lambda: results.setdefault(
+            "write", fan.write_register("HR_SuSPEED1", 55)
+        )
+    )
+
+    poll.start()
+    assert eviction_started.wait(timeout=1)
+    write.start()
+    write.join(timeout=0.05)
+    assert write.is_alive(), "typed write entered an unfinished preset poll"
+
+    release_eviction.set()
+    poll.join(timeout=1)
+    write.join(timeout=1)
+    assert not poll.is_alive()
+    assert not write.is_alive()
+    assert results == {"poll": False, "write": True}
+    assert client.holding_registers[7] == 55
+    assert fan.raw_registers[(Table.HOLDING_REGISTER, 7)] == 55
+    assert fan.decoded_registers["HR_SuSPEED1"] == 55
+    assert fan.supply_speed_low == 55
+
+
 def test_invalid_opportunistic_write_does_not_block_primary_command():
     client = FakeModbusClient()
     fan = device(client)
@@ -542,6 +597,91 @@ def test_poll_fails_when_a_required_operational_address_is_missing():
     assert fan.update() is False
     assert fan.last_poll_complete is False
     assert (Table.COIL, 0) in fan.unavailable_addresses
+
+
+def test_poll_fails_and_evicts_a_malformed_required_value():
+    client = FakeModbusClient()
+    client.coils[0] = 2
+    fan = device(client)
+
+    assert fan.update() is False
+    assert fan.last_poll_complete is False
+    assert (Table.COIL, 0) not in fan.raw_registers
+    assert "CL_POWER" not in fan.decoded_registers
+    assert fan.state is None
+    assert (Table.COIL, 0) not in fan.unavailable_addresses
+
+    client.coils[0] = 1
+    assert fan.update() is True
+    assert fan.state == "on"
+
+
+def test_malformed_optional_value_keeps_core_update_but_marks_poll_incomplete():
+    fan = device(FakeModbusClient())
+    humidity_slot = (Table.INPUT_REGISTER, 10)
+    fan._raw = {humidity_slot: 101}
+    fan._decoded = {"IR_CurRH_Int": 55}
+    fan._humidity = 55
+
+    invalid_slots = fan._decode_cache()
+    assert invalid_slots == frozenset({humidity_slot})
+    assert humidity_slot not in fan.raw_registers
+    assert "IR_CurRH_Int" not in fan.decoded_registers
+    assert fan.humidity is None
+    assert humidity_slot not in fan.unavailable_addresses
+
+    fan._read_resilient = lambda *_args: True
+    fan._verify_cached_identity = lambda: None
+    fan._decode_cache = lambda: invalid_slots
+    assert fan.read_all_registers() is True
+    assert fan.last_poll_complete is False
+
+    fan._decode_cache = lambda: frozenset()
+    assert fan.read_all_registers() is True
+    assert fan.last_poll_complete is True
+
+
+def test_quick_polls_publish_cache_transitions_serially():
+    decode_started = threading.Event()
+    release_decode = threading.Event()
+    client = FakeModbusClient()
+    fan = device(client)
+    assert fan.update() is True
+    original_decode = fan._decode_cache
+
+    def paused_decode():
+        if threading.current_thread().name == "first-quick-poll":
+            decode_started.set()
+            assert release_decode.wait(timeout=1)
+        return original_decode()
+
+    fan._decode_cache = paused_decode
+    results = {}
+    errors = []
+
+    def poll(name):
+        try:
+            results[name] = fan.quick_update()
+        except Exception as err:  # pragma: no cover - asserted below
+            errors.append(err)
+
+    first = threading.Thread(target=poll, args=("first",), name="first-quick-poll")
+    second = threading.Thread(target=poll, args=("second",))
+    first.start()
+    assert decode_started.wait(timeout=1)
+    client.fail_slots.add(("read_input_registers", 25))
+    second.start()
+    second.join(timeout=0.05)
+    assert second.is_alive(), "a second quick poll entered an unpublished cache state"
+
+    release_decode.set()
+    first.join(timeout=1)
+    second.join(timeout=1)
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert errors == []
+    assert results == {"first": True, "second": True}
+    assert fan.last_poll_complete is False
 
 
 def test_transport_wide_error_fails_fast_without_recursive_address_splitting():

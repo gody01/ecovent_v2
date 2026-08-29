@@ -658,22 +658,26 @@ class A21ModbusDevice(Fan):
                             )
                 return complete
 
-    def _decode_cache(self) -> None:
+    def _decode_cache(self) -> frozenset[tuple[Table, int]]:
+        invalid_slots: set[tuple[Table, int]] = set()
         for spec in REGISTERS:
             if not spec.access.readable or spec.key in _SENSITIVE_REGISTER_KEYS:
                 continue
-            slots = [
+            slots = tuple(
                 (spec.table, spec.address + offset) for offset in range(spec.word_count)
-            ]
+            )
             if not all(slot in self._raw for slot in slots):
                 continue
             try:
-                self._decoded[spec.key] = spec.decode(self._raw[slot] for slot in slots)
+                words = tuple(self._raw[slot] for slot in slots)
+                self._decoded[spec.key] = spec.decode(words)
             except ValueError:
-                self._decoded.pop(spec.key, None)
+                invalid_slots.update(slots)
+                self._evict_cached_range(spec.table, spec.address, spec.word_count)
                 _LOGGER.debug("Invalid A21 value for %s", spec.key, exc_info=True)
         self._clear_semantic_state()
         self._apply_semantics()
+        return frozenset(invalid_slots)
 
     def _evict_cached_range(self, table: Table, address: int, count: int) -> None:
         """Forget values whose next read was not confirmed by the controller."""
@@ -699,25 +703,29 @@ class A21ModbusDevice(Fan):
         read after an explicit opt-in; raw read/write methods still implement
         its documented two-register protocol.
         """
-        ranges = (
-            (Table.COIL, 0, 17),
-            (Table.COIL, 20, 6),
-            (Table.DISCRETE_INPUT, 0, 72),
-            (Table.INPUT_REGISTER, 0, 54),
-            (Table.HOLDING_REGISTER, 0, 124),
-            (Table.HOLDING_REGISTER, 126, 57),
-        )
-        if not include_sensitive:
-            self._evict_sensitive_cache()
-        complete = True
-        for table, address, count in ranges:
-            complete = self._read_resilient(table, address, count) and complete
-        if include_sensitive:
-            complete = self._read_resilient(Table.HOLDING_REGISTER, 124, 2) and complete
-        self._decode_cache()
-        self._verify_cached_identity()
-        self.last_poll_complete = complete
-        return not bool(_REQUIRED_POLL_SLOTS & self._unavailable)
+        with self._lock:
+            ranges = (
+                (Table.COIL, 0, 17),
+                (Table.COIL, 20, 6),
+                (Table.DISCRETE_INPUT, 0, 72),
+                (Table.INPUT_REGISTER, 0, 54),
+                (Table.HOLDING_REGISTER, 0, 124),
+                (Table.HOLDING_REGISTER, 126, 57),
+            )
+            if not include_sensitive:
+                self._evict_sensitive_cache()
+            complete = True
+            for table, address, count in ranges:
+                complete = self._read_resilient(table, address, count) and complete
+            if include_sensitive:
+                complete = (
+                    self._read_resilient(Table.HOLDING_REGISTER, 124, 2) and complete
+                )
+            invalid_slots = self._decode_cache()
+            self._verify_cached_identity()
+            self.last_poll_complete = complete and not invalid_slots
+            failed_slots = self._unavailable | invalid_slots
+            return not bool(_REQUIRED_POLL_SLOTS & failed_slots)
 
     def _verify_cached_identity(self) -> None:
         identity = self._decoded.get(A21_IDENTITY_REGISTER.key)
@@ -756,34 +764,40 @@ class A21ModbusDevice(Fan):
 
     def quick_update(self) -> bool:
         """Refresh the high-frequency operational portion of the table."""
-        ranges = (
-            (Table.COIL, 0, 17),
-            # Alarm bits are one contiguous Modbus read. Keeping them in the
-            # quick poll prevents the aggregate alarm state from reusing a
-            # previous full poll.
-            (Table.DISCRETE_INPUT, 0, 72),
-            (Table.INPUT_REGISTER, 0, 54),
-            (Table.HOLDING_REGISTER, 0, 76),
-        )
-        self._evict_sensitive_cache()
-        complete = True
-        for table, address, count in ranges:
-            complete = self._read_resilient(table, address, count) and complete
-        self._decode_cache()
-        self._verify_cached_identity()
-        self.last_poll_complete = complete
-        return not bool(_REQUIRED_POLL_SLOTS & self._unavailable)
+        with self._lock:
+            ranges = (
+                (Table.COIL, 0, 17),
+                # Alarm bits are one contiguous Modbus read. Keeping them in the
+                # quick poll prevents the aggregate alarm state from reusing a
+                # previous full poll.
+                (Table.DISCRETE_INPUT, 0, 72),
+                (Table.INPUT_REGISTER, 0, 54),
+                (Table.HOLDING_REGISTER, 0, 76),
+            )
+            self._evict_sensitive_cache()
+            complete = True
+            for table, address, count in ranges:
+                complete = self._read_resilient(table, address, count) and complete
+            invalid_slots = self._decode_cache()
+            self._verify_cached_identity()
+            self.last_poll_complete = complete and not invalid_slots
+            failed_slots = self._unavailable | invalid_slots
+            return not bool(_REQUIRED_POLL_SLOTS & failed_slots)
 
     def update_preset_speed_settings(self) -> bool:
-        try:
-            complete = self._read_resilient(Table.HOLDING_REGISTER, 5, 13)
-        except A21ModbusError:
-            self._evict_cached_range(Table.HOLDING_REGISTER, 5, 13)
-            self._clear_semantic_state()
-            self._apply_semantics()
-            return False
-        self._decode_cache()
-        return complete
+        with self._lock:
+            try:
+                complete = self._read_resilient(Table.HOLDING_REGISTER, 5, 13)
+            except A21ModbusError:
+                self._evict_cached_range(Table.HOLDING_REGISTER, 5, 13)
+                self._clear_semantic_state()
+                self._apply_semantics()
+                return False
+            invalid_slots = self._decode_cache()
+            preset_slots = {
+                (Table.HOLDING_REGISTER, address) for address in range(5, 18)
+            }
+            return complete and not bool(invalid_slots & preset_slots)
 
     @staticmethod
     def _valid_temperature(value: Any) -> float | None:
@@ -1102,35 +1116,38 @@ class A21ModbusDevice(Fan):
         return self.write_register("HR_ManualSPEED", target)
 
     def read_weekly_schedule_day(self, day: int) -> dict[int, WeeklyScheduleRecord]:
-        if day not in range(1, 8):
-            raise ValueError(f"Invalid schedule day: {day}")
-        labels = ("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")
-        label = labels[day - 1]
-        base = 126 + (day - 1) * 8
-        try:
-            complete = self._read_resilient(Table.HOLDING_REGISTER, base, 8)
-        except A21ModbusError:
-            self._evict_cached_range(Table.HOLDING_REGISTER, base, 8)
-            self._decode_cache()
-            return {}
-        self._decode_cache()
-        if not complete:
-            return {}
-        records: dict[int, WeeklyScheduleRecord] = {}
-        for period in range(1, 5):
-            schedule = self._decoded.get(f"HR_SetWEEK_{label}_P{period}")
-            end = self._decoded.get(f"HR_SetWEEK_{label}_P{period}_END")
-            if not isinstance(schedule, SchedulePeriod) or not isinstance(end, ScheduleEnd):
+        with self._lock:
+            if day not in range(1, 8):
+                raise ValueError(f"Invalid schedule day: {day}")
+            labels = ("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")
+            label = labels[day - 1]
+            base = 126 + (day - 1) * 8
+            try:
+                complete = self._read_resilient(Table.HOLDING_REGISTER, base, 8)
+            except A21ModbusError:
+                self._evict_cached_range(Table.HOLDING_REGISTER, base, 8)
+                self._decode_cache()
                 return {}
-            records[period] = WeeklyScheduleRecord(
-                day=day,
-                period=period,
-                speed=_A21_SPEEDS.get(schedule.speed, f"unknown_{schedule.speed}"),
-                end_hour=end.hour,
-                end_minute=end.minute,
-                reserved=schedule.temperature,
-            )
-        return records
+            self._decode_cache()
+            if not complete:
+                return {}
+            records: dict[int, WeeklyScheduleRecord] = {}
+            for period in range(1, 5):
+                schedule = self._decoded.get(f"HR_SetWEEK_{label}_P{period}")
+                end = self._decoded.get(f"HR_SetWEEK_{label}_P{period}_END")
+                if not isinstance(schedule, SchedulePeriod) or not isinstance(
+                    end, ScheduleEnd
+                ):
+                    return {}
+                records[period] = WeeklyScheduleRecord(
+                    day=day,
+                    period=period,
+                    speed=_A21_SPEEDS.get(schedule.speed, f"unknown_{schedule.speed}"),
+                    end_hour=end.hour,
+                    end_minute=end.minute,
+                    reserved=schedule.temperature,
+                )
+            return records
 
     def write_weekly_schedule_record(self, record: WeeklyScheduleRecord) -> bool:
         if not isinstance(record, WeeklyScheduleRecord):

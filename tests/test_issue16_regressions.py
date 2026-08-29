@@ -263,8 +263,15 @@ class Issue16RegressionTest(unittest.TestCase):
             _schedule_day=1,
             _weekly_schedule={1: {}},
             schedule_day_records=lambda _day: {},
+            _async_reconcile_schedule_day=None,
             async_update_listeners=lambda: None,
         )
+
+        async def reconcile(_day):
+            coordinator._weekly_schedule[1] = actual
+            return actual
+
+        coordinator._async_reconcile_schedule_day = reconcile
 
         with self.assertRaisesRegex(RuntimeError, "did not confirm schedule write"):
             asyncio.run(
@@ -274,6 +281,89 @@ class Issue16RegressionTest(unittest.TestCase):
                 )
             )
         self.assertEqual(coordinator._weekly_schedule[1], actual)
+
+    def test_partial_schedule_write_failure_reconciles_device_state(self):
+        method = _class_method(
+            ast.parse(COORDINATOR_PATH.read_text()),
+            "EcoVentCoordinator",
+            "async_write_schedule",
+        )
+        records = [
+            types.SimpleNamespace(period=1, value="new-1"),
+            types.SimpleNamespace(period=2, value="new-2"),
+        ]
+        namespace = {
+            "SCHEDULE_DAY_TO_INDEX": {"Monday": 1},
+            "changed_schedule_records": lambda *_args: records,
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+                str(COORDINATOR_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+        actual = {
+            period: types.SimpleNamespace(period=period, value=f"old-{period}")
+            for period in range(1, 5)
+        }
+        events = []
+
+        class Hass:
+            async def async_add_executor_job(self, callback, *args):
+                return callback(*args)
+
+        class Fan:
+            weekly_schedule_state = "off"
+            name = "Test fan"
+
+            def supports_parameter(self, _name):
+                return False
+
+            def write_weekly_schedule_record(self, record):
+                events.append(("write", record.period))
+                if record.period == 1:
+                    actual[1] = record
+                    return True
+                return False
+
+        coordinator = types.SimpleNamespace(
+            hass=Hass(),
+            _fan=Fan(),
+            _schedule_day=1,
+            _weekly_schedule={
+                1: {
+                    period: types.SimpleNamespace(
+                        period=period, value=f"old-{period}"
+                    )
+                    for period in range(1, 5)
+                }
+            },
+            schedule_day_records=lambda day: dict(actual),
+            _async_reconcile_schedule_day=None,
+            async_update_listeners=lambda: events.append("listeners"),
+        )
+
+        async def reconcile(day):
+            coordinator._weekly_schedule[day] = dict(actual)
+            events.append("readback")
+            return actual
+
+        coordinator._async_reconcile_schedule_day = reconcile
+
+        with self.assertRaisesRegex(RuntimeError, "period 2"):
+            asyncio.run(
+                namespace["async_write_schedule"](
+                    coordinator,
+                    days=[{"day": "Monday", "periods": []}],
+                )
+            )
+        self.assertEqual(
+            events,
+            [("write", 1), ("write", 2), "readback", "listeners"],
+        )
+        self.assertIs(coordinator._weekly_schedule[1][1], records[0])
 
     def test_incomplete_schedule_read_preserves_last_complete_day(self):
         source = COORDINATOR_PATH.read_text()

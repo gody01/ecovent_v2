@@ -494,6 +494,29 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         """Return the full weekly schedule for Home Assistant attributes."""
         return [self.schedule_day_payload(day) for day in range(1, 8)]
 
+    async def _async_reconcile_schedule_day(self, day: int):
+        """Read one complete day after writes and expose only confirmed state."""
+        try:
+            confirmed_records = await self.hass.async_add_executor_job(
+                self._fan.read_weekly_schedule_day,
+                day,
+            )
+        except Exception as err:  # noqa: BLE001
+            self._weekly_schedule.pop(day, None)
+            _LOGGER.warning(
+                "Failed to read schedule day %d after a write for %s: %s",
+                day,
+                self._fan.name,
+                err,
+            )
+            return None
+
+        if set(confirmed_records) != {1, 2, 3, 4}:
+            self._weekly_schedule.pop(day, None)
+            return None
+        self._weekly_schedule[day] = confirmed_records
+        return confirmed_records
+
     async def async_write_schedule(
         self,
         *,
@@ -558,6 +581,8 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                         record,
                     )
                     if not written:
+                        await self._async_reconcile_schedule_day(day)
+                        self.async_update_listeners()
                         raise RuntimeError(
                             "Failed to write schedule record "
                             f"{day_label} period {record.period}"
@@ -565,17 +590,12 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                     expected_records[record.period] = record
 
                 if records_to_write:
-                    confirmed_records = await self.hass.async_add_executor_job(
-                        self._fan.read_weekly_schedule_day,
-                        day,
-                    )
-                    if set(confirmed_records) != {1, 2, 3, 4}:
-                        self._weekly_schedule.pop(day, None)
+                    confirmed_records = await self._async_reconcile_schedule_day(day)
+                    if confirmed_records is None:
                         raise RuntimeError(
                             "Incomplete schedule readback after writing "
                             f"{day_label} for {self._fan.name}"
                         )
-                    self._weekly_schedule[day] = confirmed_records
                     if any(
                         confirmed_records.get(record.period)
                         != expected_records[record.period]

@@ -140,12 +140,15 @@ class Issue16RegressionTest(unittest.TestCase):
 
         async def refresh():
             events.append("refresh")
+            coordinator._fan.weekly_schedule_state = "on"
+            coordinator.last_update_success = True
 
         coordinator = types.SimpleNamespace(
             hass=Hass(),
             _fan=Fan(),
             _schedule_day=1,
             _weekly_schedule={},
+            last_update_success=False,
             async_refresh=refresh,
             async_update_listeners=lambda: events.append("listeners"),
         )
@@ -159,6 +162,59 @@ class Issue16RegressionTest(unittest.TestCase):
             events,
             [("write", "weekly_schedule_state", "on"), "refresh", "listeners"],
         )
+
+    def test_schedule_state_write_rejects_swallowed_refresh_failure(self):
+        method = _class_method(
+            ast.parse(COORDINATOR_PATH.read_text()),
+            "EcoVentCoordinator",
+            "async_write_schedule",
+        )
+        namespace = {
+            "SCHEDULE_DAY_TO_INDEX": {},
+            "changed_schedule_records": lambda *_args: [],
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+                str(COORDINATOR_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+        events = []
+
+        class Hass:
+            async def async_add_executor_job(self, callback, *args):
+                return callback(*args)
+
+        class Fan:
+            weekly_schedule_state = "off"
+            name = "Test fan"
+
+            def set_param(self, _name, _value):
+                events.append("write")
+                return True
+
+        async def refresh():
+            events.append("refresh-failed-but-swallowed")
+
+        coordinator = types.SimpleNamespace(
+            hass=Hass(),
+            _fan=Fan(),
+            _schedule_day=1,
+            _weekly_schedule={},
+            last_update_success=False,
+            async_refresh=refresh,
+            async_update_listeners=lambda: events.append("listeners"),
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "did not confirm"):
+            asyncio.run(
+                namespace["async_write_schedule"](
+                    coordinator, weekly_schedule_enabled=True
+                )
+            )
+        self.assertEqual(events, ["write", "refresh-failed-but-swallowed"])
 
     def test_schedule_record_write_requires_complete_matching_readback(self):
         method = _class_method(

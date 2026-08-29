@@ -521,6 +521,14 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                 # Confirm the new state through the normal coordinator path before
                 # listeners render the schedule summary.
                 await self.async_refresh()
+                if (
+                    not self.last_update_success
+                    or self._fan.weekly_schedule_state != target
+                ):
+                    raise RuntimeError(
+                        "Device did not confirm weekly schedule state "
+                        f"{target!r} for {self._fan.name}"
+                    )
 
         if days:
             day_payloads = []

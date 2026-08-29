@@ -631,9 +631,26 @@ class A21ModbusDevice(Fan):
                 _LOGGER.debug("A21 address unavailable: %s/%d", table.value, address)
                 return False
             left = count // 2
-            return self._read_resilient(
+            left_complete = self._read_resilient(
                 table, address, left, split_budget
-            ) & self._read_resilient(table, address + left, count - left, split_budget)
+            )
+            right_complete = self._read_resilient(
+                table, address + left, count - left, split_budget
+            )
+            complete = left_complete & right_complete
+            if not complete:
+                for unavailable_table, unavailable_address in tuple(
+                    self._unavailable
+                ):
+                    if (
+                        unavailable_table is table
+                        and address <= unavailable_address < address + count
+                    ):
+                        spec = get_by_address(table, unavailable_address)
+                        self._evict_cached_range(
+                            spec.table, spec.address, spec.word_count
+                        )
+            return complete
 
     def _decode_cache(self) -> None:
         for spec in REGISTERS:

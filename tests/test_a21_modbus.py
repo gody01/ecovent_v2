@@ -326,7 +326,10 @@ def test_resilient_poll_clears_stale_optional_semantic_value():
     assert fan.outdoor_temperature is None
 
 
-def test_resilient_poll_evicts_every_word_of_failed_multiword_value():
+@pytest.mark.parametrize("failed_address", (25, 26))
+def test_resilient_poll_evicts_every_word_of_failed_multiword_value(
+    failed_address,
+):
     client = FakeModbusClient()
     fan = device(client)
     fan.read_register("IR_DeviceTYPE")
@@ -335,7 +338,7 @@ def test_resilient_poll_evicts_every_word_of_failed_multiword_value():
     assert (Table.INPUT_REGISTER, 25) in fan.raw_registers
     assert (Table.INPUT_REGISTER, 26) in fan.raw_registers
 
-    client.fail_slots.add(("read_input_registers", 26))
+    client.fail_slots.add(("read_input_registers", failed_address))
 
     assert fan.update() is True
     assert (Table.INPUT_REGISTER, 25) not in fan.raw_registers

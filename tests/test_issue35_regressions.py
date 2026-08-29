@@ -810,6 +810,37 @@ class Issue35RegressionTest(unittest.TestCase):
         self.assertNotIn("self._attr_native_value = value", number_method_source)
         self.assertNotIn("self.async_write_ha_state()", number_method_source)
 
+    def test_entity_write_paths_refresh_in_finally_after_partial_failure(self):
+        cases = (
+            (FAN_PATH, "VentoExpertFan", "async_turn_on"),
+            (FAN_PATH, "VentoExpertFan", "async_turn_off"),
+            (FAN_PATH, "VentoExpertFan", "async_set_preset_mode"),
+            (FAN_PATH, "VentoExpertFan", "async_set_percentage"),
+            (FAN_PATH, "VentoExpertFan", "async_set_direction"),
+            (FAN_PATH, "VentoExpertFan", "async_oscillate"),
+            (FAN_PATH, "VentoExpertFan", "async_reset_filter_timer"),
+            (FAN_PATH, "VentoExpertFan", "async_reset_alarms"),
+            (SWITCH_PATH, "VentoSwitch", "async_turn_on"),
+            (SWITCH_PATH, "VentoSwitch", "async_turn_off"),
+            (NUMBER_PATH, "VentoNumber", "async_set_native_value"),
+            (SELECT_PATH, "VentoSelect", "async_select_option"),
+        )
+        for path, class_name, method_name in cases:
+            with self.subTest(path=path.name, method=method_name):
+                method = _class_method(_tree(path), class_name, method_name)
+                self.assertTrue(
+                    any(
+                        isinstance(node, ast.Try)
+                        and any(
+                            isinstance(child, ast.Attribute)
+                            and child.attr == "async_refresh"
+                            for statement in node.finalbody
+                            for child in ast.walk(statement)
+                        )
+                        for node in ast.walk(method)
+                    )
+                )
+
     def test_auto_boost_trigger_switch_names_are_explicit(self):
         switch_source = SWITCH_PATH.read_text()
         select_source = SELECT_PATH.read_text()

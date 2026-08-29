@@ -257,6 +257,7 @@ class Issue16RegressionTest(unittest.TestCase):
             def read_weekly_schedule_day(self, _day):
                 return actual
 
+        events = []
         coordinator = types.SimpleNamespace(
             hass=Hass(),
             _fan=Fan(),
@@ -264,7 +265,7 @@ class Issue16RegressionTest(unittest.TestCase):
             _weekly_schedule={1: {}},
             schedule_day_records=lambda _day: {},
             _async_reconcile_schedule_day=None,
-            async_update_listeners=lambda: None,
+            async_update_listeners=lambda: events.append("listeners"),
         )
 
         async def reconcile(_day):
@@ -281,6 +282,7 @@ class Issue16RegressionTest(unittest.TestCase):
                 )
             )
         self.assertEqual(coordinator._weekly_schedule[1], actual)
+        self.assertEqual(events, ["listeners"])
 
     def test_partial_schedule_write_failure_reconciles_device_state(self):
         method = _class_method(

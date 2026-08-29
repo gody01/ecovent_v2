@@ -515,15 +515,17 @@ class VentoNumber(StableObjectIdMixin, CoordinatorEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Update the current value."""
         if self._write_mode == "manual_speed_percent":
-            success = await self.hass.async_add_executor_job(
-                self._fan.set_man_speed_percent,
-                int(value),
-            )
+            try:
+                success = await self.hass.async_add_executor_job(
+                    self._fan.set_man_speed_percent,
+                    int(value),
+                )
+            finally:
+                await self.coordinator.async_refresh()
             if not success:
                 raise RuntimeError(
                     f"Failed to write {self._func}={value!r} for {self._fan.name}"
                 )
-            await self.coordinator.async_refresh()
             return
 
         if self._fan.supports_capability("a21_modbus"):
@@ -540,13 +542,15 @@ class VentoNumber(StableObjectIdMixin, CoordinatorEntity, NumberEntity):
                 value, self._value_bytes, native_numeric=False
             )
 
-        success = await self.hass.async_add_executor_job(
-            self._fan.set_param,
-            self._func,
-            write_value,
-        )
+        try:
+            success = await self.hass.async_add_executor_job(
+                self._fan.set_param,
+                self._func,
+                write_value,
+            )
+        finally:
+            await self.coordinator.async_refresh()
         if not success:
             raise RuntimeError(
                 f"Failed to write {self._func}={value!r} for {self._fan.name}"
             )
-        await self.coordinator.async_refresh()

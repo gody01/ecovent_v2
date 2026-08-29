@@ -438,36 +438,37 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         ):
             preset_mode = speed
 
-        if preset_mode is not None:
-            await self.hass.async_add_executor_job(
-                self.set_preset_mode,
-                preset_mode,
-                True,
-            )
-        if percentage is not None:
-            await self.hass.async_add_executor_job(
-                self.set_percentage,
-                percentage,
-                True,
-            )
-
-        if preset_mode is None and percentage is None:
-            if self._silent_mode_controls_manual_speed:
+        try:
+            if preset_mode is not None:
                 await self.hass.async_add_executor_job(
-                    partial(
-                        self._set_silent_manual_percentage,
-                        self._silent_preset_percentage(
-                            self.coordinator.silent_preset_mode or "manual"
-                        ),
-                        preset_mode=self.coordinator.silent_preset_mode or "manual",
-                    ),
+                    self.set_preset_mode,
+                    preset_mode,
+                    True,
                 )
-                await self.coordinator.async_refresh()
-                return
-            await self.hass.async_add_executor_job(
-                self._set_param_if_changed, "state", "on"
-            )
-        await self.coordinator.async_refresh()
+            if percentage is not None:
+                await self.hass.async_add_executor_job(
+                    self.set_percentage,
+                    percentage,
+                    True,
+                )
+
+            if preset_mode is None and percentage is None:
+                if self._silent_mode_controls_manual_speed:
+                    await self.hass.async_add_executor_job(
+                        partial(
+                            self._set_silent_manual_percentage,
+                            self._silent_preset_percentage(
+                                self.coordinator.silent_preset_mode or "manual"
+                            ),
+                            preset_mode=self.coordinator.silent_preset_mode or "manual",
+                        ),
+                    )
+                    return
+                await self.hass.async_add_executor_job(
+                    self._set_param_if_changed, "state", "on"
+                )
+        finally:
+            await self.coordinator.async_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the entity."""
@@ -475,10 +476,12 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             _LOGGER.debug("Skipping unchanged turn_off command for %s", self._fan.name)
             return
 
-        await self.hass.async_add_executor_job(
-            self._set_param_if_changed, "state", "off"
-        )
-        await self.coordinator.async_refresh()
+        try:
+            await self.hass.async_add_executor_job(
+                self._set_param_if_changed, "state", "off"
+            )
+        finally:
+            await self.coordinator.async_refresh()
 
     def set_preset_mode(self, preset_mode: str, turn_on: bool = True) -> None:
         """Set the preset mode of the fan."""
@@ -531,8 +534,12 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             )
             return
 
-        await self.hass.async_add_executor_job(self.set_preset_mode, preset_mode, True)
-        await self.coordinator.async_refresh()
+        try:
+            await self.hass.async_add_executor_job(
+                self.set_preset_mode, preset_mode, True
+            )
+        finally:
+            await self.coordinator.async_refresh()
 
     def set_percentage(self, percentage: int, turn_on: bool = True) -> None:
         """Set the speed of the fan, as a percentage."""
@@ -600,13 +607,19 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             )
             return
 
-        await self.hass.async_add_executor_job(self.set_percentage, percentage, True)
-        await self.coordinator.async_refresh()
+        try:
+            await self.hass.async_add_executor_job(
+                self.set_percentage, percentage, True
+            )
+        finally:
+            await self.coordinator.async_refresh()
 
     async def async_set_direction(self, direction: str) -> None:
         """Set the direction of the fan."""
-        await self.hass.async_add_executor_job(self.set_direction, direction)
-        await self.coordinator.async_refresh()
+        try:
+            await self.hass.async_add_executor_job(self.set_direction, direction)
+        finally:
+            await self.coordinator.async_refresh()
 
     def set_direction(self, direction: str) -> None:
         """Set the direction of the fan."""
@@ -621,8 +634,10 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
 
     async def async_oscillate(self, oscillating: bool) -> None:
         """Set oscillation."""
-        await self.hass.async_add_executor_job(self.set_oscillating, oscillating)
-        await self.coordinator.async_refresh()
+        try:
+            await self.hass.async_add_executor_job(self.set_oscillating, oscillating)
+        finally:
+            await self.coordinator.async_refresh()
         # self.schedule_update_ha_state()
 
     def set_oscillating(self, oscillating: bool) -> None:
@@ -635,18 +650,22 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
     # Reset filter timer
     async def async_reset_filter_timer(self, fan_target) -> None:
         """Reset Fan's filter timer."""
-        await self.hass.async_add_executor_job(
-            self._set_param, "filter_timer_reset", "01"
-        )
-        await self.coordinator.async_refresh()
+        try:
+            await self.hass.async_add_executor_job(
+                self._set_param, "filter_timer_reset", "01"
+            )
+        finally:
+            await self.coordinator.async_refresh()
 
     # Reset alarms
     async def async_reset_alarms(self, fan_target) -> None:
         """Reset Fan's Alarms."""
-        await self.hass.async_add_executor_job(
-            self._set_param, "reset_alarms", "01"
-        )
-        await self.coordinator.async_refresh()
+        try:
+            await self.hass.async_add_executor_job(
+                self._set_param, "reset_alarms", "01"
+            )
+        finally:
+            await self.coordinator.async_refresh()
 
     async def async_sync_device_clock(self, fan_target) -> None:
         """Synchronize the device clock with Home Assistant local time."""

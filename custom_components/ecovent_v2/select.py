@@ -218,11 +218,13 @@ class VentoSelect(StableObjectIdMixin, CoordinatorEntity, SelectEntity):
         if option not in self.options:
             raise ValueError(f"Invalid {self._method} option: {option}")
 
-        success = await self.hass.async_add_executor_job(
-            self._fan.set_param, self._method, option
-        )
+        try:
+            success = await self.hass.async_add_executor_job(
+                self._fan.set_param, self._method, option
+            )
+        finally:
+            await self.coordinator.async_refresh()
         if not success:
             raise RuntimeError(
                 f"Failed to write {self._method}={option!r} for {self._fan.name}"
             )
-        await self.coordinator.async_refresh()

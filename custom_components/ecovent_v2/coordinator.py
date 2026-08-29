@@ -592,6 +592,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                 if records_to_write:
                     confirmed_records = await self._async_reconcile_schedule_day(day)
                     if confirmed_records is None:
+                        self.async_update_listeners()
                         raise RuntimeError(
                             "Incomplete schedule readback after writing "
                             f"{day_label} for {self._fan.name}"
@@ -601,6 +602,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                         != expected_records[record.period]
                         for record in records_to_write
                     ):
+                        self.async_update_listeners()
                         raise RuntimeError(
                             "Device did not confirm schedule write for "
                             f"{day_label} on {self._fan.name}"

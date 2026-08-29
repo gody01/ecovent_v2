@@ -6,6 +6,15 @@ from ecovent_test_helpers import Fan, packet_with_payload
 
 
 class ParseRobustnessTest(unittest.TestCase):
+    def test_direct_parse_response_keeps_eager_store_behavior(self):
+        fan = Fan("192.0.2.1")
+
+        self.assertTrue(
+            fan.parse_response(packet_with_payload([0x01, 0x01, 0x02, 0x03]))
+        )
+        self.assertEqual(fan.state, "on")
+        self.assertEqual(fan.speed, "high")
+
     def test_parse_response_skips_unknown_parameter_ids(self):
         fan = Fan("192.0.2.1")
         self.assertTrue(

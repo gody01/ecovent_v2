@@ -1,6 +1,7 @@
 """Regression tests for EcoVent discovery and transport."""
 
 import socket
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -112,6 +113,85 @@ class TransportTest(unittest.TestCase):
             )
         )
         self.assertEqual(receive_calls, [])
+
+    def test_read_commits_only_requested_decoded_rows(self):
+        fan = Fan("192.0.2.1")
+        fan.send = lambda _data: True
+        fan.receive = lambda: packet_with_payload([0x01, 0x01, 0x02, 0x03])
+
+        self.assertTrue(fan.send_command(fan.func["read"], "0001", retries=1))
+        self.assertEqual(fan.state, "on")
+        self.assertIsNone(fan.speed)
+
+    def test_value_mismatched_write_response_cannot_change_properties(self):
+        fan = Fan("192.0.2.1")
+        fan.send = lambda _data: True
+        fan.receive = lambda: packet_with_payload([0x01, 0x00, 0x02, 0x03])
+
+        self.assertFalse(
+            fan.send_command(fan.func["write_return"], "0001", "01", retries=1)
+        )
+        self.assertIsNone(fan.state)
+        self.assertIsNone(fan.speed)
+
+    def test_write_commits_only_exactly_acknowledged_rows(self):
+        fan = Fan("192.0.2.1")
+        fan.send = lambda _data: True
+        fan.receive = lambda: packet_with_payload([0x01, 0x01, 0x02, 0x03])
+
+        self.assertTrue(
+            fan.send_command(fan.func["write_return"], "0001", "01", retries=1)
+        )
+        self.assertEqual(fan.state, "on")
+        self.assertIsNone(fan.speed)
+
+    def test_command_transaction_serializes_socket_exchange(self):
+        fan = Fan("192.0.2.1")
+        first_receive_entered = threading.Event()
+        release_first_receive = threading.Event()
+        second_send_entered = threading.Event()
+        sent = []
+        responses = [
+            packet_with_payload([0x01, 0x01]),
+            packet_with_payload([0x01, 0x00]),
+        ]
+        results = []
+
+        def send(data):
+            sent.append(data)
+            if len(sent) == 2:
+                second_send_entered.set()
+            return True
+
+        def receive():
+            if len(sent) == 1:
+                first_receive_entered.set()
+                self.assertTrue(release_first_receive.wait(timeout=1))
+            return responses.pop(0)
+
+        def command(value):
+            results.append(
+                fan.send_command(fan.func["write_return"], "0001", value, retries=1)
+            )
+
+        fan.send = send
+        fan.receive = receive
+        first = threading.Thread(target=command, args=("01",))
+        second = threading.Thread(target=command, args=("00",))
+
+        first.start()
+        self.assertTrue(first_receive_entered.wait(timeout=1))
+        second.start()
+        self.assertFalse(second_send_entered.wait(timeout=0.1))
+        self.assertEqual(len(sent), 1)
+
+        release_first_receive.set()
+        first.join(timeout=1)
+        second.join(timeout=1)
+
+        self.assertFalse(first.is_alive())
+        self.assertFalse(second.is_alive())
+        self.assertEqual(results, [True, True])
 
 
 if __name__ == "__main__":

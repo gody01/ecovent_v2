@@ -324,6 +324,24 @@ class FanProtocolMixin:
         expected_response_param_ids=None,
     ):
         """Execute a protocol command with an already encoded parameter payload."""
+        with self._command_lock:
+            return self._send_encoded_command(
+                command,
+                encoded_params,
+                retries=retries,
+                include_extra_write_parameters=include_extra_write_parameters,
+                expected_response_param_ids=expected_response_param_ids,
+            )
+
+    def _send_encoded_command(
+        self,
+        command,
+        encoded_params,
+        retries=10,
+        include_extra_write_parameters=True,
+        expected_response_param_ids=None,
+    ):
+        """Execute one lock-held send/receive/parse/retry transaction."""
         expected_write_values = None
         final_write_page = 0
         if command == self.func["write_return"]:
@@ -373,9 +391,16 @@ class FanProtocolMixin:
             else:
                 response = False
             if response:
-                if self.parse_response(response):
+                if self.parse_response(response, store=False):
                     received_values = self._last_response_param_values or {}
                     unsupported_ids = self._last_unsupported_param_ids or set()
+                    confirmed_write_ids = set()
+                    if expected_write_values is not None:
+                        confirmed_write_ids.update(
+                            param_id
+                            for param_id, value in expected_write_values.items()
+                            if received_values.get(param_id) == value
+                        )
                     if expected_extra_write_values is not None:
                         extra_write_confirmed = extra_write_confirmed or (
                             _response_matches_write_values(
@@ -384,6 +409,11 @@ class FanProtocolMixin:
                                 unsupported_ids,
                             )
                         )
+                        confirmed_write_ids.update(
+                            param_id
+                            for param_id, value in expected_extra_write_values.items()
+                            if received_values.get(param_id) == value
+                        )
                     write_confirmed = expected_write_values is None or (
                         _response_matches_write_values(
                             expected_write_values,
@@ -391,13 +421,22 @@ class FanProtocolMixin:
                             unsupported_ids,
                         )
                     )
-                    read_confirmed = expected_response_param_ids is None or bool(
-                        set(expected_response_param_ids)
-                        & (
-                            set(self._last_response_param_ids or ())
-                            | set(unsupported_ids)
+                    if expected_response_param_ids is not None:
+                        requested_read_ids = set(expected_response_param_ids)
+                        decoded_read_ids = self._store_staged_response_params(
+                            requested_read_ids, record_unknown=False
                         )
-                    )
+                        read_confirmed = bool(
+                            requested_read_ids
+                            & (decoded_read_ids | set(unsupported_ids))
+                        )
+                    else:
+                        read_confirmed = True
+
+                    if confirmed_write_ids:
+                        self._store_staged_response_params(
+                            confirmed_write_ids, record_unknown=False
+                        )
                 else:
                     write_confirmed = False
                     read_confirmed = False

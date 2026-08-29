@@ -35,12 +35,19 @@ _FIXED_VALUE_SIZES = {
 }
 
 class FanProtocolParseMixin:
-    def parse_response(self, data, *, allow_any_device_id=False):
+    def parse_response(self, data, *, allow_any_device_id=False, store=True):
+        """Parse one response, optionally staging rows for transaction correlation.
+
+        Direct callers keep the historic eager-store behaviour. Command
+        transactions pass ``store=False`` so they can first correlate a
+        response to their request and only then commit accepted rows.
+        """
         self._last_response_param_ids = None
         self._last_raw_response_param_ids = None
         self._last_response_param_values = None
         self._last_unsupported_param_ids = None
         self._last_response_device_id = None
+        self._last_parsed_responses = None
         if not self.validate_packet(data):
             return False
         pointer = 2  # discard frame marker
@@ -158,23 +165,34 @@ class FanProtocolParseMixin:
                 int.from_bytes(parsed_response[:2], byteorder="big"): parsed_response[2:]
                 for parsed_response in parsed_responses
             }
-            decoded_param_ids = set()
-            for parsed_response in parsed_responses:
-                if self._store_param(parsed_response):
-                    decoded_param_ids.add(
-                        int.from_bytes(parsed_response[:2], byteorder="big")
-                    )
             self._last_raw_response_param_ids = response_param_ids
-            self._last_response_param_ids = decoded_param_ids
             self._last_unsupported_param_ids = unsupported_param_ids
             self._last_response_device_id = response_device_id
+            self._last_parsed_responses = tuple(parsed_responses)
+            if store:
+                self._store_staged_response_params(response_param_ids)
+            else:
+                self._last_response_param_ids = set()
         return valid
 
-    def _store_param(self, response):
+    def _store_staged_response_params(self, param_ids, *, record_unknown=True):
+        """Commit selected staged rows and return the successfully decoded ids."""
+        decoded_param_ids = set()
+        for response in self._last_parsed_responses or ():
+            param_id = int.from_bytes(response[:2], byteorder="big")
+            if param_id not in param_ids:
+                continue
+            if self._store_param(response, record_unknown=record_unknown):
+                decoded_param_ids.add(param_id)
+        self._last_response_param_ids = decoded_param_ids
+        return decoded_param_ids
+
+    def _store_param(self, response, *, record_unknown=True):
         param_id = int(response[:2].hex(), 16)
         value = response[2:].hex()
         if param_id not in self.params:
-            self._unknown_params[param_id] = value
+            if record_unknown:
+                self._unknown_params[param_id] = value
             return False
         definition = self.params[param_id]
         parameter = definition[0]
@@ -182,12 +200,14 @@ class FanProtocolParseMixin:
         if definition[1] is not None and parameter != "unit_type":
             expected_size = 1
         if expected_size is not None and len(response) != expected_size + 2:
-            self._unknown_params[param_id] = value
+            if record_unknown:
+                self._unknown_params[param_id] = value
             return False
         try:
             setattr(self, parameter, value)
         except (AttributeError, KeyError, TypeError, ValueError, OverflowError):
-            self._unknown_params[param_id] = value
+            if record_unknown:
+                self._unknown_params[param_id] = value
             return False
         return True
 

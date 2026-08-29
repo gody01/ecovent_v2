@@ -14,6 +14,10 @@ _LOGGER = logging.getLogger(__name__)
 MAX_BULK_READ_PARAMS = 12
 OPTIONAL_PARAM_RETRY_BACKOFF_READS = 10
 BULK_READ_REPROBE_READS = 10
+ACTION_PARAMETER_VALUES = {
+    "filter_timer_reset": "01",
+    "reset_alarms": "01",
+}
 PRESERVE_ON_SOFT_MISS_PARAMS = frozenset(
     {
         0x007C,  # device_search
@@ -74,7 +78,10 @@ def _decode_encoded_write_payload(encoded_params, *, initial_high_byte=0):
                 return None
             value = payload[pointer : pointer + 1]
             pointer += 1
-        values[(high_byte << 8) | low_byte] = bytes(value)
+        param_id = (high_byte << 8) | low_byte
+        if param_id in values:
+            return None
+        values[param_id] = bytes(value)
     if not values:
         return None
     return values, high_byte
@@ -478,7 +485,8 @@ class FanProtocolMixin:
 
     def _is_manual_speed_only_write(self, encoded_params):
         """Return whether encoded params contain exactly one 0x0044 write."""
-        return len(encoded_params) == 4 and encoded_params[:2].lower() == "44"
+        decoded = _decode_encoded_write_payload(encoded_params)
+        return decoded is not None and set(decoded[0]) == {0x0044}
 
     def _protocol_context(self):
         """Return non-secret device context for protocol diagnostics."""
@@ -780,6 +788,8 @@ class FanProtocolMixin:
         return available
 
     def set_param(self, param, value):
+        if value == "" and param in ACTION_PARAMETER_VALUES:
+            value = ACTION_PARAMETER_VALUES[param]
         valpar = self.get_params_values(param, value)
         # print ( "EcoventV2: " + " " + param + "/" + value , file = sys.stderr )
         if valpar[0] is not None:

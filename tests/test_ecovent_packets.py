@@ -1340,6 +1340,54 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertIn("0344bb", calls[0])
         self.assertEqual(fan.audible_write_command_count, 0)
 
+    def test_manual_speed_write_uses_decoded_parameter_id(self):
+        fan = Fan("192.0.2.1")
+
+        self.assertFalse(
+            fan._write_may_be_audible(fan.func["write_return"], "ff0044bb")
+        )
+        self.assertTrue(
+            fan._write_may_be_audible(fan.func["write_return"], "ff0144bb")
+        )
+        self.assertTrue(
+            fan._write_may_be_audible(fan.func["write_return"], "44bb44cc")
+        )
+
+    def test_reset_actions_send_explicit_byte_and_require_matching_ack(self):
+        cases = (
+            ("filter timer", "reset_filter_timer", "036501", [0x65, 0x01], True),
+            (
+                "filter timer rejected",
+                "reset_filter_timer",
+                "036501",
+                [0x65, 0x00],
+                False,
+            ),
+            ("alarms", "reset_alarms", "038001", [0x80, 0x01], True),
+            ("alarms rejected", "reset_alarms", "038001", [0x80, 0x00], False),
+        )
+        for label, method, expected_command, response, expected in cases:
+            with self.subTest(label=label):
+                fan = Fan("192.0.2.1")
+                calls = []
+                fan.send = lambda data: calls.append(data) or True
+                fan.receive = lambda response=response: packet_with_payload(response)
+
+                self.assertEqual(getattr(fan, method)(), expected)
+                self.assertEqual(
+                    calls, [expected_command] * (1 if expected else 10)
+                )
+                self.assertEqual(fan.unknown_params, {})
+
+    def test_blank_reset_action_is_encoded_as_the_explicit_action_byte(self):
+        fan = Fan("192.0.2.1")
+        calls = []
+        fan.send = lambda data: calls.append(data) or True
+        fan.receive = lambda: packet_with_payload([0x65, 0x01])
+
+        self.assertTrue(fan.set_param("filter_timer_reset", ""))
+        self.assertEqual(calls, ["036501"])
+
     def test_manual_speed_zero_write_reaches_device(self):
         fan = Fan("192.0.2.1")
         calls = []

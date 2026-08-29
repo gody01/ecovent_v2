@@ -123,6 +123,15 @@ class TransportTest(unittest.TestCase):
         self.assertEqual(fan.state, "on")
         self.assertIsNone(fan.speed)
 
+    def test_read_ignores_unrelated_unknown_row_without_recording_it(self):
+        fan = Fan("192.0.2.1")
+        fan.send = lambda _data: True
+        fan.receive = lambda: packet_with_payload([0x01, 0x01, 0xAA, 0x55])
+
+        self.assertTrue(fan.send_command(fan.func["read"], "0001", retries=1))
+        self.assertEqual(fan.state, "on")
+        self.assertEqual(fan.unknown_params, {})
+
     def test_value_mismatched_write_response_cannot_change_properties(self):
         fan = Fan("192.0.2.1")
         fan.send = lambda _data: True
@@ -133,6 +142,17 @@ class TransportTest(unittest.TestCase):
         )
         self.assertIsNone(fan.state)
         self.assertIsNone(fan.speed)
+
+    def test_rejected_write_does_not_record_unrelated_unknown_row(self):
+        fan = Fan("192.0.2.1")
+        fan.send = lambda _data: True
+        fan.receive = lambda: packet_with_payload([0x01, 0x00, 0xAA, 0x55])
+
+        self.assertFalse(
+            fan.send_command(fan.func["write_return"], "0001", "01", retries=1)
+        )
+        self.assertIsNone(fan.state)
+        self.assertEqual(fan.unknown_params, {})
 
     def test_write_commits_only_exactly_acknowledged_rows(self):
         fan = Fan("192.0.2.1")

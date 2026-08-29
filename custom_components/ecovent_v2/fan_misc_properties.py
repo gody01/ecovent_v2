@@ -117,7 +117,7 @@ class FanMiscPropertiesMixin:
         return self._unknown_params
 
     def reset_filter_timer(self):
-        return self.set_param("filter_timer_reset", "")
+        return self.set_param("filter_timer_reset", "01")
 
     def reset_alarms(self):
-        return self.set_param("reset_alarms", "")
+        return self.set_param("reset_alarms", "01")

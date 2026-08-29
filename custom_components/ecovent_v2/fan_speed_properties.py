@@ -208,7 +208,11 @@ class FanSpeedPropertiesMixin:
 
     @filter_timer_setpoint.setter
     def filter_timer_setpoint(self, input):
-        val = int.from_bytes(bytes.fromhex(input), byteorder="little", signed=False)
+        val = int.from_bytes(
+            self._decode_exact_bytes(input, 2, "filter_timer_setpoint"),
+            byteorder="little",
+            signed=False,
+        )
         self._filter_timer_setpoint = str(val) + " d"
 
     @property
@@ -217,19 +221,25 @@ class FanSpeedPropertiesMixin:
 
     @filter_timer_countdown.setter
     def filter_timer_countdown(self, input):
-        if len(input) >= 8:
-            val = int(input, 16).to_bytes(max((len(input) + 1) // 2, 4), "big")
+        raw = bytes.fromhex(input)
+        if len(raw) == 5 and raw[0] == 0:
+            raw = raw[1:]
+        if len(raw) == 4:
+            val = raw
             days = val[-1] * 256 + val[-2]
             self._filter_timer_countdown = (
                 str(days) + "d " + str(val[-3]) + "h " + str(val[-4]) + "m "
             )
             return
-        # print ( "EcoventV2: " + input , file = sys.stderr )
-        val = int(input, 16).to_bytes(3, "big")
+        if not 1 <= len(raw) <= 3:
+            raise ValueError(
+                "filter_timer_countdown must contain 1-4 bytes or one "
+                "leading zero pad plus 4 bytes"
+            )
+        val = raw.rjust(3, b"\x00")
         self._filter_timer_countdown = (
             str(val[2]) + "d " + str(val[1]) + "h " + str(val[0]) + "m "
         )
-        # self._filter_timer_countdown = str(int(input[4:6],16)) + "d " + str(int(input[2:4],16)) + "h " +str(int(input[0:2],16)) + "m "
 
     @property
     def boost_time(self):

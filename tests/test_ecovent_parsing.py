@@ -139,6 +139,36 @@ class ParseRobustnessTest(unittest.TestCase):
         )
         self.assertEqual(fan.filter_timer_countdown, "72d 8h 17m ")
 
+    def test_filter_timer_rows_reject_unbounded_padding(self):
+        malformed_rows = (
+            (0x63, [0x00, 0x6D, 0x01], "365 d"),
+            (0x64, [0x00, 0x00, 0x11, 0x08, 0x48, 0x00], "72d 8h 17m "),
+            (0x64, [0x01, 0x11, 0x08, 0x48, 0x00], "72d 8h 17m "),
+        )
+
+        for parameter, malformed, previous in malformed_rows:
+            with self.subTest(parameter=parameter, malformed=malformed):
+                fan = Fan("192.0.2.1")
+                fan.filter_timer_setpoint = "6d01"
+                fan.filter_timer_countdown = "11084800"
+                self.assertTrue(
+                    fan.parse_response(
+                        packet_with_payload(
+                            [0xFE, len(malformed), parameter, *malformed]
+                        )
+                    )
+                )
+                attribute = (
+                    fan.filter_timer_setpoint
+                    if parameter == 0x63
+                    else fan.filter_timer_countdown
+                )
+                self.assertEqual(attribute, previous)
+                self.assertEqual(
+                    fan.unknown_params, {parameter: bytes(malformed).hex()}
+                )
+                self.assertEqual(fan._last_response_param_ids, set())
+
     def test_parse_response_rejects_dangling_extended_marker(self):
         fan = Fan("192.0.2.1")
         self.assertFalse(fan.parse_response(packet_with_payload([0xFF])))

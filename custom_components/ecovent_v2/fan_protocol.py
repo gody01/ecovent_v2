@@ -36,15 +36,15 @@ def _request_param_ids(request):
     return {int(request[i : i + 4], 16) for i in range(0, len(request), 4)}
 
 
-def _decode_encoded_write_values(encoded_params):
-    """Decode one internally generated BGCP write payload for acknowledgement."""
+def _decode_encoded_write_payload(encoded_params, *, initial_high_byte=0):
+    """Decode a BGCP write payload and return its values and final page."""
     try:
         payload = bytes.fromhex(encoded_params)
     except ValueError:
         return None
 
     values = {}
-    high_byte = 0
+    high_byte = initial_high_byte
     pointer = 0
     while pointer < len(payload):
         marker = payload[pointer]
@@ -74,7 +74,19 @@ def _decode_encoded_write_values(encoded_params):
             value = payload[pointer : pointer + 1]
             pointer += 1
         values[(high_byte << 8) | low_byte] = bytes(value)
-    return values or None
+    if not values:
+        return None
+    return values, high_byte
+
+
+def _decode_encoded_write_values(encoded_params, *, initial_high_byte=0):
+    """Decode one internally generated BGCP write payload for acknowledgement."""
+    decoded = _decode_encoded_write_payload(
+        encoded_params, initial_high_byte=initial_high_byte
+    )
+    if decoded is None:
+        return None
+    return decoded[0]
 
 
 def _response_matches_write_values(expected, received, unsupported):
@@ -217,24 +229,31 @@ class FanProtocolMixin:
         else:
             return [None, None]
 
+    def _encode_parameter_value(self, param_id, value, current_high_byte=0):
+        """Encode one parameter while preserving the active BGCP id page."""
+        high_byte = param_id >> 8
+        low_byte = param_id & 0xFF
+        parameter = ""
+        if high_byte != current_high_byte:
+            parameter = f"ff{high_byte:02x}"
+
+        value_size = len(value) // 2 if value else 0
+        if value_size > 1:
+            parameter += f"fe{value_size:02x}{low_byte:02x}"
+        else:
+            parameter += f"{low_byte:02x}"
+        return parameter + value, high_byte
+
     def encode_params(self, param, value=""):
         parameter = ""
+        current_high_byte = 0
         for i in range(0, len(param), 4):
-            n_out = ""
             out = param[i : (i + 4)]
-            if out == "0077" and value == "":
-                value = "0101"
-            if value != "":
-                val_bytes = int(len(value) / 2)
-            else:
-                val_bytes = 0
-            if out[:2] != "00":
-                n_out = "ff" + out[:2]
-            if val_bytes > 1:
-                n_out += "fe" + hex(val_bytes).replace("0x", "").zfill(2) + out[2:4]
-            else:
-                n_out += out[2:4]
-            parameter += n_out + value
+            current_value = "0101" if out == "0077" and value == "" else value
+            encoded, current_high_byte = self._encode_parameter_value(
+                int(out, 16), current_value, current_high_byte
+            )
+            parameter += encoded
             if out == "0077":
                 value = ""
         return parameter
@@ -291,11 +310,15 @@ class FanProtocolMixin:
             param,
             value,
         )
+        expected_response_param_ids = None
+        if command == self.func["read"]:
+            expected_response_param_ids = _request_param_ids(param)
         return self.send_encoded_command(
             command,
             self.encode_params(param, value),
             retries=retries,
             include_extra_write_parameters=include_extra_write_parameters,
+            expected_response_param_ids=expected_response_param_ids,
         )
 
     def send_encoded_command(
@@ -304,23 +327,26 @@ class FanProtocolMixin:
         encoded_params,
         retries=10,
         include_extra_write_parameters=True,
+        expected_response_param_ids=None,
     ):
         """Execute a protocol command with an already encoded parameter payload."""
         expected_write_values = None
+        final_write_page = 0
         if command == self.func["write_return"]:
-            expected_write_values = _decode_encoded_write_values(encoded_params)
-            if expected_write_values is None:
+            decoded_write = _decode_encoded_write_payload(encoded_params)
+            if decoded_write is None:
                 return False
+            expected_write_values, final_write_page = decoded_write
 
         extra_write_parameters = ""
         expected_extra_write_values = None
         if include_extra_write_parameters:
             extra_write_parameters = self._extra_write_parameters(
-                command, encoded_params
+                command, encoded_params, initial_high_byte=final_write_page
             )
             if extra_write_parameters:
                 expected_extra_write_values = _decode_encoded_write_values(
-                    extra_write_parameters
+                    extra_write_parameters, initial_high_byte=final_write_page
                 )
                 if expected_extra_write_values is None:
                     self._notify_extra_write_parameters_result(
@@ -362,9 +388,14 @@ class FanProtocolMixin:
                             unsupported_ids,
                         )
                     )
+                    read_confirmed = expected_response_param_ids is None or bool(
+                        set(expected_response_param_ids)
+                        & (set(received_values) | set(unsupported_ids))
+                    )
                 else:
                     write_confirmed = False
-                if write_confirmed:
+                    read_confirmed = False
+                if write_confirmed and read_confirmed:
                     self._notify_extra_write_parameters_result(
                         extra_write_parameters, extra_write_confirmed
                     )
@@ -710,9 +741,10 @@ class FanProtocolMixin:
                 )
         return False
 
-    def _encode_parameter_values(self, values):
+    def _encode_parameter_values(self, values, *, initial_high_byte=0):
         """Encode profile-mapped parameter values for one command payload."""
         request = ""
+        current_high_byte = initial_high_byte
         for param, value in values.items():
             valpar = self.get_params_values(param, value)
             if valpar[0] is None:
@@ -722,10 +754,10 @@ class FanProtocolMixin:
                 value = hex(valpar[1]).replace("0x", "").zfill(2)
             else:
                 value = str(value)
-            request += self.encode_params(
-                hex(valpar[0]).replace("0x", "").zfill(4),
-                value,
+            encoded, current_high_byte = self._encode_parameter_value(
+                valpar[0], value, current_high_byte
             )
+            request += encoded
         return request
 
     def set_parameters(self, values, include_extra_write_parameters=True):
@@ -742,7 +774,9 @@ class FanProtocolMixin:
 
     set_params = set_parameters
 
-    def _extra_write_parameters(self, command, encoded_params):
+    def _extra_write_parameters(
+        self, command, encoded_params, *, initial_high_byte=0
+    ):
         """Return encoded opportunistic parameters for write commands."""
         if command != self.func["write_return"] or not encoded_params:
             return ""
@@ -751,15 +785,17 @@ class FanProtocolMixin:
         if callback is None:
             return ""
 
-        return self._encode_parameter_values(callback())
+        return self._encode_parameter_values(
+            callback(), initial_high_byte=initial_high_byte
+        )
 
     def get_param(self, param):
         idx = self.get_params_index(param)
         if idx is not None:
-            #  _LOGGER.debug(f"Getting parameter {param} with index {idx}")
-            return self.send_command(
+            response = self.send_command(
                 self.func["read"], hex(idx).replace("0x", "").zfill(4)
             )
+            return response and idx in set(self._last_response_param_ids or ())
         return False
 
     def read_weekly_schedule_record(self, day, period):

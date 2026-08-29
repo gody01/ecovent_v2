@@ -131,6 +131,22 @@ class ParseRobustnessTest(unittest.TestCase):
         self.assertEqual(fan.state, "on")
         self.assertEqual(fan._last_response_param_values, {0x0001: b"\x01"})
 
+    def test_parse_response_rejects_duplicate_or_conflicting_parameter_status(self):
+        malformed_payloads = (
+            [0x01, 0x00, 0x01, 0x01],
+            [0xFD, 0x01, 0x01, 0x01],
+            [0xFD, 0x01, 0xFD, 0x01],
+        )
+
+        for payload in malformed_payloads:
+            with self.subTest(payload=payload):
+                fan = Fan("192.0.2.1")
+
+                self.assertFalse(fan.parse_response(packet_with_payload(payload)))
+                self.assertIsNone(fan.state)
+                self.assertIsNone(fan._last_response_param_ids)
+                self.assertIsNone(fan._last_unsupported_param_ids)
+
     def test_parse_response_keeps_known_params_with_bad_value_as_unknown(self):
         fan = Fan("192.0.2.1")
         self.assertTrue(

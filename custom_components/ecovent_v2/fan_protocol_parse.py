@@ -70,7 +70,13 @@ class FanProtocolParseMixin:
                 elif ext_function == 0xFD:
                     if p >= 0xFC:
                         return False
-                    unsupported_param_ids.add((high_byte_value << 8) | p)
+                    unsupported_param_id = (high_byte_value << 8) | p
+                    if (
+                        unsupported_param_id in response_param_ids
+                        or unsupported_param_id in unsupported_param_ids
+                    ):
+                        return False
+                    unsupported_param_ids.add(unsupported_param_id)
                     ext_function = 0
                     response = bytearray()
                 else:
@@ -89,7 +95,13 @@ class FanProtocolParseMixin:
                 ext_function = 0
                 if len(response) < 2:
                     return False
-                response_param_ids.add(int(response[:2].hex(), 16))
+                response_param_id = int(response[:2].hex(), 16)
+                if (
+                    response_param_id in response_param_ids
+                    or response_param_id in unsupported_param_ids
+                ):
+                    return False
+                response_param_ids.add(response_param_id)
                 parsed_responses.append(bytes(response))
                 response = bytearray()
         valid = (

@@ -586,9 +586,13 @@ Version 1.2.25
 * Close and remove a coordinator when config-entry setup fails after opening its
   transport, so a retry cannot leave a stale connection behind.
 * Validate the BGCP protocol type, controller-ID/password sizes, and response
-  function `0x06` instead of accepting any checksum-valid packet as a write;
-  apply decoded values only after the entire payload is valid, and confirm that
-  write responses echo every requested parameter and raw value.
+  function `0x06` instead of accepting any checksum-valid packet as a command;
+  apply decoded values only after the entire payload is valid, reject duplicate
+  or conflicting status rows, confirm that reads contain a requested parameter,
+  and confirm that writes echo every requested parameter and raw value.
+* Preserve the active BGCP parameter page across batched reads and writes,
+  including an explicit return to page `0x00` before low-page parameters and
+  opportunistic RTC rows.
 * Restore Blauberg Smart Wi-Fi / VENTS iFan Wi-Fi extract-fan availability when
   firmware `2.2 2022-06-16` rejects optional motion rows `0x000B`/`0x0012`;
   state `0x0001` and fan speed `0x0004` remain the liveness rows.

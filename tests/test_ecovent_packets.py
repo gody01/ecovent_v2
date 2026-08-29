@@ -31,6 +31,20 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertEqual(fan.encode_params("00b9", "0e00"), "fe02b90e00")
         self.assertEqual(fan.encode_params("0302", "0102"), "ff03fe02020102")
 
+    def test_encoding_resets_the_parameter_page_when_returning_to_page_zero(self):
+        fan = Fan("192.0.2.1")
+
+        self.assertEqual(fan.encode_params("03020001"), "ff0302ff0001")
+        self.assertEqual(
+            fan._encode_parameter_values(
+                {
+                    "night_mode_timer": "01",
+                    "state": "on",
+                }
+            ),
+            "ff030201ff000101",
+        )
+
     def test_update_does_not_read_write_only_reset_params(self):
         fan = Fan("192.0.2.1")
         calls = []
@@ -1309,11 +1323,43 @@ class PacketBuilderTest(unittest.TestCase):
     def test_read_commands_do_not_increment_audible_write_count(self):
         fan = Fan("192.0.2.1")
         fan.send = lambda data: True
-        fan.receive = lambda: packet_with_payload([])
+        fan.receive = lambda: packet_with_payload([0x01, 0x01])
 
         self.assertTrue(fan.get_param("state"))
 
         self.assertEqual(fan.audible_write_command_count, 0)
+
+    def test_read_requires_a_response_for_the_requested_parameter(self):
+        cases = (
+            ("empty", [], False),
+            ("different parameter", [0x02, 0x03], False),
+            ("requested unsupported", [0xFD, 0x01], False),
+            ("requested value", [0x01, 0x01], True),
+            ("requested plus extra", [0x01, 0x01, 0x02, 0x03], True),
+        )
+        for label, payload, expected in cases:
+            with self.subTest(label=label):
+                fan = Fan("192.0.2.1")
+                fan.send = lambda _data: True
+                fan.receive = lambda payload=payload: packet_with_payload(payload)
+
+                self.assertEqual(fan.get_param("state"), expected)
+
+    def test_partial_bulk_read_response_still_reaches_missing_row_retry(self):
+        fan = Fan("192.0.2.1")
+        responses = iter(
+            (
+                packet_with_payload([0x01, 0x01]),
+                packet_with_payload([0x02, 0x03]),
+            )
+        )
+        calls = []
+        fan.send = lambda data: calls.append(data) or True
+        fan.receive = lambda: next(responses)
+
+        self.assertTrue(fan._read_params("00010002"))
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(fan._last_response_param_ids, {0x0002})
 
     def test_mode_write_increments_audible_write_count(self):
         fan = Fan("192.0.2.1")
@@ -1360,6 +1406,28 @@ class PacketBuilderTest(unittest.TestCase):
 
         self.assertEqual(len(calls), 1)
         self.assertIn("030101fe036f1e2d13fe04701704041a", calls[0])
+        self.assertEqual(results, [True])
+
+    def test_high_page_write_resets_to_page_zero_before_clock_rows(self):
+        fan = Fan("192.0.2.1")
+        calls = []
+        results = []
+        fan.extra_write_parameters_callback = lambda: {
+            "rtc_time": "1e2d13",
+            "rtc_date": "1704041a",
+        }
+        fan.extra_write_parameters_result_callback = results.append
+        fan.send = lambda data: calls.append(data) or True
+        fan.receive = lambda: packet_for_write_command(calls[-1])
+
+        self.assertTrue(
+            fan.send_command(fan.func["write_return"], "0302", "01", retries=1)
+        )
+
+        self.assertEqual(
+            calls,
+            ["03ff030201ff00fe036f1e2d13fe04701704041a"],
+        )
         self.assertEqual(results, [True])
 
     def test_main_write_and_opportunistic_clock_acknowledgements_are_separate(self):

@@ -1302,7 +1302,7 @@ class PacketBuilderTest(unittest.TestCase):
         fan.send = send
         fan.receive = lambda: packet_for_write_command(calls[-1])
 
-        fan.set_man_speed_percent(73)
+        self.assertTrue(fan.set_man_speed_percent(73))
 
         self.assertEqual(len(calls), 1)
         self.assertIn("0344bb", calls[0])
@@ -1314,11 +1314,56 @@ class PacketBuilderTest(unittest.TestCase):
         fan.send = lambda data: calls.append(data) or True
         fan.receive = lambda: packet_for_write_command(calls[-1])
 
-        fan.set_man_speed_percent(0)
+        self.assertTrue(fan.set_man_speed_percent(0))
 
         self.assertEqual(len(calls), 1)
         self.assertIn("034400", calls[0])
         self.assertEqual(fan.audible_write_command_count, 0)
+
+    def test_manual_speed_write_propagates_failure(self):
+        fan = Fan("192.0.2.1")
+        fan.send_command = lambda *_args, **_kwargs: False
+
+        self.assertFalse(fan.set_man_speed_percent(73))
+        self.assertFalse(fan.set_man_speed_percent(-1))
+        self.assertFalse(fan.set_man_speed_percent(101))
+
+    def test_direct_control_methods_propagate_write_results(self):
+        fan = Fan("192.0.2.1")
+        calls = []
+        fan.send_command = lambda *args, **_kwargs: calls.append(args) or True
+
+        fan._state = "off"
+        self.assertTrue(fan.set_state_on())
+        fan._state = "on"
+        self.assertTrue(fan.set_state_on())
+        self.assertTrue(fan.set_state_off())
+        fan._state = "off"
+        self.assertTrue(fan.set_state_off())
+        fan._state = None
+        self.assertFalse(fan.set_state_on())
+        self.assertFalse(fan.set_state_off())
+
+        self.assertTrue(fan.set_speed(3))
+        self.assertFalse(fan.set_speed(0))
+        self.assertFalse(fan.set_speed(6))
+        self.assertTrue(fan.set_man_speed(14))
+        self.assertFalse(fan.set_man_speed(13))
+        self.assertFalse(fan.set_man_speed(256))
+        self.assertTrue(fan.set_airflow(2))
+        self.assertFalse(fan.set_airflow(-1))
+        self.assertFalse(fan.set_airflow(3))
+
+        self.assertEqual(
+            calls,
+            [
+                (fan.func["write_return"], "0001", "01"),
+                (fan.func["write_return"], "0001", "00"),
+                (fan.func["write_return"], "0002", "03"),
+                (fan.func["write_return"], "0044", "0e"),
+                (fan.func["write_return"], "00b7", "02"),
+            ],
+        )
 
     def test_read_commands_do_not_increment_audible_write_count(self):
         fan = Fan("192.0.2.1")
@@ -1344,6 +1389,33 @@ class PacketBuilderTest(unittest.TestCase):
                 fan.receive = lambda payload=payload: packet_with_payload(payload)
 
                 self.assertEqual(fan.get_param("state"), expected)
+
+    def test_read_rejects_present_but_undecodable_requested_value(self):
+        fan = Fan("192.0.2.1")
+        fan.battery_voltage = "3412"
+        invalid_value = packet_with_payload(
+            [0xFE, 0x03, 0x24, 0x01, 0x02, 0x03]
+        )
+        fan.send = lambda _data: True
+        fan.receive = lambda: invalid_value
+
+        self.assertFalse(fan.get_param("battery_voltage"))
+        self.assertEqual(fan.battery_voltage, "4660 mV")
+        self.assertEqual(fan._last_raw_response_param_ids, {0x0024})
+        self.assertEqual(fan._last_response_param_ids, set())
+
+    def test_poll_marks_undecodable_requested_value_missing(self):
+        fan = Fan("192.0.2.1")
+        fan.battery_voltage = "3412"
+        invalid_value = packet_with_payload(
+            [0xFE, 0x03, 0x24, 0x01, 0x02, 0x03]
+        )
+        fan.send = lambda _data: True
+        fan.receive = lambda: invalid_value
+
+        self.assertFalse(fan._read_params("0024"))
+        self.assertEqual(fan.battery_voltage, "4660 mV")
+        self.assertEqual(fan.last_missing_required_params, {0x0024})
 
     def test_partial_bulk_read_response_still_reaches_missing_row_retry(self):
         fan = Fan("192.0.2.1")

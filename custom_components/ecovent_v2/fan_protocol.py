@@ -365,6 +365,7 @@ class FanProtocolMixin:
         while not response:
             i = i + 1
             self._last_response_param_ids = None
+            self._last_raw_response_param_ids = None
             self._last_response_param_values = None
             self._last_unsupported_param_ids = None
             self.send(data)
@@ -390,7 +391,10 @@ class FanProtocolMixin:
                     )
                     read_confirmed = expected_response_param_ids is None or bool(
                         set(expected_response_param_ids)
-                        & (set(received_values) | set(unsupported_ids))
+                        & (
+                            set(self._last_response_param_ids or ())
+                            | set(unsupported_ids)
+                        )
                     )
                 else:
                     write_confirmed = False

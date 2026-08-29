@@ -588,8 +588,9 @@ Version 1.2.25
 * Validate the BGCP protocol type, controller-ID/password sizes, and response
   function `0x06` instead of accepting any checksum-valid packet as a command;
   apply decoded values only after the entire payload is valid, reject duplicate
-  or conflicting status rows, confirm that reads contain a requested parameter,
-  and confirm that writes echo every requested parameter and raw value.
+  or conflicting status rows, confirm that reads contain a requested parameter
+  with a decodable value, and confirm that writes echo every requested parameter
+  and raw value.
 * Preserve the active BGCP parameter page across batched reads and writes,
   including an explicit return to page `0x00` before low-page parameters and
   opportunistic RTC rows.

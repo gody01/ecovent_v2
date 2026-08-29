@@ -149,13 +149,17 @@ class ParseRobustnessTest(unittest.TestCase):
 
     def test_parse_response_keeps_known_params_with_bad_value_as_unknown(self):
         fan = Fan("192.0.2.1")
+        fan.battery_voltage = "3412"
         self.assertTrue(
             fan.parse_response(
                 packet_with_payload([0xFE, 0x03, 0x24, 0x01, 0x02, 0x03, 0x01, 0x01])
             )
         )
         self.assertEqual(fan.unknown_params, {0x0024: "010203"})
+        self.assertEqual(fan.battery_voltage, "4660 mV")
         self.assertEqual(fan.state, "on")
+        self.assertEqual(fan._last_raw_response_param_ids, {0x0024, 0x0001})
+        self.assertEqual(fan._last_response_param_ids, {0x0001})
 
     def test_parse_response_skips_no_value_parameter_markers(self):
         fan = Fan("192.0.2.1")
@@ -187,7 +191,8 @@ class ParseRobustnessTest(unittest.TestCase):
             )
         )
 
-        self.assertEqual(fan._last_response_param_ids, {0x0104})
+        self.assertEqual(fan._last_raw_response_param_ids, {0x0104})
+        self.assertEqual(fan._last_response_param_ids, set())
         self.assertEqual(fan._last_unsupported_param_ids, {0x0101})
 
     def test_parse_response_keeps_page_for_following_parameters(self):
@@ -200,4 +205,5 @@ class ParseRobustnessTest(unittest.TestCase):
         )
 
         self.assertEqual(fan.unknown_params, {0x0104: "05", 0x0105: "06"})
-        self.assertEqual(fan._last_response_param_ids, {0x0104, 0x0105})
+        self.assertEqual(fan._last_raw_response_param_ids, {0x0104, 0x0105})
+        self.assertEqual(fan._last_response_param_ids, set())

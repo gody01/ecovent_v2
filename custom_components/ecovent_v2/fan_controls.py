@@ -8,50 +8,56 @@ class FanControlsMixin:
         request = "0001"
         value = "01"
         if self.state == "off":
-            self.send_command(self.func["write_return"], request, value)
+            return self.send_command(self.func["write_return"], request, value)
+        return self.state == "on"
 
     def set_state_off(self):
         request = "0001"
         value = "00"
         if self.state == "on":
-            self.send_command(self.func["write_return"], request, value)
+            return self.send_command(self.func["write_return"], request, value)
+        return self.state == "off"
 
     def set_speed(self, speed):
-        if speed >= 1 and speed <= 5:
+        if 1 <= speed <= 5:
             request = "0002"
             value = hex(speed).replace("0x", "").zfill(2)
-            self.send_command(self.func["write_return"], request, value)
+            return self.send_command(self.func["write_return"], request, value)
+        return False
 
     def set_man_speed_percent(self, speed):
-        if speed >= 0 and speed <= 100:
+        if 0 <= speed <= 100:
             request = "0044"
             if self.device_profile.speed_percent_scale == "percent":
                 value = speed
             else:
                 value = math.ceil(255 / 100 * speed)
             value = hex(value).replace("0x", "").zfill(2)
-            self.send_command(self.func["write_return"], request, value)
+            return self.send_command(self.func["write_return"], request, value)
+        return False
 
     #            request = "0002"
     #            value = "ff"
     #            self.send_command(self.func["write_return"], request, value)
 
     def set_man_speed(self, speed):
-        if speed >= 14 and speed <= 255:
+        if 14 <= speed <= 255:
             request = "0044"
             value = speed
             value = hex(value).replace("0x", "").zfill(2)
-            self.send_command(self.func["write_return"], request, value)
+            return self.send_command(self.func["write_return"], request, value)
+        return False
 
     #            request = "0002"
     #            value = "ff"
     #            self.send_command(self.func["write_return"], request, value)
 
     def set_airflow(self, val):
-        if val >= 0 and val <= 2:
+        if 0 <= val <= 2:
             request = "00b7"
             value = hex(val).replace("0x", "").zfill(2)
-            self.send_command(self.func["write_return"], request, value)
+            return self.send_command(self.func["write_return"], request, value)
+        return False
 
     @property
     def operating_mode_preset(self):

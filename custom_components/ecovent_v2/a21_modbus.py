@@ -263,6 +263,7 @@ class A21ModbusDevice(Fan):
         self._unavailable: set[tuple[Table, int]] = set()
         self.last_poll_complete = False
         self.identity_probe_failed = False
+        self._writes_blocked_by_identity = False
         self.extra_write_parameters_callback = None
         self._unit_type = model
         self._unit_type_id = A21_IDENTITY_VALUE
@@ -506,6 +507,11 @@ class A21ModbusDevice(Fan):
                 )
 
         with self._lock:
+            if self._writes_blocked_by_identity:
+                raise A21IdentityError(
+                    "A21 writes are blocked until the controller identity is "
+                    "confirmed again"
+                )
             self._ensure_connected()
             if table is Table.COIL:
                 if any(value not in {False, True, 0, 1} for value in values):
@@ -558,10 +564,10 @@ class A21ModbusDevice(Fan):
             spec = get_register(key)
             if not spec.access.readable:
                 raise PermissionError(f"{key} is write-only")
-            words = self.read_raw(spec.table, spec.address, spec.word_count)
             try:
+                words = self.read_raw(spec.table, spec.address, spec.word_count)
                 value = spec.decode(words)
-            except ValueError:
+            except (A21ModbusError, ValueError):
                 self._evict_cached_range(spec.table, spec.address, spec.word_count)
                 self._clear_semantic_state()
                 self._apply_semantics()
@@ -721,25 +727,37 @@ class A21ModbusDevice(Fan):
                 complete = (
                     self._read_resilient(Table.HOLDING_REGISTER, 124, 2) and complete
                 )
-            invalid_slots = self._decode_cache()
             self._verify_cached_identity()
+            invalid_slots = self._decode_cache()
             self.last_poll_complete = complete and not invalid_slots
             failed_slots = self._unavailable | invalid_slots
             return not bool(_REQUIRED_POLL_SLOTS & failed_slots)
 
     def _verify_cached_identity(self) -> None:
-        identity = self._decoded.get(A21_IDENTITY_REGISTER.key)
         identity_slot = (
             A21_IDENTITY_REGISTER.table,
             A21_IDENTITY_REGISTER.address,
         )
-        if identity is None and identity_slot in self._unavailable:
+        if identity_slot in self._unavailable:
+            self.last_poll_complete = False
+            self._writes_blocked_by_identity = True
+            self._raw.clear()
+            self._decoded.clear()
+            self._clear_semantic_state()
             return
+        identity = self._raw.get(identity_slot)
         if identity != A21_IDENTITY_VALUE:
             self.identity_probe_failed = True
+            self._writes_blocked_by_identity = True
+            self.last_poll_complete = False
+            self._raw.clear()
+            self._decoded.clear()
+            self._clear_semantic_state()
             raise A21IdentityError(
                 f"Controller identity register 37 is {identity!r}; expected A21 value 1"
             )
+        self.identity_probe_failed = False
+        self._writes_blocked_by_identity = False
 
     def init_device(self) -> bool:
         """Connect and accept only a controller that reports A21 at IR37."""
@@ -778,8 +796,8 @@ class A21ModbusDevice(Fan):
             complete = True
             for table, address, count in ranges:
                 complete = self._read_resilient(table, address, count) and complete
-            invalid_slots = self._decode_cache()
             self._verify_cached_identity()
+            invalid_slots = self._decode_cache()
             self.last_poll_complete = complete and not invalid_slots
             failed_slots = self._unavailable | invalid_slots
             return not bool(_REQUIRED_POLL_SLOTS & failed_slots)

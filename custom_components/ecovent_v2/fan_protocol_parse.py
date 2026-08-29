@@ -34,6 +34,9 @@ _FIXED_VALUE_SIZES = {
     "voc_treshold": 2,
 }
 
+_PROFILE_SELECTING_PARAM_IDS = frozenset({0x00B9})
+
+
 class FanProtocolParseMixin:
     def parse_response(self, data, *, allow_any_device_id=False, store=True):
         """Parse one response, optionally staging rows for transaction correlation.
@@ -178,10 +181,17 @@ class FanProtocolParseMixin:
     def _store_staged_response_params(self, param_ids, *, record_unknown=True):
         """Commit selected staged rows and return the successfully decoded ids."""
         decoded_param_ids = set()
-        for response in self._last_parsed_responses or ():
+        selected_responses = [
+            response
+            for response in self._last_parsed_responses or ()
+            if int.from_bytes(response[:2], byteorder="big") in param_ids
+        ]
+        selected_responses.sort(
+            key=lambda response: int.from_bytes(response[:2], byteorder="big")
+            not in _PROFILE_SELECTING_PARAM_IDS
+        )
+        for response in selected_responses:
             param_id = int.from_bytes(response[:2], byteorder="big")
-            if param_id not in param_ids:
-                continue
             if self._store_param(response, record_unknown=record_unknown):
                 decoded_param_ids.add(param_id)
         self._last_response_param_ids = decoded_param_ids

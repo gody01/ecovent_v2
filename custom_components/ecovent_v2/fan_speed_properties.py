@@ -1,9 +1,12 @@
 """EcoVent Fan mixin extracted from the vendored protocol client."""
 
+from datetime import date
+
 try:
     from .schedule_helpers import WeeklyScheduleRecord
 except ImportError:
     from schedule_helpers import WeeklyScheduleRecord
+
 
 class FanSpeedPropertiesMixin:
     def _preset_speed_percent(self, input):
@@ -277,6 +280,10 @@ class FanSpeedPropertiesMixin:
             return
 
         val = self._decode_exact_bytes(input, 3, "rtc_time")
+        if val[0] > 59 or val[1] > 59 or val[2] > 23:
+            raise ValueError(
+                f"Invalid RTC time: {val[2]:02d}:{val[1]:02d}:{val[0]:02d}"
+            )
         self._rtc_time = f"{val[2]:02d}:{val[1]:02d}:{val[0]:02d}"
 
     @property
@@ -318,8 +325,16 @@ class FanSpeedPropertiesMixin:
     @rtc_date.setter
     def rtc_date(self, input):
         val = self._decode_exact_bytes(input, 4, "rtc_date")
+        if val[1] not in range(1, 8):
+            raise ValueError(f"Invalid RTC weekday: {val[1]}")
+        try:
+            calendar_date = date(2000 + val[3], val[2], val[0])
+        except ValueError as err:
+            raise ValueError(
+                f"Invalid RTC date: 20{val[3]:02d}-{val[2]:02d}-{val[0]:02d}"
+            ) from err
         self._rtc_weekday = val[1]
-        self._rtc_date = f"20{val[3]:02d}-{val[2]:02d}-{val[0]:02d}"
+        self._rtc_date = calendar_date.isoformat()
 
     @property
     def weekly_schedule_state(self):
@@ -339,6 +354,15 @@ class FanSpeedPropertiesMixin:
     @weekly_schedule_setup.setter
     def weekly_schedule_setup(self, input):
         val = self._decode_exact_bytes(input, 6, "weekly_schedule_setup")
+        if val[0] not in range(1, 8):
+            raise ValueError(f"Invalid schedule response day: {val[0]}")
+        if val[1] not in range(1, 5):
+            raise ValueError(f"Invalid schedule response period: {val[1]}")
+        if val[4] > 59 or val[5] > 23:
+            raise ValueError(
+                "Invalid schedule response end time: "
+                f"{val[5]:02d}:{val[4]:02d}"
+            )
         speed = self._map_value(self.speeds, val[2], "weekly_schedule_speed")
         record = WeeklyScheduleRecord(
             day=val[0],

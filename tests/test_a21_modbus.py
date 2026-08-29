@@ -389,6 +389,79 @@ def test_identity_gate_rejects_non_a21_before_any_write():
     assert [call[0] for call in client.calls] == ["connect", "read_input_registers"]
 
 
+def test_poll_rejects_changed_identity_before_publishing_values():
+    client = FakeModbusClient()
+    fan = device(client)
+
+    assert fan.update() is True
+    assert fan.state == "off"
+    assert fan.speed == "speed_1"
+
+    client.input_registers[37] = 2
+    client.coils[0] = True
+    client.holding_registers[2] = 5
+
+    with pytest.raises(a21_modbus.A21IdentityError):
+        fan.update()
+
+    assert fan.identity_probe_failed is True
+    assert fan.last_poll_complete is False
+    assert fan.raw_registers == {}
+    assert fan.decoded_registers == {}
+    assert fan.state is None
+    assert fan.speed is None
+
+    client.input_registers[37] = 1
+    assert fan.update() is True
+    assert fan.identity_probe_failed is False
+    assert fan.state == "on"
+    assert fan.speed == "speed_5"
+
+
+def test_poll_missing_identity_does_not_publish_other_fresh_values():
+    client = FakeModbusClient()
+    fan = device(client)
+
+    assert fan.update() is True
+    client.fail_slots.add(("read_input_registers", 37))
+    client.coils[0] = True
+    client.holding_registers[2] = 5
+
+    assert fan.update() is False
+    assert fan.last_poll_complete is False
+    assert fan.raw_registers == {}
+    assert fan.decoded_registers == {}
+    assert fan.state is None
+    assert fan.speed is None
+
+    client.fail_slots.clear()
+    assert fan.update() is True
+    assert fan.state == "on"
+    assert fan.speed == "speed_5"
+
+
+def test_identity_rejection_blocks_writes_until_a_valid_poll():
+    client = FakeModbusClient()
+    fan = device(client)
+
+    assert fan.update() is True
+    client.input_registers[37] = 2
+    with pytest.raises(a21_modbus.A21IdentityError):
+        fan.update()
+
+    with pytest.raises(a21_modbus.A21IdentityError, match="writes are blocked"):
+        fan.write_register("CL_POWER", True)
+    assert fan.set_param("state", "on") is False
+    assert client.coils[0] is False
+    assert fan.state is None
+
+    client.input_registers[37] = 1
+    assert fan.update() is True
+    assert fan.set_param("state", "on") is True
+    assert client.coils[0] is True
+    assert fan.state == "on"
+
+
 def test_init_reads_complete_non_sensitive_surface_and_populates_semantics():
     client = FakeModbusClient()
     fan = device(client)
@@ -574,6 +647,26 @@ def test_direct_invalid_read_evicts_prior_raw_decoded_and_semantic_state():
     assert (Table.INPUT_REGISTER, 10) not in fan.raw_registers
     assert "IR_CurRH_Int" not in fan.decoded_registers
     assert fan.humidity is None
+
+
+def test_failed_direct_read_evicts_stale_decoded_and_semantic_value():
+    client = FakeModbusClient()
+    fan = device(client)
+
+    assert fan.read_register("IR_CurRH_Int") == 55
+    client.input_registers[10] = 60
+    client.fail_slots.add(("read_input_registers", 10))
+
+    with pytest.raises(a21_modbus.A21ModbusError):
+        fan.read_register("IR_CurRH_Int")
+
+    assert (Table.INPUT_REGISTER, 10) not in fan.raw_registers
+    assert "IR_CurRH_Int" not in fan.decoded_registers
+    assert fan.humidity is None
+
+    client.fail_slots.clear()
+    assert fan.read_register("IR_CurRH_Int") == 60
+    assert fan.humidity == 60
 
 
 def test_successful_write_clears_prior_unavailable_marker():

@@ -4,7 +4,7 @@ from datetime import datetime
 import unittest
 
 from ecovent_test_helpers import Fan, packet_for_write_command, packet_with_payload
-from fan_protocol import MAX_BULK_READ_PARAMS
+from fan_protocol import BULK_READ_REPROBE_READS, MAX_BULK_READ_PARAMS
 
 
 class PacketBuilderTest(unittest.TestCase):
@@ -149,6 +149,38 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertTrue(fan.update())
         self.assertEqual(calls, [("00010002", 3), ("0001", 1), ("0002", 1)])
         self.assertFalse(fan._bulk_read_supported)
+
+    def test_update_reprobes_bulk_reads_after_transient_failure(self):
+        fan = Fan("192.0.2.1")
+        calls = []
+        bulk_available = False
+
+        def send_command(func, param, value="", retries=10):
+            calls.append((param, retries))
+            if len(param) > 4 and not bulk_available:
+                return False
+            fan._last_response_param_ids = {
+                int(param[index : index + 4], 16)
+                for index in range(0, len(param), 4)
+            }
+            return True
+
+        fan.params = {0x0001: ["state", fan.states], 0x0002: ["speed", fan.speeds]}
+        fan.send_command = send_command
+
+        self.assertTrue(fan.update())
+        self.assertFalse(fan._bulk_read_supported)
+
+        calls.clear()
+        bulk_available = True
+        for _ in range(BULK_READ_REPROBE_READS - 1):
+            self.assertTrue(fan.update())
+        self.assertNotIn(("00010002", 3), calls)
+
+        calls.clear()
+        self.assertTrue(fan.update())
+        self.assertEqual(calls, [("00010002", 3)])
+        self.assertTrue(fan._bulk_read_supported)
 
     def test_update_fails_when_missing_param_retry_fails(self):
         fan = Fan("192.0.2.1")
@@ -1456,6 +1488,18 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertTrue(fan.set_parameters({"man_speed": "73"}))
 
         self.assertEqual(fan.audible_write_command_count, 1)
+
+    def test_batch_write_rejects_unmapped_keys_atomically(self):
+        fan = Fan("192.0.2.1")
+        calls = []
+        fan.send = lambda data: calls.append(data) or True
+        fan.receive = lambda: packet_for_write_command(calls[-1])
+
+        self.assertFalse(fan.set_parameters({"state": "on", "bogus": "ff"}))
+        self.assertEqual(calls, [])
+
+        self.assertTrue(fan.set_parameters({"state": "on"}))
+        self.assertEqual(len(calls), 1)
 
     def test_opportunistic_clock_sync_is_batched_into_existing_writes(self):
         fan = Fan("192.0.2.1")

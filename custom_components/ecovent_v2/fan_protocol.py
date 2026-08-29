@@ -13,6 +13,7 @@ except ImportError:
 _LOGGER = logging.getLogger(__name__)
 MAX_BULK_READ_PARAMS = 12
 OPTIONAL_PARAM_RETRY_BACKOFF_READS = 10
+BULK_READ_REPROBE_READS = 10
 PRESERVE_ON_SOFT_MISS_PARAMS = frozenset(
     {
         0x007C,  # device_search
@@ -140,7 +141,7 @@ class FanProtocolMixin:
                 except OSError:
                     continue
                 if (
-                    self.parse_response(data)
+                    self.parse_response(data, allow_any_device_id=True)
                     and self._device_search != "DEFAULT_DEVICEID"
                 ):
                     ips.append(addr[0])
@@ -579,6 +580,12 @@ class FanProtocolMixin:
         self._last_missing_optional_params = frozenset()
         self._last_unsupported_params = frozenset()
         chunk_size = MAX_BULK_READ_PARAMS * 4
+        try_bulk_read = self._bulk_read_supported is not False
+        if not try_bulk_read:
+            self._bulk_read_reprobe_countdown = max(
+                0, getattr(self, "_bulk_read_reprobe_countdown", 0) - 1
+            )
+            try_bulk_read = self._bulk_read_reprobe_countdown == 0
 
         def mark_unavailable(param_id, *, delay_optional_retry=False):
             nonlocal complete
@@ -597,12 +604,13 @@ class FanProtocolMixin:
             missing = [chunk[i : i + 4] for i in range(0, len(chunk), 4)]
             chunk_param_ids = {int(param, 16) for param in missing}
 
-            if self._bulk_read_supported is not False:
+            if try_bulk_read:
                 self._last_response_param_ids = None
                 self._last_unsupported_param_ids = None
                 if self.send_command(self.func["read"], chunk, retries=3):
                     received_response = True
                     self._bulk_read_supported = True
+                    self._bulk_read_reprobe_countdown = 0
                     response_ids = self._last_response_param_ids
                     unsupported_ids = self._last_unsupported_param_ids
                     if response_ids is None and unsupported_ids is None:
@@ -640,6 +648,8 @@ class FanProtocolMixin:
                         continue
                 else:
                     self._bulk_read_supported = False
+                    self._bulk_read_reprobe_countdown = BULK_READ_REPROBE_READS
+                    try_bulk_read = False
 
             for param in missing:
                 param_id = int(param, 16)
@@ -766,6 +776,11 @@ class FanProtocolMixin:
 
     def set_parameters(self, values, include_extra_write_parameters=True):
         """Write several profile-mapped parameters in one encoded command."""
+        if any(
+            self.get_params_values(param, value)[0] is None
+            for param, value in values.items()
+        ):
+            return False
         request = self._encode_parameter_values(values)
 
         if request:

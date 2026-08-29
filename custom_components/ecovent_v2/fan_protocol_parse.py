@@ -1,11 +1,12 @@
 """EcoVent Fan mixin extracted from the vendored protocol client."""
 
 class FanProtocolParseMixin:
-    def parse_response(self, data):
+    def parse_response(self, data, *, allow_any_device_id=False):
         self._last_response_param_ids = None
         self._last_raw_response_param_ids = None
         self._last_response_param_values = None
         self._last_unsupported_param_ids = None
+        self._last_response_device_id = None
         if not self.validate_packet(data):
             return False
         pointer = 2  # discard frame marker
@@ -21,6 +22,16 @@ class FanProtocolParseMixin:
         if id_size != 0x10:
             return False
         if len(data) < pointer + id_size + 3:
+            return False
+        response_device_id = bytes(data[pointer : pointer + id_size]).decode(
+            "latin-1"
+        )
+        expected_device_id = getattr(self, "_id", None)
+        if (
+            not allow_any_device_id
+            and expected_device_id not in (None, "DEFAULT_DEVICEID")
+            and response_device_id != expected_device_id
+        ):
             return False
         pointer += id_size
         pwd_size = data[pointer]
@@ -122,6 +133,7 @@ class FanProtocolParseMixin:
             self._last_raw_response_param_ids = response_param_ids
             self._last_response_param_ids = decoded_param_ids
             self._last_unsupported_param_ids = unsupported_param_ids
+            self._last_response_device_id = response_device_id
         return valid
 
     def _store_param(self, response):

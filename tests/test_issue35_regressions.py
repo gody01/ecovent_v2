@@ -794,18 +794,13 @@ class Issue35RegressionTest(unittest.TestCase):
                     self.assertIn("raise RuntimeError", method_source)
 
         switch_source = SWITCH_PATH.read_text()
-        for method_name, state_assignment in (
-            ("async_turn_on", "self._attr_is_on = True"),
-            ("async_turn_off", "self._attr_is_on = False"),
-        ):
+        for method_name in ("async_turn_on", "async_turn_off"):
             method_source = ast.get_source_segment(
                 switch_source,
                 _class_method(_tree(SWITCH_PATH), "VentoSwitch", method_name),
             )
-            self.assertLess(
-                method_source.index("raise RuntimeError"),
-                method_source.index(state_assignment),
-            )
+            self.assertIn("await self.coordinator.async_refresh()", method_source)
+            self.assertNotIn("self.async_write_ha_state()", method_source)
 
     def test_auto_boost_trigger_switch_names_are_explicit(self):
         switch_source = SWITCH_PATH.read_text()

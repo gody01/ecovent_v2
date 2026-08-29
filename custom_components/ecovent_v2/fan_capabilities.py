@@ -127,6 +127,7 @@ class FanCapabilitiesMixin:
     def _reset_learned_protocol_capabilities(self):
         """Discard protocol capabilities learned for a previous identity."""
         self._bulk_read_supported = None
+        self._bulk_read_reprobe_countdown = 0
         self._optional_read_backoff = {}
         self._unsupported_optional_poll_params = set()
 

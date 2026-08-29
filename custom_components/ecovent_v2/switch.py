@@ -296,8 +296,7 @@ class VentoSwitch(StableObjectIdMixin, CoordinatorEntity, SwitchEntity):
         )
         if not success:
             raise RuntimeError(f"Failed to turn on {self._func} for {self._fan.name}")
-        self._attr_is_on = True
-        self.async_write_ha_state()
+        await self.coordinator.async_refresh()
 
     async def async_turn_off(self, **kwargs):
         """Turn the device off."""
@@ -306,8 +305,7 @@ class VentoSwitch(StableObjectIdMixin, CoordinatorEntity, SwitchEntity):
         )
         if not success:
             raise RuntimeError(f"Failed to turn off {self._func} for {self._fan.name}")
-        self._attr_is_on = False
-        self.async_write_ha_state()
+        await self.coordinator.async_refresh()
 
     def humidity_sensor_state(self):
         """Humidity sensor state."""

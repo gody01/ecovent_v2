@@ -50,6 +50,43 @@ class ParseRobustnessTest(unittest.TestCase):
             fan.parse_response(packet_with_payload([], password=b"X" * 9))
         )
 
+    def test_parse_response_correlates_configured_device_id(self):
+        configured_id = "KNOWN_DEVICE_ID!"
+        fan = Fan("192.0.2.1", fan_id=configured_id)
+
+        self.assertFalse(
+            fan.parse_response(
+                packet_with_payload(
+                    [0x01, 0x01], device_id=b"OTHER_DEVICE_ID!"
+                )
+            )
+        )
+        self.assertIsNone(fan.state)
+        self.assertIsNone(fan._last_response_device_id)
+
+        self.assertTrue(
+            fan.parse_response(
+                packet_with_payload(
+                    [0x01, 0x01], device_id=configured_id.encode()
+                )
+            )
+        )
+        self.assertEqual(fan.state, "on")
+        self.assertEqual(fan._last_response_device_id, configured_id)
+
+    def test_discovery_can_accept_an_unconfigured_device_id(self):
+        fan = Fan("192.0.2.1", fan_id="KNOWN_DEVICE_ID!")
+
+        self.assertTrue(
+            fan.parse_response(
+                packet_with_payload(
+                    [0x01, 0x01], device_id=b"OTHER_DEVICE_ID!"
+                ),
+                allow_any_device_id=True,
+            )
+        )
+        self.assertEqual(fan._last_response_device_id, "OTHER_DEVICE_ID!")
+
     def test_parse_response_rejects_short_packet(self):
         fan = Fan("192.0.2.1")
         self.assertFalse(fan.parse_response(b"\xfd\xfd"))

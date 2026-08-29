@@ -597,3 +597,9 @@ Version 1.2.25
 * Restore Blauberg Smart Wi-Fi / VENTS iFan Wi-Fi extract-fan availability when
   firmware `2.2 2022-06-16` rejects optional motion rows `0x000B`/`0x0012`;
   state `0x0001` and fan speed `0x0004` remain the liveness rows.
+* Correlate normal BGCP replies with the configured controller ID while keeping
+  explicit broadcast discovery open to new device IDs.
+* Re-probe bulk reads after a temporary failure instead of permanently using
+  slower per-register polling until the device identity changes.
+* Reject mixed batch writes when any requested semantic key is unknown, and
+  refresh switch state from the controller after successful writes.

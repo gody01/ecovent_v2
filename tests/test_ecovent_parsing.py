@@ -38,6 +38,53 @@ class ParseRobustnessTest(unittest.TestCase):
         self.assertEqual(vento.profile_key, "vento")
         self.assertEqual(vento.relay_sensor_state, "on")
 
+    def test_malformed_profile_row_rejects_all_rows_from_the_response(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0500"
+
+        self.assertTrue(
+            fan.parse_response(
+                packet_with_payload(
+                    [0xFE, 0x03, 0xB9, 0x00, 0x06, 0x00, 0x14, 0x01]
+                )
+            )
+        )
+
+        self.assertEqual(fan.profile_key, "vento")
+        self.assertIsNone(fan.relay_sensor_state)
+        self.assertIsNone(fan.humidity_treshold)
+        self.assertEqual(fan.unknown_params, {0x00B9: "000600"})
+        self.assertEqual(fan._last_response_param_ids, set())
+
+    def test_breezy_screen_off_times_reject_invalid_clock_components(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+
+        for param, attribute in (
+            (0x08, "screen_off_start_time"),
+            (0x09, "screen_off_end_time"),
+        ):
+            with self.subTest(param=param):
+                self.assertTrue(
+                    fan.parse_response(
+                        packet_with_payload(
+                            [0xFF, 0x04, 0xFE, 0x02, param, 0x3B, 0x17]
+                        )
+                    )
+                )
+                self.assertEqual(getattr(fan, attribute), "23:59")
+
+                self.assertTrue(
+                    fan.parse_response(
+                        packet_with_payload(
+                            [0xFF, 0x04, 0xFE, 0x02, param, 0x3C, 0x17]
+                        )
+                    )
+                )
+                self.assertEqual(getattr(fan, attribute), "23:59")
+                self.assertEqual(fan.unknown_params[0x0400 + param], "3c17")
+                self.assertNotIn(0x0400 + param, fan._last_response_param_ids)
+
     def test_parse_response_skips_unknown_parameter_ids(self):
         fan = Fan("192.0.2.1")
         self.assertTrue(
@@ -437,6 +484,18 @@ class ParseRobustnessTest(unittest.TestCase):
         self.assertEqual(fan.unknown_params, {0x0086: bytes(malformed).hex()})
         self.assertEqual(fan._last_response_param_ids, set())
 
+        invalid_date = [0x00, 0x03, 0x1F, 0x04, 0xEA, 0x07]
+        self.assertTrue(
+            fan.parse_response(
+                packet_with_payload(
+                    [0xFE, len(invalid_date), 0x86, *invalid_date]
+                )
+            )
+        )
+        self.assertEqual(fan.firmware, "0.3 2020-08-26")
+        self.assertEqual(fan.unknown_params, {0x0086: bytes(invalid_date).hex()})
+        self.assertEqual(fan._last_response_param_ids, set())
+
     def test_weekly_schedule_rejects_noncanonical_length(self):
         fan = Fan("192.0.2.1")
         fan.unit_type = "1100"
@@ -463,6 +522,7 @@ class ParseRobustnessTest(unittest.TestCase):
             [0x08, 0x01, 0x01, 0x00, 0x00, 0x06],
             [0x01, 0x00, 0x01, 0x00, 0x00, 0x06],
             [0x01, 0x05, 0x01, 0x00, 0x00, 0x06],
+            [0x01, 0x01, 0xFF, 0x00, 0x00, 0x06],
             [0x01, 0x01, 0x01, 0x00, 0x3C, 0x06],
             [0x01, 0x01, 0x01, 0x00, 0x00, 0x18],
         )
@@ -494,6 +554,70 @@ class ParseRobustnessTest(unittest.TestCase):
         self.assertEqual(
             fan._weekly_schedule_setup_record.end_time.isoformat(), "06:00:00"
         )
+
+    def test_vento_schedule_rejects_profile_speed_and_final_end_mismatches(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0500"
+        valid = [0x01, 0x01, 0x03, 0x00, 0x00, 0x06]
+        self.assertTrue(
+            fan.parse_response(packet_with_payload([0xFE, 0x06, 0x77, *valid]))
+        )
+        previous = fan.weekly_schedule_setup
+
+        for malformed in (
+            [0x01, 0x01, 0x05, 0x00, 0x00, 0x06],
+            [0x01, 0x04, 0x03, 0x00, 0x00, 0x06],
+        ):
+            with self.subTest(value=bytes(malformed).hex()):
+                self.assertTrue(
+                    fan.parse_response(
+                        packet_with_payload([0xFE, 0x06, 0x77, *malformed])
+                    )
+                )
+                self.assertEqual(fan.weekly_schedule_setup, previous)
+                self.assertEqual(
+                    fan.unknown_params, {0x0077: bytes(malformed).hex()}
+                )
+                self.assertEqual(fan._last_response_param_ids, set())
+
+    def test_compound_timers_reject_out_of_range_clock_fields(self):
+        cases = (
+            (0x000B, [0x3B, 0x3B, 0x17], [0x3C, 0x00, 0x00], "timer_counter"),
+            (
+                0x0064,
+                [0x11, 0x08, 0x48],
+                [0x3C, 0x00, 0x00],
+                "filter_timer_countdown",
+            ),
+            (
+                0x007E,
+                [0x11, 0x08, 0x2C, 0x01],
+                [0x3C, 0x00, 0x00, 0x00],
+                "machine_hours",
+            ),
+        )
+        for parameter, valid, malformed, attribute in cases:
+            with self.subTest(parameter=f"0x{parameter:04X}"):
+                fan = Fan("192.0.2.1")
+                for value in (valid, malformed):
+                    payload = []
+                    if parameter > 0xFF:
+                        payload.extend([0xFF, parameter >> 8])
+                    payload.extend(
+                        [0xFE, len(value), parameter & 0xFF, *value]
+                    )
+                    self.assertTrue(fan.parse_response(packet_with_payload(payload)))
+
+                expected = {
+                    "timer_counter": "23h 59m 59s ",
+                    "filter_timer_countdown": "72d 8h 17m ",
+                    "machine_hours": "300d 8h 17m ",
+                }[attribute]
+                self.assertEqual(getattr(fan, attribute), expected)
+                self.assertEqual(
+                    fan.unknown_params, {parameter: bytes(malformed).hex()}
+                )
+                self.assertEqual(fan._last_response_param_ids, set())
 
     def test_machine_hours_decodes_two_byte_day_counter(self):
         fan = Fan("192.0.2.1")
@@ -566,6 +690,16 @@ class ParseRobustnessTest(unittest.TestCase):
         self.assertEqual(fan.unknown_params, {0x0021: bytes(malformed).hex()})
         self.assertEqual(fan._last_response_param_ids, set())
 
+        overflow = [0x90, 0x5F, 0x01]
+        self.assertTrue(
+            fan.parse_response(
+                packet_with_payload([0xFE, len(overflow), 0x21, *overflow])
+            )
+        )
+        self.assertEqual(fan.rtc_time, "01:01:01")
+        self.assertEqual(fan.unknown_params, {0x0021: bytes(overflow).hex()})
+        self.assertEqual(fan._last_response_param_ids, set())
+
     def test_vento_rtc_rejects_invalid_clock_and_calendar_fields(self):
         invalid_rows = (
             (0x006F, [0x3C, 0x00, 0x00]),
@@ -575,6 +709,7 @@ class ParseRobustnessTest(unittest.TestCase):
             (0x0070, [0x01, 0x00, 0x01, 0x1A]),
             (0x0070, [0x01, 0x08, 0x01, 0x1A]),
             (0x0070, [0x1F, 0x01, 0x04, 0x1A]),
+            (0x0070, [0x17, 0x01, 0x04, 0x1A]),
         )
 
         for parameter, value in invalid_rows:
@@ -614,6 +749,43 @@ class ParseRobustnessTest(unittest.TestCase):
         )
         self.assertEqual(fan.rtc_time, "19:45:30")
         self.assertEqual(fan.rtc_date, "2026-04-23")
+
+    def test_vento_mode_timers_reject_invalid_clock_fields(self):
+        for parameter in (0x0302, 0x0303):
+            with self.subTest(parameter=f"0x{parameter:04X}"):
+                fan = Fan("192.0.2.1")
+                valid = [0x3B, 0x17]
+                valid_payload = [
+                    0xFF,
+                    parameter >> 8,
+                    0xFE,
+                    len(valid),
+                    parameter & 0xFF,
+                    *valid,
+                ]
+                self.assertTrue(fan.parse_response(packet_with_payload(valid_payload)))
+                attribute = (
+                    "night_mode_timer" if parameter == 0x0302 else "party_mode_timer"
+                )
+                self.assertEqual(getattr(fan, attribute), "23h 59m")
+
+                for malformed in ([0x3C, 0x00], [0x00, 0x18]):
+                    malformed_payload = [
+                        0xFF,
+                        parameter >> 8,
+                        0xFE,
+                        len(malformed),
+                        parameter & 0xFF,
+                        *malformed,
+                    ]
+                    self.assertTrue(
+                        fan.parse_response(packet_with_payload(malformed_payload))
+                    )
+                    self.assertEqual(getattr(fan, attribute), "23h 59m")
+                    self.assertEqual(
+                        fan.unknown_params, {parameter: bytes(malformed).hex()}
+                    )
+                    self.assertEqual(fan._last_response_param_ids, set())
 
     def test_parse_response_skips_no_value_parameter_markers(self):
         fan = Fan("192.0.2.1")

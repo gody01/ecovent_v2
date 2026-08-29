@@ -12,6 +12,7 @@ from this documentation alone.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from datetime import date
 from enum import Enum
 from typing import Any, Iterable, Mapping
 
@@ -269,6 +270,7 @@ def encode(kind: Kind, value: Any) -> tuple[int, ...]:
     if kind is Kind.FIRMWARE:
         if not isinstance(value, Firmware):
             raise ValueError("firmware record required")
+        date(value.year, value.month, value.day)
         return (
             _pair(value.major, value.minor),
             _pair(_range(value.day, 1, 31, "day"), _range(value.month, 1, 12, "month")),
@@ -277,6 +279,9 @@ def encode(kind: Kind, value: Any) -> tuple[int, ...]:
     if kind is Kind.RTC_CALENDAR:
         if not isinstance(value, RtcCalendar):
             raise ValueError("calendar record required")
+        calendar_date = date(2000 + value.year, value.month, value.day)
+        if calendar_date.isoweekday() != value.weekday:
+            raise ValueError("calendar weekday does not match calendar date")
         return (
             _pair(
                 _range(value.day, 1, 31, "day"), _range(value.weekday, 1, 7, "weekday")

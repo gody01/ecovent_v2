@@ -101,6 +101,7 @@ class Issue16RegressionTest(unittest.TestCase):
         )
         namespace = {
             "_LOGGER": types.SimpleNamespace(warning=lambda *_args: None),
+            "validate_schedule_day": lambda _records: None,
         }
         exec(
             compile(
@@ -409,7 +410,10 @@ class Issue16RegressionTest(unittest.TestCase):
         load_schedule_days = _class_method(
             ast.parse(source), "EcoVentCoordinator", "_load_schedule_days"
         )
-        namespace = {"_LOGGER": logging.getLogger(__name__)}
+        namespace = {
+            "_LOGGER": logging.getLogger(__name__),
+            "validate_schedule_day": lambda _records: None,
+        }
         exec(
             compile(
                 ast.fix_missing_locations(
@@ -438,6 +442,62 @@ class Issue16RegressionTest(unittest.TestCase):
 
         namespace["_load_schedule_days"](coordinator, [1])
         self.assertEqual(coordinator._weekly_schedule[1], fresh)
+
+    def test_invalid_schedule_read_preserves_last_chronological_day(self):
+        method = _class_method(
+            ast.parse(COORDINATOR_PATH.read_text()),
+            "EcoVentCoordinator",
+            "_load_schedule_days",
+        )
+
+        def validate(records):
+            previous = -1
+            for record in records[:3]:
+                current = record.end_hour * 60 + record.end_minute
+                if current <= previous:
+                    raise ValueError("not chronological")
+                previous = current
+
+        namespace = {
+            "_LOGGER": logging.getLogger(__name__),
+            "validate_schedule_day": validate,
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+                str(COORDINATOR_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+
+        def records(ends):
+            return {
+                period: types.SimpleNamespace(
+                    period=period,
+                    end_hour=end // 60,
+                    end_minute=end % 60,
+                )
+                for period, end in enumerate(ends, 1)
+            }
+
+        cached = records((360, 720, 1080, 0))
+        invalid = records((600, 540, 1080, 0))
+        fresh = records((420, 780, 1140, 0))
+        reads = iter((invalid, fresh))
+        coordinator = types.SimpleNamespace(
+            _fan=types.SimpleNamespace(
+                name="Test fan",
+                read_weekly_schedule_day=lambda _day: next(reads),
+            ),
+            _weekly_schedule={1: cached},
+        )
+
+        namespace["_load_schedule_days"](coordinator, [1])
+        self.assertIs(coordinator._weekly_schedule[1], cached)
+
+        namespace["_load_schedule_days"](coordinator, [1])
+        self.assertIs(coordinator._weekly_schedule[1], fresh)
 
 
 if __name__ == "__main__":

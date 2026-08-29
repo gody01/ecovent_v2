@@ -67,6 +67,8 @@ class FanMiscPropertiesMixin:
     @night_mode_timer.setter
     def night_mode_timer(self, input):
         val = self._decode_exact_bytes(input, 2, "night_mode_timer")
+        if val[0] > 59 or val[1] > 23:
+            raise ValueError(f"Invalid night mode timer: {val[1]:02d}:{val[0]:02d}")
         self._night_mode_timer = (
             str(val[1]).zfill(2) + "h " + str(val[0]).zfill(2) + "m"
         )
@@ -78,6 +80,8 @@ class FanMiscPropertiesMixin:
     @party_mode_timer.setter
     def party_mode_timer(self, input):
         val = self._decode_exact_bytes(input, 2, "party_mode_timer")
+        if val[0] > 59 or val[1] > 23:
+            raise ValueError(f"Invalid party mode timer: {val[1]:02d}:{val[0]:02d}")
         self._party_mode_timer = (
             str(val[1]).zfill(2) + "h " + str(val[0]).zfill(2) + "m"
         )

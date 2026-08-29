@@ -106,6 +106,10 @@ class FanCorePropertiesMixin:
     @timer_counter.setter
     def timer_counter(self, input):
         val = self._decode_exact_bytes(input, 3, "timer_counter")
+        if val[0] > 59 or val[1] > 59 or val[2] > 23:
+            raise ValueError(
+                f"Invalid timer countdown: {val[2]:02d}:{val[1]:02d}:{val[0]:02d}"
+            )
         self._timer_counter = (
             str(val[2]) + "h " + str(val[1]) + "m " + str(val[0]) + "s "
         )

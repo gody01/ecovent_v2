@@ -387,6 +387,36 @@ def test_identity_gate_rejects_non_a21_before_any_write():
     assert fan.identity_probe_failed is True
     assert fan.id == "DEFAULT_DEVICEID"
     assert [call[0] for call in client.calls] == ["connect", "read_input_registers"]
+    assert fan.raw_registers == {}
+    assert fan.decoded_registers == {}
+
+    assert fan.set_param("state", "on") is False
+    assert client.coils[0] is False
+    assert [call[0] for call in client.calls] == ["connect", "read_input_registers"]
+
+
+def test_identity_reprobe_error_clears_state_and_blocks_writes():
+    client = FakeModbusClient()
+    fan = device(client)
+
+    assert fan.init_device() is True
+    assert fan.state == "off"
+    assert fan.speed == "speed_1"
+    client.fail_slots.add(("read_input_registers", 37))
+    calls_before_reprobe = len(client.calls)
+
+    with pytest.raises(a21_modbus.A21IllegalAddressError):
+        fan.init_device()
+
+    assert fan.identity_probe_failed is True
+    assert fan.last_poll_complete is False
+    assert fan.raw_registers == {}
+    assert fan.decoded_registers == {}
+    assert fan.state is None
+    assert fan.speed is None
+    assert fan.set_param("state", "on") is False
+    assert client.coils[0] is False
+    assert len(client.calls) == calls_before_reprobe + 1
 
 
 def test_poll_rejects_changed_identity_before_publishing_values():

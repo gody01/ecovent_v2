@@ -62,6 +62,45 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertNotIn("0065", params)
         self.assertNotIn("0080", params)
 
+    def test_read_command_rejects_other_rows_when_profile_row_is_malformed(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0500"
+        fan.send = lambda _data: True
+        fan.receive = lambda: packet_with_payload(
+            [0xFE, 0x03, 0xB9, 0x00, 0x06, 0x00, 0x14, 0x01]
+        )
+
+        for requested in ("00b90014", "0014"):
+            with self.subTest(requested=requested):
+                self.assertFalse(
+                    fan.send_command(fan.func["read"], requested, retries=1)
+                )
+        self.assertEqual(fan.profile_key, "vento")
+        self.assertIsNone(fan.relay_sensor_state)
+        self.assertIsNone(fan.humidity_treshold)
+
+    def test_schedule_read_rejects_a_different_day_or_period(self):
+        fan = Fan("192.0.2.1")
+        fan.send = lambda _data: True
+
+        for returned_day, returned_period in ((2, 1), (1, 2)):
+            with self.subTest(day=returned_day, period=returned_period):
+                fan.receive = lambda day=returned_day, period=returned_period: (
+                    packet_with_payload(
+                        [0xFE, 0x06, 0x77, day, period, 0x01, 0x00, 0x00, 0x06]
+                    )
+                )
+                self.assertIsNone(fan.read_weekly_schedule_record(1, 1))
+                self.assertIsNone(fan.weekly_schedule_setup)
+                self.assertIsNone(fan._weekly_schedule_setup_record)
+
+        fan.receive = lambda: packet_with_payload(
+            [0xFE, 0x06, 0x77, 0x01, 0x01, 0x01, 0x00, 0x00, 0x06]
+        )
+        record = fan.read_weekly_schedule_record(1, 1)
+        self.assertIsNotNone(record)
+        self.assertEqual((record.day, record.period), (1, 1))
+
     def test_update_does_not_poll_weekly_schedule_setup(self):
         fan = Fan("192.0.2.1")
         self.assertTrue(

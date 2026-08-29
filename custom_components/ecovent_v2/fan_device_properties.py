@@ -1,5 +1,8 @@
 """EcoVent Fan mixin extracted from the vendored protocol client."""
 
+from datetime import date
+
+
 class FanDevicePropertiesMixin:
     @property
     def device_search(self):
@@ -26,6 +29,10 @@ class FanDevicePropertiesMixin:
     @machine_hours.setter
     def machine_hours(self, input):
         val = self._decode_exact_bytes(input, 4, "machine_hours")
+        if val[0] > 59 or val[1] > 23:
+            raise ValueError(
+                f"Invalid machine-hours time: {val[1]:02d}:{val[0]:02d}"
+            )
         self._machine_hours = (
             str(int.from_bytes(val[2:4], byteorder="little", signed=False))
             + "d "
@@ -84,16 +91,18 @@ class FanDevicePropertiesMixin:
     @firmware.setter
     def firmware(self, input):
         val = self._decode_exact_bytes(input, 6, "firmware")
+        year = int.from_bytes(val[4:6], byteorder="little", signed=False)
+        firmware_date = date(year, val[3], val[2])
         firmware = (
             str(val[0])
             + "."
             + str(val[1])
             + " "
-            + str(int.from_bytes(val[4:6], byteorder="little", signed=False))
+            + str(firmware_date.year)
             + "-"
-            + str(val[3]).zfill(2)
+            + str(firmware_date.month).zfill(2)
             + "-"
-            + str(val[2]).zfill(2)
+            + str(firmware_date.day).zfill(2)
         )
         previous_firmware = getattr(self, "_firmware", None)
         if previous_firmware is not None and previous_firmware != firmware:

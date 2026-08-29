@@ -11,6 +11,7 @@ from .schedule_helpers import (
     SCHEDULE_DAY_TO_INDEX,
     WeeklyScheduleRecord,
     changed_schedule_records,
+    validate_schedule_day,
 )
 
 from homeassistant.config_entries import ConfigEntry
@@ -274,6 +275,17 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                     self._fan.name,
                     day,
                     len(records or {}),
+                )
+                continue
+            try:
+                validate_schedule_day([records[period] for period in range(1, 5)])
+            except ValueError as err:
+                _LOGGER.warning(
+                    "EcoVentCoordinator: preserving cached schedule for %s day %s "
+                    "after invalid readback: %s",
+                    self._fan.name,
+                    day,
+                    err,
                 )
                 continue
             self._weekly_schedule[day] = records
@@ -559,6 +571,13 @@ class EcoVentCoordinator(DataUpdateCoordinator):
             return None
 
         if set(confirmed_records) != {1, 2, 3, 4}:
+            self._weekly_schedule.pop(day, None)
+            return None
+        try:
+            validate_schedule_day(
+                [confirmed_records[period] for period in range(1, 5)]
+            )
+        except ValueError:
             self._weekly_schedule.pop(day, None)
             return None
         self._weekly_schedule[day] = confirmed_records

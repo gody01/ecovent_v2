@@ -227,6 +227,10 @@ class FanCapabilitiesMixin:
     def _decode_time_minutes_hours(self, input):
         """Decode two-byte minute/hour protocol time into HH:MM text."""
         value = self._decode_exact_bytes(input, 2, "time")
+        if value[0] > 59 or value[1] > 23:
+            raise ValueError(
+                f"Invalid time components: hours={value[1]}, minutes={value[0]}"
+            )
         return f"{value[1]:02d}:{value[0]:02d}"
 
     def _decode_duration_seconds(self, input, parameter):
@@ -236,6 +240,8 @@ class FanCapabilitiesMixin:
             byteorder="little",
             signed=False,
         )
+        if value > 24 * 60 * 60:
+            raise ValueError(f"Invalid {parameter} duration: {value} seconds")
         hours, remainder = divmod(value, 3600)
         minutes, seconds = divmod(remainder, 60)
         return hours, minutes, seconds

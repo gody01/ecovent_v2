@@ -104,3 +104,12 @@ class ExtractFanCapabilityTest(unittest.TestCase):
         self.assertEqual(fan.silent_mode_start_time, "1h 1m 1s ")
         self.assertEqual(fan.silent_mode_end_time, "24h 0m 0s ")
         self.assertEqual(fan.rtc_time, "01:01:01")
+
+        for attribute in (
+            "boost_timer_countdown",
+            "silent_mode_start_time",
+            "silent_mode_end_time",
+        ):
+            with self.subTest(attribute=attribute):
+                with self.assertRaisesRegex(ValueError, "duration"):
+                    setattr(fan, attribute, "905f01")

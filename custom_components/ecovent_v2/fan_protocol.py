@@ -906,11 +906,17 @@ class FanProtocolMixin:
                 f"Invalid weekly schedule slot: day={day}, period={period}"
             )
 
+        self._weekly_schedule_setup = None
         self._weekly_schedule_setup_record = None
         request_value = bytes([day, period]).hex()
         if not self.send_command(self.func["read"], "0077", request_value):
             return None
-        return self._weekly_schedule_setup_record
+        record = self._weekly_schedule_setup_record
+        if record is None or record.day != day or record.period != period:
+            self._weekly_schedule_setup = None
+            self._weekly_schedule_setup_record = None
+            return None
+        return record
 
     def read_weekly_schedule_day(self, day):
         """Read all four schedule periods for a day."""

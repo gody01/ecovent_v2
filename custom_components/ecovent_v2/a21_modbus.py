@@ -739,6 +739,7 @@ class A21ModbusDevice(Fan):
             A21_IDENTITY_REGISTER.address,
         )
         if identity_slot in self._unavailable:
+            self.identity_probe_failed = True
             self.last_poll_complete = False
             self._writes_blocked_by_identity = True
             self._raw.clear()
@@ -765,9 +766,20 @@ class A21ModbusDevice(Fan):
         try:
             identity = self.read_register(A21_IDENTITY_REGISTER.key)
         except A21ModbusError:
+            self.identity_probe_failed = True
+            self._writes_blocked_by_identity = True
+            self.last_poll_complete = False
+            self._raw.clear()
+            self._decoded.clear()
+            self._clear_semantic_state()
             raise
         if identity != A21_IDENTITY_VALUE:
             self.identity_probe_failed = True
+            self._writes_blocked_by_identity = True
+            self.last_poll_complete = False
+            self._raw.clear()
+            self._decoded.clear()
+            self._clear_semantic_state()
             return False
 
         endpoint_id = _safe_identity(

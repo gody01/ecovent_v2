@@ -3,9 +3,9 @@
 from datetime import date
 
 try:
-    from .schedule_helpers import WeeklyScheduleRecord
+    from .schedule_helpers import SCHEDULE_SPEED_TO_VALUE, WeeklyScheduleRecord
 except ImportError:
-    from schedule_helpers import WeeklyScheduleRecord
+    from schedule_helpers import SCHEDULE_SPEED_TO_VALUE, WeeklyScheduleRecord
 
 
 class FanSpeedPropertiesMixin:
@@ -229,6 +229,11 @@ class FanSpeedPropertiesMixin:
             raw = raw[1:]
         if len(raw) == 4:
             val = raw
+            if val[-4] > 59 or val[-3] > 23:
+                raise ValueError(
+                    "Invalid filter countdown time: "
+                    f"{val[-3]:02d}:{val[-4]:02d}"
+                )
             days = val[-1] * 256 + val[-2]
             self._filter_timer_countdown = (
                 str(days) + "d " + str(val[-3]) + "h " + str(val[-4]) + "m "
@@ -240,6 +245,10 @@ class FanSpeedPropertiesMixin:
                 "leading zero pad plus 4 bytes"
             )
         val = raw.rjust(3, b"\x00")
+        if val[0] > 59 or val[1] > 23:
+            raise ValueError(
+                f"Invalid filter countdown time: {val[1]:02d}:{val[0]:02d}"
+            )
         self._filter_timer_countdown = (
             str(val[2]) + "d " + str(val[1]) + "h " + str(val[0]) + "m "
         )
@@ -274,6 +283,8 @@ class FanSpeedPropertiesMixin:
                 byteorder="little",
                 signed=False,
             )
+            if total_seconds > 24 * 60 * 60:
+                raise ValueError(f"Invalid RTC seconds since midnight: {total_seconds}")
             hours, remainder = divmod(total_seconds, 3600)
             minutes, seconds = divmod(remainder, 60)
             self._rtc_time = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
@@ -333,6 +344,11 @@ class FanSpeedPropertiesMixin:
             raise ValueError(
                 f"Invalid RTC date: 20{val[3]:02d}-{val[2]:02d}-{val[0]:02d}"
             ) from err
+        if calendar_date.isoweekday() != val[1]:
+            raise ValueError(
+                "Invalid RTC weekday for date: "
+                f"{val[1]} != {calendar_date.isoweekday()}"
+            )
         self._rtc_weekday = val[1]
         self._rtc_date = calendar_date.isoformat()
 
@@ -364,6 +380,16 @@ class FanSpeedPropertiesMixin:
                 f"{val[5]:02d}:{val[4]:02d}"
             )
         speed = self._map_value(self.speeds, val[2], "weekly_schedule_speed")
+        if (
+            speed not in SCHEDULE_SPEED_TO_VALUE
+            or speed not in self.device_profile.schedule_speed_modes
+        ):
+            raise ValueError(f"Invalid schedule response speed: {val[2]}")
+        if val[1] == 4 and (val[4] != 0 or val[5] != 0):
+            raise ValueError(
+                "Invalid final schedule period end time: "
+                f"{val[5]:02d}:{val[4]:02d}"
+            )
         record = WeeklyScheduleRecord(
             day=val[0],
             period=val[1],

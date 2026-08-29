@@ -186,12 +186,55 @@ class FanProtocolParseMixin:
             for response in self._last_parsed_responses or ()
             if int.from_bytes(response[:2], byteorder="big") in param_ids
         ]
+        profile_responses = [
+            response
+            for response in self._last_parsed_responses or ()
+            if int.from_bytes(response[:2], byteorder="big")
+            in _PROFILE_SELECTING_PARAM_IDS
+        ]
         selected_responses.sort(
             key=lambda response: int.from_bytes(response[:2], byteorder="big")
             not in _PROFILE_SELECTING_PARAM_IDS
         )
+        selected_profile_responses = [
+            response
+            for response in selected_responses
+            if int.from_bytes(response[:2], byteorder="big")
+            in _PROFILE_SELECTING_PARAM_IDS
+        ]
+        before = None
+        if profile_responses:
+            before = self.__dict__.copy()
+            before["_unknown_params"] = self._unknown_params.copy()
+            decoded_profile_ids = set()
+            for response in profile_responses:
+                param_id = int.from_bytes(response[:2], byteorder="big")
+                if self._store_param(response, record_unknown=record_unknown):
+                    decoded_profile_ids.add(param_id)
+            profile_ids = {
+                int.from_bytes(response[:2], byteorder="big")
+                for response in profile_responses
+            }
+            if decoded_profile_ids != profile_ids:
+                malformed_profile_values = {
+                    int.from_bytes(response[:2], byteorder="big"): response[2:].hex()
+                    for response in profile_responses
+                }
+                self.__dict__.clear()
+                self.__dict__.update(before)
+                if record_unknown:
+                    self._unknown_params.update(malformed_profile_values)
+                self._last_response_param_ids = set()
+                return set()
+            if not selected_profile_responses:
+                self.__dict__.clear()
+                self.__dict__.update(before)
+            else:
+                decoded_param_ids.update(decoded_profile_ids)
         for response in selected_responses:
             param_id = int.from_bytes(response[:2], byteorder="big")
+            if param_id in _PROFILE_SELECTING_PARAM_IDS:
+                continue
             if self._store_param(response, record_unknown=record_unknown):
                 decoded_param_ids.add(param_id)
         self._last_response_param_ids = decoded_param_ids

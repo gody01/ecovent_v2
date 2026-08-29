@@ -106,6 +106,20 @@ class ParseRobustnessTest(unittest.TestCase):
         fan = Fan("192.0.2.1")
         self.assertFalse(fan.parse_response(packet_with_payload([0xFF])))
 
+    def test_parse_response_rejects_nested_or_unsupported_markers(self):
+        fan = Fan("192.0.2.1")
+        malformed_payloads = (
+            [0xFE, 0x02, 0xFE, 0x02, 0x63, 0x6D, 0x01],
+            [0xFD, 0xFE, 0x02, 0x63, 0x6D, 0x01],
+            [0xFC, 0x01, 0x01, 0x01],
+        )
+
+        for payload in malformed_payloads:
+            with self.subTest(payload=payload):
+                self.assertFalse(fan.parse_response(packet_with_payload(payload)))
+                self.assertIsNone(fan.filter_timer_setpoint)
+                self.assertIsNone(fan._last_response_param_values)
+
     def test_invalid_payload_does_not_apply_valid_prefix(self):
         fan = Fan("192.0.2.1")
 
@@ -115,6 +129,7 @@ class ParseRobustnessTest(unittest.TestCase):
 
         self.assertTrue(fan.parse_response(packet_with_payload([0x01, 0x01])))
         self.assertEqual(fan.state, "on")
+        self.assertEqual(fan._last_response_param_values, {0x0001: b"\x01"})
 
     def test_parse_response_keeps_known_params_with_bad_value_as_unknown(self):
         fan = Fan("192.0.2.1")

@@ -3,6 +3,7 @@
 class FanProtocolParseMixin:
     def parse_response(self, data):
         self._last_response_param_ids = None
+        self._last_response_param_values = None
         self._last_unsupported_param_ids = None
         if not self.validate_packet(data):
             return False
@@ -43,13 +44,18 @@ class FanProtocolParseMixin:
         unsupported_param_ids = set()
         parsed_responses = []
         for p in payload:
-            if parameter and p == 0xFF:
+            if parameter and ext_function == 2 and p >= 0xFC:
+                return False
+            marker_ready = parameter and ext_function in (0, 1)
+            if marker_ready and p == 0xFC:
+                return False
+            if marker_ready and p == 0xFF:
                 ext_function = 0xFF
                 # print ( "def ext:" + hex(0xff) )
-            elif parameter and p == 0xFE:
+            elif marker_ready and p == 0xFE:
                 ext_function = 0xFE
                 # print ( "def ext:" + hex(0xfe) )
-            elif parameter and p == 0xFD:
+            elif marker_ready and p == 0xFD:
                 ext_function = 0xFD
                 # print ( "dev ext:" + hex(0xfd) )
             else:
@@ -57,9 +63,13 @@ class FanProtocolParseMixin:
                     high_byte_value = p
                     ext_function = 1
                 elif ext_function == 0xFE:
+                    if p <= 1:
+                        return False
                     value_counter = p
                     ext_function = 2
                 elif ext_function == 0xFD:
+                    if p >= 0xFC:
+                        return False
                     unsupported_param_ids.add((high_byte_value << 8) | p)
                     ext_function = 0
                     response = bytearray()
@@ -86,6 +96,10 @@ class FanProtocolParseMixin:
             ext_function == 0 and parameter == 1 and value_counter == 1 and not response
         )
         if valid:
+            self._last_response_param_values = {
+                int.from_bytes(parsed_response[:2], byteorder="big"): parsed_response[2:]
+                for parsed_response in parsed_responses
+            }
             for parsed_response in parsed_responses:
                 self._store_param(parsed_response)
             self._last_response_param_ids = response_param_ids

@@ -3,7 +3,7 @@
 from datetime import datetime
 import unittest
 
-from ecovent_test_helpers import Fan, packet_with_payload
+from ecovent_test_helpers import Fan, packet_for_write_command, packet_with_payload
 from fan_protocol import MAX_BULK_READ_PARAMS
 
 
@@ -1286,7 +1286,7 @@ class PacketBuilderTest(unittest.TestCase):
             return True
 
         fan.send = send
-        fan.receive = lambda: packet_with_payload([])
+        fan.receive = lambda: packet_for_write_command(calls[-1])
 
         fan.set_man_speed_percent(73)
 
@@ -1298,7 +1298,7 @@ class PacketBuilderTest(unittest.TestCase):
         fan = Fan("192.0.2.1")
         calls = []
         fan.send = lambda data: calls.append(data) or True
-        fan.receive = lambda: packet_with_payload([])
+        fan.receive = lambda: packet_for_write_command(calls[-1])
 
         fan.set_man_speed_percent(0)
 
@@ -1317,8 +1317,9 @@ class PacketBuilderTest(unittest.TestCase):
 
     def test_mode_write_increments_audible_write_count(self):
         fan = Fan("192.0.2.1")
-        fan.send = lambda data: True
-        fan.receive = lambda: packet_with_payload([])
+        calls = []
+        fan.send = lambda data: calls.append(data) or True
+        fan.receive = lambda: packet_for_write_command(calls[-1])
 
         self.assertTrue(fan.set_param("state", "on"))
 
@@ -1326,12 +1327,13 @@ class PacketBuilderTest(unittest.TestCase):
 
     def test_clock_rows_make_manual_speed_batch_audible(self):
         fan = Fan("192.0.2.1")
+        calls = []
         fan.extra_write_parameters_callback = lambda: {
             "rtc_time": "1e2d13",
             "rtc_date": "1704041a",
         }
-        fan.send = lambda data: True
-        fan.receive = lambda: packet_with_payload([])
+        fan.send = lambda data: calls.append(data) or True
+        fan.receive = lambda: packet_for_write_command(calls[-1])
 
         self.assertTrue(fan.set_parameters({"man_speed": "73"}))
 
@@ -1352,13 +1354,55 @@ class PacketBuilderTest(unittest.TestCase):
             return True
 
         fan.send = send
-        fan.receive = lambda: packet_with_payload([])
+        fan.receive = lambda: packet_for_write_command(calls[-1])
 
         self.assertTrue(fan.set_param("state", "on"))
 
         self.assertEqual(len(calls), 1)
         self.assertIn("030101fe036f1e2d13fe04701704041a", calls[0])
         self.assertEqual(results, [True])
+
+    def test_main_write_and_opportunistic_clock_acknowledgements_are_separate(self):
+        clock_payload = [
+            0xFE,
+            0x03,
+            0x6F,
+            0x1E,
+            0x2D,
+            0x13,
+            0xFE,
+            0x04,
+            0x70,
+            0x17,
+            0x04,
+            0x04,
+            0x1A,
+        ]
+        cases = (
+            ("main only", [0x01, 0x01], True, False),
+            ("clock only", clock_payload, False, True),
+        )
+        for label, payload, write_result, clock_result in cases:
+            with self.subTest(label=label):
+                fan = Fan("192.0.2.1")
+                results = []
+                fan.extra_write_parameters_callback = lambda: {
+                    "rtc_time": "1e2d13",
+                    "rtc_date": "1704041a",
+                }
+                fan.extra_write_parameters_result_callback = results.append
+                fan.send = lambda _data: True
+                fan.receive = lambda payload=payload: packet_with_payload(payload)
+
+                self.assertEqual(
+                    fan.send_encoded_command(
+                        fan.func["write_return"],
+                        fan.encode_params("0001", "01"),
+                        retries=1,
+                    ),
+                    write_result,
+                )
+                self.assertEqual(results, [clock_result])
 
     def test_failed_write_does_not_confirm_opportunistic_clock_sync(self):
         fan = Fan("192.0.2.1")
@@ -1389,6 +1433,28 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertFalse(fan.set_param("state", "on"))
         self.assertEqual(results, [False])
 
+    def test_write_requires_matching_parameter_value_acknowledgement(self):
+        cases = (
+            ("empty", [], False),
+            ("unsupported", [0xFD, 0x01], False),
+            ("different parameter", [0x02, 0x03], False),
+            ("old value", [0x01, 0x00], False),
+            ("matching value", [0x01, 0x01], True),
+            ("matching plus extra", [0x01, 0x01, 0x02, 0x03], True),
+        )
+        for label, payload, expected in cases:
+            with self.subTest(label=label):
+                fan = Fan("192.0.2.1")
+                fan.send = lambda _data: True
+                fan.receive = lambda payload=payload: packet_with_payload(payload)
+
+                self.assertEqual(
+                    fan.send_command(
+                        fan.func["write_return"], "0001", "01", retries=1
+                    ),
+                    expected,
+                )
+
     def test_explicit_clock_sync_does_not_reappend_opportunistic_clock_rows(self):
         fan = Fan("192.0.2.1")
         calls = []
@@ -1402,7 +1468,7 @@ class PacketBuilderTest(unittest.TestCase):
             return True
 
         fan.send = send
-        fan.receive = lambda: packet_with_payload([])
+        fan.receive = lambda: packet_for_write_command(calls[-1])
 
         self.assertTrue(fan.set_rtc_datetime(datetime(2026, 4, 23, 19, 45, 30)))
 

@@ -33,3 +33,10 @@ def packet_with_payload(
     )
     checksum = sum(body) & 0xFFFF
     return b"\xfd\xfd" + body + checksum.to_bytes(2, byteorder="little")
+
+
+def packet_for_write_command(command):
+    """Echo one FUNC 0x03 request as the documented FUNC 0x06 response."""
+    if not command.startswith("03"):
+        raise ValueError("command must use BGCP write-with-response function 0x03")
+    return packet_with_payload(bytes.fromhex(command[2:]))

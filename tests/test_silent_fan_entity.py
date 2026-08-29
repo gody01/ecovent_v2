@@ -9,7 +9,7 @@ import sys
 import types
 import unittest
 
-from ecovent_test_helpers import Fan, packet_with_payload
+from ecovent_test_helpers import Fan, packet_for_write_command
 
 
 COMPONENT_PATH = (
@@ -116,7 +116,7 @@ def _silent_entity(*, speed="manual", man_speed=63):
 
     calls = []
     fan.send = lambda data: calls.append(data) or True
-    fan.receive = lambda: packet_with_payload([])
+    fan.receive = lambda: packet_for_write_command(calls[-1])
 
     entity = VentoExpertFan.__new__(VentoExpertFan)
     entity._fan = fan

@@ -36,6 +36,54 @@ def _request_param_ids(request):
     return {int(request[i : i + 4], 16) for i in range(0, len(request), 4)}
 
 
+def _decode_encoded_write_values(encoded_params):
+    """Decode one internally generated BGCP write payload for acknowledgement."""
+    try:
+        payload = bytes.fromhex(encoded_params)
+    except ValueError:
+        return None
+
+    values = {}
+    high_byte = 0
+    pointer = 0
+    while pointer < len(payload):
+        marker = payload[pointer]
+        pointer += 1
+        if marker == 0xFF:
+            if pointer >= len(payload):
+                return None
+            high_byte = payload[pointer]
+            pointer += 1
+            continue
+        if marker in (0xFC, 0xFD):
+            return None
+        if marker == 0xFE:
+            if pointer + 1 >= len(payload):
+                return None
+            value_size = payload[pointer]
+            low_byte = payload[pointer + 1]
+            pointer += 2
+            if value_size <= 1 or pointer + value_size > len(payload):
+                return None
+            value = payload[pointer : pointer + value_size]
+            pointer += value_size
+        else:
+            low_byte = marker
+            if pointer >= len(payload):
+                return None
+            value = payload[pointer : pointer + 1]
+            pointer += 1
+        values[(high_byte << 8) | low_byte] = bytes(value)
+    return values or None
+
+
+def _response_matches_write_values(expected, received, unsupported):
+    """Return whether a response confirms each requested raw write value."""
+    return set(expected).isdisjoint(unsupported) and all(
+        received.get(param_id) == value for param_id, value in expected.items()
+    )
+
+
 class FanProtocolMixin:
     @property
     def last_missing_required_params(self):
@@ -258,11 +306,27 @@ class FanProtocolMixin:
         include_extra_write_parameters=True,
     ):
         """Execute a protocol command with an already encoded parameter payload."""
+        expected_write_values = None
+        if command == self.func["write_return"]:
+            expected_write_values = _decode_encoded_write_values(encoded_params)
+            if expected_write_values is None:
+                return False
+
         extra_write_parameters = ""
+        expected_extra_write_values = None
         if include_extra_write_parameters:
             extra_write_parameters = self._extra_write_parameters(
                 command, encoded_params
             )
+            if extra_write_parameters:
+                expected_extra_write_values = _decode_encoded_write_values(
+                    extra_write_parameters
+                )
+                if expected_extra_write_values is None:
+                    self._notify_extra_write_parameters_result(
+                        extra_write_parameters, False
+                    )
+                    return False
             encoded_params += extra_write_parameters
 
         if self._write_may_be_audible(command, encoded_params):
@@ -270,24 +334,46 @@ class FanProtocolMixin:
 
         data = command + encoded_params
         response = False
+        extra_write_confirmed = False
         i = 0
         while not response:
             i = i + 1
             self._last_response_param_ids = None
+            self._last_response_param_values = None
             self._last_unsupported_param_ids = None
             self.send(data)
             response = self.receive()
             if response:
                 if self.parse_response(response):
+                    received_values = self._last_response_param_values or {}
+                    unsupported_ids = self._last_unsupported_param_ids or set()
+                    if expected_extra_write_values is not None:
+                        extra_write_confirmed = extra_write_confirmed or (
+                            _response_matches_write_values(
+                                expected_extra_write_values,
+                                received_values,
+                                unsupported_ids,
+                            )
+                        )
+                    write_confirmed = expected_write_values is None or (
+                        _response_matches_write_values(
+                            expected_write_values,
+                            received_values,
+                            unsupported_ids,
+                        )
+                    )
+                else:
+                    write_confirmed = False
+                if write_confirmed:
                     self._notify_extra_write_parameters_result(
-                        extra_write_parameters, True
+                        extra_write_parameters, extra_write_confirmed
                     )
                     return True
                 response = False
             if i >= retries:
                 # print ("EcoventV2: Timeout device: " + self._host + " bail out after " + str(i) + " retries" , file = sys.stderr )
                 self._notify_extra_write_parameters_result(
-                    extra_write_parameters, False
+                    extra_write_parameters, extra_write_confirmed
                 )
                 return False
 

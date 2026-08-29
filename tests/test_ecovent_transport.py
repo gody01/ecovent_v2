@@ -41,6 +41,42 @@ class TransportTest(unittest.TestCase):
         fan = Fan("192.0.2.1")
         self.assertFalse(fan.receive())
 
+    def test_send_reports_success_after_socket_sendall(self):
+        fan = Fan("192.0.2.1")
+
+        class FakeSocket:
+            payload = None
+
+            def sendall(self, payload):
+                self.payload = payload
+
+        sock = FakeSocket()
+        fan.connect = lambda: sock
+        fan.build_packet = lambda _data: "0001"
+
+        self.assertTrue(fan.send("request"))
+        self.assertEqual(sock.payload, b"\x00\x01")
+
+    def test_send_failure_closes_the_socket(self):
+        fan = Fan("192.0.2.1")
+
+        class FailingSocket:
+            closed = False
+
+            def sendall(self, _payload):
+                raise OSError("synthetic send failure")
+
+            def close(self):
+                self.closed = True
+
+        sock = FailingSocket()
+        fan.connect = lambda: sock
+        fan.build_packet = lambda _data: "0001"
+
+        self.assertFalse(fan.send("request"))
+        self.assertTrue(sock.closed)
+        self.assertIsNone(fan.socket)
+
     def test_send_command_retries_invalid_packet_before_success(self):
         fan = Fan("192.0.2.1")
         good_packet = packet_with_payload([0x01, 0x01])
@@ -50,6 +86,7 @@ class TransportTest(unittest.TestCase):
 
         def send(data):
             sent.append(data)
+            return True
 
         def receive():
             return responses.pop(0)
@@ -60,6 +97,21 @@ class TransportTest(unittest.TestCase):
         self.assertTrue(fan.send_command(fan.func["read"], "0001"))
         self.assertEqual(len(sent), 2)
         self.assertEqual(fan.state, "on")
+
+    def test_failed_send_cannot_be_confirmed_by_a_stale_response(self):
+        fan = Fan("192.0.2.1")
+        receive_calls = []
+        fan.send = lambda _data: False
+        fan.receive = lambda: receive_calls.append(True) or packet_with_payload(
+            [0x01, 0x01]
+        )
+
+        self.assertFalse(
+            fan.send_encoded_command(
+                fan.func["write_return"], "0101", retries=1
+            )
+        )
+        self.assertEqual(receive_calls, [])
 
 
 if __name__ == "__main__":

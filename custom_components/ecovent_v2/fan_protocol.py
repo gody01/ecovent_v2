@@ -264,22 +264,15 @@ class FanProtocolMixin:
         try:
             self.socket = self.connect()
             if self.socket is None:
-                return None
+                return False
             payload = self.build_packet(data)
-            response = self.socket.sendall(bytes.fromhex(payload))
-        except socket.timeout:
-            # print ( "EcoventV2: Connection timeout send to device: " + self._host , file = sys.stderr )
-            return None
-        except (
-            OSError
-        ):  # this shall include all connection errors like Aborted, Refused and Reset
-            return None
-        except TypeError:
-            return (
-                None  # this can happen if the socket connection fails and returns None
-            )
-        else:
-            return response
+            self.socket.sendall(bytes.fromhex(payload))
+            return True
+        except (OSError, TypeError):
+            if self.socket is not None:
+                self.socket.close()
+                self.socket = None
+            return False
 
     def receive(self):
         try:
@@ -342,9 +335,15 @@ class FanProtocolMixin:
         extra_write_parameters = ""
         expected_extra_write_values = None
         if include_extra_write_parameters:
-            extra_write_parameters = self._extra_write_parameters(
-                command, encoded_params, initial_high_byte=final_write_page
-            )
+            try:
+                extra_write_parameters = self._extra_write_parameters(
+                    command, encoded_params, initial_high_byte=final_write_page
+                )
+            except ValueError:
+                self._notify_extra_write_parameters_result(
+                    "", False, requested=True
+                )
+                return False
             if extra_write_parameters:
                 expected_extra_write_values = _decode_encoded_write_values(
                     extra_write_parameters, initial_high_byte=final_write_page
@@ -369,8 +368,10 @@ class FanProtocolMixin:
             self._last_raw_response_param_ids = None
             self._last_response_param_values = None
             self._last_unsupported_param_ids = None
-            self.send(data)
-            response = self.receive()
+            if self.send(data):
+                response = self.receive()
+            else:
+                response = False
             if response:
                 if self.parse_response(response):
                     received_values = self._last_response_param_values or {}
@@ -413,9 +414,11 @@ class FanProtocolMixin:
                 )
                 return False
 
-    def _notify_extra_write_parameters_result(self, extra_parameters, success):
+    def _notify_extra_write_parameters_result(
+        self, extra_parameters, success, *, requested=False
+    ):
         """Report whether opportunistic parameters reached the controller."""
-        if not extra_parameters:
+        if not extra_parameters and not requested:
             return
 
         callback = getattr(self, "extra_write_parameters_result_callback", None)
@@ -762,7 +765,7 @@ class FanProtocolMixin:
         for param, value in values.items():
             valpar = self.get_params_values(param, value)
             if valpar[0] is None:
-                continue
+                raise ValueError(f"Unknown EcoVent parameter: {param}")
 
             if valpar[1] is not None:
                 value = hex(valpar[1]).replace("0x", "").zfill(2)
@@ -776,12 +779,10 @@ class FanProtocolMixin:
 
     def set_parameters(self, values, include_extra_write_parameters=True):
         """Write several profile-mapped parameters in one encoded command."""
-        if any(
-            self.get_params_values(param, value)[0] is None
-            for param, value in values.items()
-        ):
+        try:
+            request = self._encode_parameter_values(values)
+        except ValueError:
             return False
-        request = self._encode_parameter_values(values)
 
         if request:
             return self.send_encoded_command(

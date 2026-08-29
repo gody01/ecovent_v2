@@ -1501,6 +1501,19 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertTrue(fan.set_parameters({"state": "on"}))
         self.assertEqual(len(calls), 1)
 
+    def test_unmapped_opportunistic_batch_fails_and_reports_result(self):
+        fan = Fan("192.0.2.1")
+        calls = []
+        results = []
+        fan.extra_write_parameters_callback = lambda: {"bogus": "ff"}
+        fan.extra_write_parameters_result_callback = results.append
+        fan.send = lambda data: calls.append(data) or True
+        fan.receive = lambda: packet_for_write_command(calls[-1])
+
+        self.assertFalse(fan.set_param("state", "on"))
+        self.assertEqual(calls, [])
+        self.assertEqual(results, [False])
+
     def test_opportunistic_clock_sync_is_batched_into_existing_writes(self):
         fan = Fan("192.0.2.1")
         calls = []

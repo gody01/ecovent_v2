@@ -277,6 +277,13 @@ class EcoVentCoordinator(DataUpdateCoordinator):
             return
         self._last_clock_sync_check = now
 
+        if self._silent_mode:
+            _LOGGER.debug(
+                "EcoVentCoordinator: skipping standalone clock sync because "
+                "silent manual-speed mode is enabled"
+            )
+            return
+
         if self._recently_synced_clock(now):
             return
 

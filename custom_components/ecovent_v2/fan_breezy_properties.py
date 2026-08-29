@@ -74,6 +74,8 @@ class FanBreezyPropertiesMixin:
     @alarm_list.setter
     def alarm_list(self, input):
         data = bytes.fromhex(input)
+        if len(data) % 2:
+            raise ValueError("alarm_list must contain type/status byte pairs")
         alarms = []
         for index in range(0, len(data) - 1, 2):
             alarm_type = self._map_value(self.alarms, data[index + 1], "alarm_type")

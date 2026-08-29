@@ -126,6 +126,10 @@ class Issue49RegressionTest(unittest.TestCase):
             maybe_sync_source.index("_clock_sync_needed"),
         )
         self.assertLess(
+            maybe_sync_source.index("if self._silent_mode"),
+            maybe_sync_source.index("set_rtc_datetime"),
+        )
+        self.assertLess(
             maybe_sync_source.index("_recently_synced_clock"),
             maybe_sync_source.index("_host_clock_synchronized"),
         )
@@ -168,6 +172,16 @@ class Issue49RegressionTest(unittest.TestCase):
                 for node in ast.walk(sync_completed)
             )
         )
+
+    def test_manual_clock_sync_remains_explicit_in_silent_mode(self):
+        tree = _tree(COORDINATOR_PATH)
+        manual_sync = _class_method(
+            tree, "EcoVentCoordinator", "async_sync_device_clock"
+        )
+        source = ast.get_source_segment(COORDINATOR_PATH.read_text(), manual_sync)
+
+        self.assertIn("set_rtc_datetime", source)
+        self.assertNotIn("_silent_mode", source)
 
     def test_startup_discovery_defers_standalone_clock_sync(self):
         tree = _tree(COORDINATOR_PATH)

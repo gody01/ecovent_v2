@@ -142,9 +142,12 @@ External relabels and OEM names tracked as evidence or candidates:
     clock correction, so restarting HA does not make every fan beep
   - standalone periodic correction rereads the device RTC immediately before
     writing, and skips the write if the fresh RTC state is unavailable
+  - silent manual-speed mode suppresses standalone automatic RTC correction,
+    because RTC writes can make BGCP devices acknowledge audibly
   - device writes that would already beep also batch the RTC rows when the
     cached clock has drifted, avoiding a separate clock-only beep
-  - the `sync_device_clock` fan service can be used for manual or automated sync
+  - the explicit `sync_device_clock` fan service remains available when a clock
+    write is more important than silence and may make the device acknowledge
 
 # Changelog
 version 0.0.5:
@@ -603,3 +606,10 @@ Version 1.2.25
   slower per-register polling until the device identity changes.
 * Reject mixed batch writes when any requested semantic key is unknown, and
   refresh switch state from the controller after successful writes.
+* Treat failed UDP sends as failed commands without reading a stale response,
+  validate opportunistic RTC batches atomically, and report their failure to
+  the coordinator.
+* Suppress standalone automatic RTC correction in silent manual-speed mode;
+  explicit manual clock synchronization remains available and may be audible.
+* Reject malformed Breezy/Freshbox alarm lists with an unpaired trailing byte
+  instead of silently dropping the tail.

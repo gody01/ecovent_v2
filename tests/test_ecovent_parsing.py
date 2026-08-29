@@ -198,6 +198,27 @@ class ParseRobustnessTest(unittest.TestCase):
         self.assertEqual(fan._last_raw_response_param_ids, {0x0024, 0x0001})
         self.assertEqual(fan._last_response_param_ids, {0x0001})
 
+    def test_alarm_list_rejects_an_unpaired_trailing_byte(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0200"
+
+        self.assertTrue(
+            fan.parse_response(
+                packet_with_payload([0xFE, 0x02, 0x7F, 0x01, 0x02])
+            )
+        )
+        self.assertEqual(fan.alarm_list, "1:warning")
+
+        self.assertTrue(
+            fan.parse_response(
+                packet_with_payload([0xFE, 0x03, 0x7F, 0x01, 0x02, 0x03])
+            )
+        )
+        self.assertEqual(fan.alarm_list, "1:warning")
+        self.assertEqual(fan.unknown_params, {0x007F: "010203"})
+        self.assertEqual(fan._last_raw_response_param_ids, {0x007F})
+        self.assertEqual(fan._last_response_param_ids, set())
+
     def test_parse_response_skips_no_value_parameter_markers(self):
         fan = Fan("192.0.2.1")
         self.assertTrue(

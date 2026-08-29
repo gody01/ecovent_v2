@@ -36,6 +36,145 @@ class DiscoveryTest(unittest.TestCase):
             self.assertEqual(fan.search_devices(), [])
         self.assertIsNone(fan.host)
 
+    def test_search_devices_requires_device_id_and_does_not_store_other_rows(self):
+        fan = Fan("192.0.2.1", fan_id="OWN_DEVICE_00001")
+        fan._device_search = "OWN_DEVICE_00001"
+        foreign_profile = packet_with_payload(
+            [0xFE, 0x02, 0xB9, 0x11, 0x00],
+            device_id=b"OTHER_DEVICE_001",
+        )
+
+        class ForeignResponseSocket:
+            def __init__(self):
+                self.responses = [(foreign_profile, ("192.0.2.99", 4000))]
+
+            def setsockopt(self, *args):
+                pass
+
+            def bind(self, *args):
+                pass
+
+            def settimeout(self, *args):
+                pass
+
+            def sendto(self, *args):
+                pass
+
+            def recvfrom(self, *args):
+                if self.responses:
+                    return self.responses.pop(0)
+                raise socket.timeout()
+
+            def close(self):
+                self.closed = True
+
+        with patch("socket.socket", return_value=ForeignResponseSocket()):
+            self.assertEqual(fan.search_devices(), [])
+        self.assertEqual(fan.profile_key, "vento")
+        self.assertIsNone(fan.unit_type)
+        self.assertEqual(fan._device_search, "OWN_DEVICE_00001")
+
+    def test_search_devices_commits_only_the_requested_device_id(self):
+        discovered_id = b"OTHER_DEVICE_001"
+        response = packet_with_payload(
+            [
+                0xFE,
+                len(discovered_id),
+                0x7C,
+                *discovered_id,
+                0xFE,
+                0x02,
+                0xB9,
+                0x11,
+                0x00,
+            ],
+            device_id=discovered_id,
+        )
+        fan = Fan("192.0.2.1", fan_id="OWN_DEVICE_00001")
+        fan._device_search = "OWN_DEVICE_00001"
+
+        class DiscoverySocket:
+            def __init__(self):
+                self.responses = [(response, ("192.0.2.99", 4000))]
+
+            def setsockopt(self, *args):
+                pass
+
+            def bind(self, *args):
+                pass
+
+            def settimeout(self, *args):
+                pass
+
+            def sendto(self, *args):
+                pass
+
+            def recvfrom(self, *args):
+                if self.responses:
+                    return self.responses.pop(0)
+                raise socket.timeout()
+
+            def close(self):
+                self.closed = True
+
+        with patch("socket.socket", return_value=DiscoverySocket()):
+            self.assertEqual(fan.search_devices(), ["192.0.2.99"])
+        self.assertEqual(fan.profile_key, "vento")
+        self.assertIsNone(fan.unit_type)
+        self.assertEqual(fan._device_search, "OWN_DEVICE_00001")
+
+    def test_search_devices_waits_for_an_active_command_transaction(self):
+        discovered_id = b"OTHER_DEVICE_001"
+        response = packet_with_payload(
+            [0xFE, len(discovered_id), 0x7C, *discovered_id],
+            device_id=discovered_id,
+        )
+        response_received = threading.Event()
+        result = []
+
+        class DiscoverySocket:
+            def __init__(self):
+                self.responses = [(response, ("192.0.2.99", 4000))]
+
+            def setsockopt(self, *args):
+                pass
+
+            def bind(self, *args):
+                pass
+
+            def settimeout(self, *args):
+                pass
+
+            def sendto(self, *args):
+                pass
+
+            def recvfrom(self, *args):
+                if self.responses:
+                    response_received.set()
+                    return self.responses.pop(0)
+                raise socket.timeout()
+
+            def close(self):
+                self.closed = True
+
+        fan = Fan("192.0.2.1", fan_id="OWN_DEVICE_00001")
+        fan._command_lock.acquire()
+        try:
+            with patch("socket.socket", return_value=DiscoverySocket()):
+                thread = threading.Thread(
+                    target=lambda: result.extend(fan.search_devices())
+                )
+                thread.start()
+                self.assertTrue(response_received.wait(timeout=1))
+                thread.join(timeout=0.05)
+                self.assertTrue(thread.is_alive())
+        finally:
+            fan._command_lock.release()
+
+        thread.join(timeout=1)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(result, ["192.0.2.99"])
+
 
 class TransportTest(unittest.TestCase):
     def test_receive_before_send_returns_false(self):

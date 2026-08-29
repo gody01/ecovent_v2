@@ -191,6 +191,7 @@ class FanProtocolParseMixin:
         """Commit every selected row or restore the pre-decode device state."""
         param_ids = set(param_ids)
         before = self.__dict__.copy()
+        before["_unknown_params"] = self._unknown_params.copy()
         decoded_param_ids = self._store_staged_response_params(
             param_ids, record_unknown=False
         )
@@ -224,6 +225,7 @@ class FanProtocolParseMixin:
             if record_unknown:
                 self._unknown_params[param_id] = value
             return False
+        self._unknown_params.pop(param_id, None)
         return True
 
     def _map_value(self, mapping, value, label):

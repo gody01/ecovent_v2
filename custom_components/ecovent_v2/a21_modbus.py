@@ -1025,6 +1025,17 @@ class A21ModbusDevice(Fan):
         values: Mapping[str, Any],
         include_extra_write_parameters: bool = True,
     ) -> bool:
+        with self._lock:
+            return self._set_parameters_locked(
+                values,
+                include_extra_write_parameters=include_extra_write_parameters,
+            )
+
+    def _set_parameters_locked(
+        self,
+        values: Mapping[str, Any],
+        include_extra_write_parameters: bool = True,
+    ) -> bool:
         primary_targets = dict(values)
         extra_parameters = {}
         if include_extra_write_parameters and self.extra_write_parameters_callback:
@@ -1047,18 +1058,25 @@ class A21ModbusDevice(Fan):
 
         try:
             prepared_primary = self._prepared_semantic_writes(primary_targets)
-            prepared_extra = self._prepared_semantic_writes(extra_targets)
         except (A21ModbusError, PermissionError, ValueError):
             primary_success = False
             extra_success = False
         else:
             try:
+                prepared_extra = self._prepared_semantic_writes(extra_targets)
+            except (A21ModbusError, PermissionError, ValueError):
+                prepared_extra = []
+                extra_valid = False
+            else:
+                extra_valid = True
+
+            try:
                 primary_success = self._write_prepared_groups(prepared_primary)
             except (A21ModbusError, PermissionError, ValueError):
                 primary_success = False
 
-            extra_success = primary_success
-            if primary_success and prepared_extra:
+            extra_success = primary_success and extra_valid
+            if primary_success and extra_valid and prepared_extra:
                 try:
                     extra_success = self._write_prepared_groups(prepared_extra)
                 except (A21ModbusError, PermissionError, ValueError):

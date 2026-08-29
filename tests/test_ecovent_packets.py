@@ -850,6 +850,31 @@ class PacketBuilderTest(unittest.TestCase):
 
         self.assertFalse(fan.update_preset_speed_settings())
 
+    def test_preset_read_learns_explicitly_unsupported_rows(self):
+        fan = Fan("192.0.2.1")
+        requested = set(range(0x003A, 0x0040))
+        calls = []
+
+        def send_command(func, param, value="", retries=10):
+            calls.append((param, retries))
+            fan._last_response_param_ids = set()
+            fan._last_unsupported_param_ids = {
+                int(param[index : index + 4], 16)
+                for index in range(0, len(param), 4)
+            }
+            return True
+
+        fan.send_command = send_command
+
+        self.assertFalse(fan.update_preset_speed_settings())
+        self.assertEqual(fan.unsupported_optional_poll_parameter_ids(), requested)
+        self.assertEqual(fan.last_missing_required_params, set())
+        self.assertEqual(fan.last_missing_optional_params, requested)
+        self.assertEqual(len(calls), 1)
+
+        self.assertFalse(fan.update_preset_speed_settings())
+        self.assertEqual(len(calls), 1)
+
     def test_vento_update_reads_humidity_in_bulk_request(self):
         fan = Fan("192.0.2.1")
         calls = []

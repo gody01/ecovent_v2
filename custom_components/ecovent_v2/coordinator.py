@@ -298,9 +298,18 @@ class EcoVentCoordinator(DataUpdateCoordinator):
             )
             return
 
-        clock_read = await self.hass.async_add_executor_job(
-            self._refresh_device_clock_state
-        )
+        try:
+            clock_read = await self.hass.async_add_executor_job(
+                self._refresh_device_clock_state
+            )
+        except OSError as err:
+            _LOGGER.debug(
+                "EcoVentCoordinator: skipping standalone clock sync after "
+                "RTC read error for %s: %s",
+                self._fan.name,
+                err,
+            )
+            return
         if not clock_read:
             _LOGGER.debug(
                 "EcoVentCoordinator: skipping standalone clock sync because "
@@ -327,6 +336,15 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         if not written:
             _LOGGER.warning(
                 "EcoVentCoordinator: failed to synchronize device clock for %s",
+                self._fan.name,
+            )
+            return
+        confirmed = await self.hass.async_add_executor_job(
+            self._confirm_device_clock_sync, now
+        )
+        if not confirmed:
+            _LOGGER.warning(
+                "EcoVentCoordinator: device did not confirm synchronized clock for %s",
                 self._fan.name,
             )
             return
@@ -371,11 +389,30 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         return self._fan.rtc_datetime_params(now)
 
     def _clock_sync_write_completed(self, success: bool) -> None:
-        """Record an opportunistic RTC write only after transport success."""
+        """Record an opportunistic RTC write only after fresh device readback."""
         pending = self._pending_clock_sync
         self._pending_clock_sync = None
-        if success and pending is not None:
+        if (
+            success
+            and pending is not None
+            and self._confirm_device_clock_sync(pending)
+        ):
             self._record_clock_sync(pending)
+
+    def _confirm_device_clock_sync(self, expected) -> bool:
+        """Read back the device RTC and compare it with the requested wall clock."""
+        try:
+            refreshed = self._refresh_device_clock_state()
+        except OSError as err:
+            _LOGGER.warning(
+                "EcoVentCoordinator: failed to read back device clock for %s: %s",
+                self._fan.name,
+                err,
+            )
+            return False
+        if not refreshed:
+            return False
+        return self._clock_sync_confirmed(expected)
 
     def _device_clock_now(self):
         """Return the HA-local wall clock value the device RTC should store."""
@@ -625,4 +662,23 @@ class EcoVentCoordinator(DataUpdateCoordinator):
             raise RuntimeError(
                 f"Failed to confirm synchronized device clock for {self._fan.name}"
             )
+        if not self._clock_sync_confirmed(now):
+            raise RuntimeError(
+                f"Device clock did not match synchronized time for {self._fan.name}"
+            )
         self._record_clock_sync(now)
+
+    def _clock_sync_confirmed(self, expected) -> bool:
+        """Compare cached RTC state from the latest coordinator refresh."""
+        device_now = self._device_clock_datetime()
+        if device_now is None:
+            return False
+        return abs(self._local_wall_clock(expected) - device_now) <= CLOCK_SYNC_DRIFT
+
+    async def async_refresh_confirmed(self) -> None:
+        """Refresh entities and fail when Home Assistant swallowed the read error."""
+        await self.async_refresh()
+        if not self.last_update_success:
+            raise RuntimeError(
+                f"Failed to confirm updated state for {self._fan.name}"
+            )

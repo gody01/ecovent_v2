@@ -468,7 +468,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
                     self._set_param_if_changed, "state", "on"
                 )
         finally:
-            await self.coordinator.async_refresh()
+            await self.coordinator.async_refresh_confirmed()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the entity."""
@@ -481,7 +481,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
                 self._set_param_if_changed, "state", "off"
             )
         finally:
-            await self.coordinator.async_refresh()
+            await self.coordinator.async_refresh_confirmed()
 
     def set_preset_mode(self, preset_mode: str, turn_on: bool = True) -> None:
         """Set the preset mode of the fan."""
@@ -539,7 +539,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
                 self.set_preset_mode, preset_mode, True
             )
         finally:
-            await self.coordinator.async_refresh()
+            await self.coordinator.async_refresh_confirmed()
 
     def set_percentage(self, percentage: int, turn_on: bool = True) -> None:
         """Set the speed of the fan, as a percentage."""
@@ -612,14 +612,14 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
                 self.set_percentage, percentage, True
             )
         finally:
-            await self.coordinator.async_refresh()
+            await self.coordinator.async_refresh_confirmed()
 
     async def async_set_direction(self, direction: str) -> None:
         """Set the direction of the fan."""
         try:
             await self.hass.async_add_executor_job(self.set_direction, direction)
         finally:
-            await self.coordinator.async_refresh()
+            await self.coordinator.async_refresh_confirmed()
 
     def set_direction(self, direction: str) -> None:
         """Set the direction of the fan."""
@@ -637,7 +637,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         try:
             await self.hass.async_add_executor_job(self.set_oscillating, oscillating)
         finally:
-            await self.coordinator.async_refresh()
+            await self.coordinator.async_refresh_confirmed()
         # self.schedule_update_ha_state()
 
     def set_oscillating(self, oscillating: bool) -> None:
@@ -648,25 +648,25 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
     ###### Custom services
 
     # Reset filter timer
-    async def async_reset_filter_timer(self, fan_target) -> None:
+    async def async_reset_filter_timer(self, _service_call) -> None:
         """Reset Fan's filter timer."""
         try:
             await self.hass.async_add_executor_job(
                 self._set_param, "filter_timer_reset", "01"
             )
         finally:
-            await self.coordinator.async_refresh()
+            await self.coordinator.async_refresh_confirmed()
 
     # Reset alarms
-    async def async_reset_alarms(self, fan_target) -> None:
+    async def async_reset_alarms(self, _service_call) -> None:
         """Reset Fan's Alarms."""
         try:
             await self.hass.async_add_executor_job(
                 self._set_param, "reset_alarms", "01"
             )
         finally:
-            await self.coordinator.async_refresh()
+            await self.coordinator.async_refresh_confirmed()
 
-    async def async_sync_device_clock(self, fan_target) -> None:
+    async def async_sync_device_clock(self, _service_call) -> None:
         """Synchronize the device clock with Home Assistant local time."""
         await self.coordinator.async_sync_device_clock()

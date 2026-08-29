@@ -223,7 +223,7 @@ class VentoSelect(StableObjectIdMixin, CoordinatorEntity, SelectEntity):
                 self._fan.set_param, self._method, option
             )
         finally:
-            await self.coordinator.async_refresh()
+            await self.coordinator.async_refresh_confirmed()
         if not success:
             raise RuntimeError(
                 f"Failed to write {self._method}={option!r} for {self._fan.name}"

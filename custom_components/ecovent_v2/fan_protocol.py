@@ -135,7 +135,6 @@ class FanProtocolMixin:
             i = 10
             while i > 1:
                 i = i - 1
-                self._device_search = self._id
                 try:
                     sock.sendto(payload, (target_host, target_port))
                     data, addr = sock.recvfrom(1024)
@@ -143,10 +142,29 @@ class FanProtocolMixin:
                     continue
                 except OSError:
                     continue
-                if (
-                    self.parse_response(data, allow_any_device_id=True)
-                    and self._device_search != "DEFAULT_DEVICEID"
-                ):
+                with self._command_lock:
+                    cached_device_search = self._device_search
+                    try:
+                        self._device_search = "DEFAULT_DEVICEID"
+                        parsed = self.parse_response(
+                            data, allow_any_device_id=True, store=False
+                        )
+                        decoded_ids = (
+                            self._store_staged_response_params(
+                                {0x007C}, record_unknown=False
+                            )
+                            if parsed
+                            else set()
+                        )
+                        discovered = (
+                            self._device_search
+                            if decoded_ids == {0x007C}
+                            and self._device_search != "DEFAULT_DEVICEID"
+                            else None
+                        )
+                    finally:
+                        self._device_search = cached_device_search
+                if discovered:
                     ips.append(addr[0])
                     ips = list(set(ips))
             return ips
@@ -536,7 +554,12 @@ class FanProtocolMixin:
             return True
 
         request = "003A003B003C003D003E003F"
-        return self._read_params(request, read_name="preset speed settings")
+        return self._read_params(
+            request,
+            required_params=frozenset(),
+            require_all_requested=True,
+            read_name="preset speed settings",
+        )
 
     def _mark_param_unavailable(self, param_id):
         """Clear a missing soft-poll value so Home Assistant does not keep stale data."""
@@ -582,7 +605,14 @@ class FanProtocolMixin:
             self._unsupported_optional_poll_params = unsupported
         return unsupported
 
-    def _read_params(self, request, *, required_params=None, read_name="custom read"):
+    def _read_params(
+        self,
+        request,
+        *,
+        required_params=None,
+        require_all_requested=False,
+        read_name="custom read",
+    ):
         """Read parameters without trusting a valid but incomplete bulk reply.
 
         The Smart Home protocol limits a packet to 256 bytes. Keep each request
@@ -754,6 +784,10 @@ class FanProtocolMixin:
         # or untracked response and must not keep a dead device available.
         if required_params is not None and not required_param_ids:
             complete = complete and bool(received_params)
+        if require_all_requested and (
+            ignored_optional_params or missing_optional_params or unsupported_params
+        ):
+            complete = False
         available = complete and received_response
         if missing_required_params or missing_optional_params or unsupported_params:
             log_level = logging.WARNING if missing_required_params else logging.DEBUG

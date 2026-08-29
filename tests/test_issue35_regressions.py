@@ -799,7 +799,9 @@ class Issue35RegressionTest(unittest.TestCase):
                 switch_source,
                 _class_method(_tree(SWITCH_PATH), "VentoSwitch", method_name),
             )
-            self.assertIn("await self.coordinator.async_refresh()", method_source)
+            self.assertIn(
+                "await self.coordinator.async_refresh_confirmed()", method_source
+            )
             self.assertNotIn("self.async_write_ha_state()", method_source)
 
         number_source = NUMBER_PATH.read_text()
@@ -833,7 +835,7 @@ class Issue35RegressionTest(unittest.TestCase):
                         isinstance(node, ast.Try)
                         and any(
                             isinstance(child, ast.Attribute)
-                            and child.attr == "async_refresh"
+                            and child.attr == "async_refresh_confirmed"
                             for statement in node.finalbody
                             for child in ast.walk(statement)
                         )
@@ -1011,6 +1013,88 @@ class Issue35RegressionTest(unittest.TestCase):
                 method = _class_method(tree, "VentoExpertFan", method_name)
                 method_source = ast.get_source_segment(source, method)
                 self.assertIn(f'"{parameter}", "01"', method_source)
+
+    def test_fan_entity_service_callables_accept_home_assistant_service_call(self):
+        """Callable entity services receive the entity and ServiceCall object."""
+        tree = _tree(FAN_PATH)
+        methods = [
+            _class_method(tree, "VentoExpertFan", method_name)
+            for method_name in (
+                "async_reset_filter_timer",
+                "async_reset_alarms",
+                "async_sync_device_clock",
+            )
+        ]
+        namespace = {}
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=methods, type_ignores=[])),
+                str(FAN_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+
+        events = []
+
+        class Hass:
+            async def async_add_executor_job(self, callback, *args):
+                events.append(("executor", args))
+                return callback(*args)
+
+        class Coordinator:
+            async def async_refresh_confirmed(self):
+                events.append("refresh")
+
+            async def async_sync_device_clock(self):
+                events.append("sync")
+
+        entity = types.SimpleNamespace(
+            hass=Hass(),
+            coordinator=Coordinator(),
+            _set_param=lambda *args: events.append(("set", args)),
+        )
+        service_call = object()
+        asyncio.run(namespace["async_reset_filter_timer"](entity, service_call))
+        asyncio.run(namespace["async_reset_alarms"](entity, service_call))
+        asyncio.run(namespace["async_sync_device_clock"](entity, service_call))
+
+        self.assertIn(("set", ("filter_timer_reset", "01")), events)
+        self.assertIn(("set", ("reset_alarms", "01")), events)
+        self.assertIn("sync", events)
+
+    def test_confirmed_refresh_rejects_swallowed_update_failure(self):
+        method = _class_method(
+            _tree(COMPONENT_PATH / "coordinator.py"),
+            "EcoVentCoordinator",
+            "async_refresh_confirmed",
+        )
+        namespace = {}
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+                str(COMPONENT_PATH / "coordinator.py"),
+                "exec",
+            ),
+            namespace,
+        )
+        events = []
+
+        async def refresh():
+            events.append("refresh")
+
+        coordinator = types.SimpleNamespace(
+            async_refresh=refresh,
+            last_update_success=False,
+            _fan=types.SimpleNamespace(name="Test fan"),
+        )
+        with self.assertRaisesRegex(RuntimeError, "Failed to confirm updated state"):
+            asyncio.run(namespace["async_refresh_confirmed"](coordinator))
+        self.assertEqual(events, ["refresh"])
+
+        coordinator.last_update_success = True
+        asyncio.run(namespace["async_refresh_confirmed"](coordinator))
+        self.assertEqual(events, ["refresh", "refresh"])
 
 
 if __name__ == "__main__":

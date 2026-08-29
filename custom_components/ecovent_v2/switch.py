@@ -296,7 +296,7 @@ class VentoSwitch(StableObjectIdMixin, CoordinatorEntity, SwitchEntity):
                 self._fan.set_param, self._func, "on"
             )
         finally:
-            await self.coordinator.async_refresh()
+            await self.coordinator.async_refresh_confirmed()
         if not success:
             raise RuntimeError(f"Failed to turn on {self._func} for {self._fan.name}")
 
@@ -307,7 +307,7 @@ class VentoSwitch(StableObjectIdMixin, CoordinatorEntity, SwitchEntity):
                 self._fan.set_param, self._func, "off"
             )
         finally:
-            await self.coordinator.async_refresh()
+            await self.coordinator.async_refresh_confirmed()
         if not success:
             raise RuntimeError(f"Failed to turn off {self._func} for {self._fan.name}")
 

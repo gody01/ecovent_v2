@@ -521,7 +521,7 @@ class VentoNumber(StableObjectIdMixin, CoordinatorEntity, NumberEntity):
                     int(value),
                 )
             finally:
-                await self.coordinator.async_refresh()
+                await self.coordinator.async_refresh_confirmed()
             if not success:
                 raise RuntimeError(
                     f"Failed to write {self._func}={value!r} for {self._fan.name}"
@@ -549,7 +549,7 @@ class VentoNumber(StableObjectIdMixin, CoordinatorEntity, NumberEntity):
                 write_value,
             )
         finally:
-            await self.coordinator.async_refresh()
+            await self.coordinator.async_refresh_confirmed()
         if not success:
             raise RuntimeError(
                 f"Failed to write {self._func}={value!r} for {self._fan.name}"

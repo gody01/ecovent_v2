@@ -6,6 +6,7 @@ from datetime import datetime
 import importlib
 from pathlib import Path
 import sys
+import threading
 import types
 
 import pytest
@@ -179,6 +180,61 @@ def device(client=None, **kwargs):
         client=client or FakeModbusClient(),
         **kwargs,
     )
+
+
+def test_semantic_transactions_are_serialized_across_all_modbus_writes():
+    first_write = threading.Event()
+    release_first = threading.Event()
+
+    class BlockingClient(FakeModbusClient):
+        def write_coil(self, address, value, *, device_id):
+            result = super().write_coil(address, value, device_id=device_id)
+            if value is True:
+                first_write.set()
+                assert release_first.wait(timeout=1)
+            return result
+
+    client = BlockingClient()
+    fan = device(client)
+    results = {}
+
+    first = threading.Thread(
+        target=lambda: results.setdefault(
+            "first", fan.set_parameters({"state": "on", "speed": "manual"})
+        )
+    )
+    second = threading.Thread(
+        target=lambda: results.setdefault("second", fan.set_param("state", "off"))
+    )
+    first.start()
+    assert first_write.wait(timeout=1)
+    second.start()
+    second.join(timeout=0.05)
+    assert second.is_alive(), "second command entered a partial first transaction"
+
+    release_first.set()
+    first.join(timeout=1)
+    second.join(timeout=1)
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert results == {"first": True, "second": True}
+
+    writes = [call for call in client.calls if call[0].startswith("write_")]
+    assert writes[0][:3] == ("write_coil", 0, True)
+    assert writes[1][0:2] == ("write_register", 2)
+    assert writes[2][:3] == ("write_coil", 0, False)
+
+
+def test_invalid_opportunistic_write_does_not_block_primary_command():
+    client = FakeModbusClient()
+    fan = device(client)
+    receipts = []
+    fan.extra_write_parameters_callback = lambda: {"rtc_time": "zzzz"}
+    fan.extra_write_parameters_result_callback = receipts.append
+
+    assert fan.set_param("state", "on") is True
+    assert client.coils[0] is True
+    assert receipts == [False]
 
 
 def test_identity_gate_rejects_non_a21_before_any_write():

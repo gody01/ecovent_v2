@@ -165,6 +165,29 @@ class TransportTest(unittest.TestCase):
         self.assertEqual(fan.state, "on")
         self.assertIsNone(fan.speed)
 
+    def test_partial_multi_write_ack_does_not_commit_any_requested_row(self):
+        fan = Fan("192.0.2.1")
+        fan.send = lambda _data: True
+        fan.receive = lambda: packet_with_payload([0x01, 0x01])
+
+        self.assertFalse(
+            fan.send_command(
+                fan.func["write_return"], "00010002", "01", retries=1
+            )
+        )
+        self.assertIsNone(fan.state)
+        self.assertIsNone(fan.speed)
+
+    def test_semantically_invalid_write_ack_is_not_success_or_cached(self):
+        fan = Fan("192.0.2.1")
+        fan.send = lambda _data: True
+        fan.receive = lambda: packet_with_payload([0x77, 0x01])
+
+        self.assertFalse(
+            fan.send_command(fan.func["write_return"], "0077", "01", retries=1)
+        )
+        self.assertIsNone(fan.weekly_schedule_setup)
+
     def test_command_transaction_serializes_socket_exchange(self):
         fan = Fan("192.0.2.1")
         first_receive_entered = threading.Event()

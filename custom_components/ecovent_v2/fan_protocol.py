@@ -397,25 +397,11 @@ class FanProtocolMixin:
                 if self.parse_response(response, store=False):
                     received_values = self._last_response_param_values or {}
                     unsupported_ids = self._last_unsupported_param_ids or set()
-                    confirmed_write_ids = set()
-                    if expected_write_values is not None:
-                        confirmed_write_ids.update(
-                            param_id
-                            for param_id, value in expected_write_values.items()
-                            if received_values.get(param_id) == value
-                        )
                     if expected_extra_write_values is not None:
-                        extra_write_confirmed = extra_write_confirmed or (
-                            _response_matches_write_values(
-                                expected_extra_write_values,
-                                received_values,
-                                unsupported_ids,
-                            )
-                        )
-                        confirmed_write_ids.update(
-                            param_id
-                            for param_id, value in expected_extra_write_values.items()
-                            if received_values.get(param_id) == value
+                        extra_write_confirmed = _response_matches_write_values(
+                            expected_extra_write_values,
+                            received_values,
+                            unsupported_ids,
                         )
                     write_confirmed = expected_write_values is None or (
                         _response_matches_write_values(
@@ -436,9 +422,24 @@ class FanProtocolMixin:
                     else:
                         read_confirmed = True
 
-                    if confirmed_write_ids:
-                        self._store_staged_response_params(
-                            confirmed_write_ids, record_unknown=False
+                    if write_confirmed and expected_write_values is not None:
+                        storable_write_values = {
+                            param_id: value
+                            for param_id, value in expected_write_values.items()
+                            if param_id not in self._write_only_params
+                        }
+                        decoded_write_ids = self._store_staged_response_params_atomic(
+                            storable_write_values
+                        )
+                        write_confirmed = decoded_write_ids == set(
+                            storable_write_values
+                        )
+                    if extra_write_confirmed:
+                        decoded_extra_ids = self._store_staged_response_params_atomic(
+                            expected_extra_write_values
+                        )
+                        extra_write_confirmed = decoded_extra_ids == set(
+                            expected_extra_write_values
                         )
                 else:
                     write_confirmed = False

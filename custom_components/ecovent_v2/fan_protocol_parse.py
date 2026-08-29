@@ -187,6 +187,21 @@ class FanProtocolParseMixin:
         self._last_response_param_ids = decoded_param_ids
         return decoded_param_ids
 
+    def _store_staged_response_params_atomic(self, param_ids):
+        """Commit every selected row or restore the pre-decode device state."""
+        param_ids = set(param_ids)
+        before = self.__dict__.copy()
+        decoded_param_ids = self._store_staged_response_params(
+            param_ids, record_unknown=False
+        )
+        if decoded_param_ids == param_ids:
+            return decoded_param_ids
+
+        self.__dict__.clear()
+        self.__dict__.update(before)
+        self._last_response_param_ids = set()
+        return set()
+
     def _store_param(self, response, *, record_unknown=True):
         param_id = int(response[:2].hex(), 16)
         value = response[2:].hex()

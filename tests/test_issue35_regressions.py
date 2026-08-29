@@ -802,6 +802,14 @@ class Issue35RegressionTest(unittest.TestCase):
             self.assertIn("await self.coordinator.async_refresh()", method_source)
             self.assertNotIn("self.async_write_ha_state()", method_source)
 
+        number_source = NUMBER_PATH.read_text()
+        number_method = _class_method(
+            _tree(NUMBER_PATH), "VentoNumber", "async_set_native_value"
+        )
+        number_method_source = ast.get_source_segment(number_source, number_method)
+        self.assertNotIn("self._attr_native_value = value", number_method_source)
+        self.assertNotIn("self.async_write_ha_state()", number_method_source)
+
     def test_auto_boost_trigger_switch_names_are_explicit(self):
         switch_source = SWITCH_PATH.read_text()
         select_source = SELECT_PATH.read_text()

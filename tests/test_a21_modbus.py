@@ -359,6 +359,35 @@ def test_quick_poll_refreshes_the_complete_alarm_bitmap():
     assert ("read_discrete_inputs", 0, 72, 7) in client.calls
 
 
+def test_direct_invalid_read_evicts_prior_raw_decoded_and_semantic_state():
+    client = FakeModbusClient()
+    fan = device(client)
+
+    assert fan.read_register("IR_CurRH_Int") == 55
+    assert fan.humidity == 55
+    client.input_registers[10] = 101
+
+    with pytest.raises(ValueError, match="outside documented range"):
+        fan.read_register("IR_CurRH_Int")
+
+    assert (Table.INPUT_REGISTER, 10) not in fan.raw_registers
+    assert "IR_CurRH_Int" not in fan.decoded_registers
+    assert fan.humidity is None
+
+
+def test_successful_write_clears_prior_unavailable_marker():
+    client = FakeModbusClient(fail_slots={("read_holding_registers", 44)})
+    fan = device(client)
+    fan.read_register("IR_DeviceTYPE")
+
+    assert fan.update() is True
+    assert (Table.HOLDING_REGISTER, 44) in fan.unavailable_addresses
+
+    client.fail_slots.clear()
+    assert fan.write_register("HR_SetTEMP", 25)
+    assert (Table.HOLDING_REGISTER, 44) not in fan.unavailable_addresses
+
+
 def test_poll_fails_when_a_required_operational_address_is_missing():
     client = FakeModbusClient(fail_slots={("read_coils", 0)})
     fan = device(client)

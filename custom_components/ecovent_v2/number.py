@@ -523,8 +523,6 @@ class VentoNumber(StableObjectIdMixin, CoordinatorEntity, NumberEntity):
                 raise RuntimeError(
                     f"Failed to write {self._func}={value!r} for {self._fan.name}"
                 )
-            self._attr_native_value = value
-            self.async_write_ha_state()
             await self.coordinator.async_refresh()
             return
 
@@ -551,6 +549,4 @@ class VentoNumber(StableObjectIdMixin, CoordinatorEntity, NumberEntity):
             raise RuntimeError(
                 f"Failed to write {self._func}={value!r} for {self._fan.name}"
             )
-        self._attr_native_value = value
-        self.async_write_ha_state()
         await self.coordinator.async_refresh()

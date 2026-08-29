@@ -1589,12 +1589,12 @@ class PacketBuilderTest(unittest.TestCase):
         fan.receive = lambda: packet_for_write_command(calls[-1])
 
         self.assertTrue(
-            fan.send_command(fan.func["write_return"], "0302", "01", retries=1)
+            fan.send_command(fan.func["write_return"], "0302", "0100", retries=1)
         )
 
         self.assertEqual(
             calls,
-            ["03ff030201ff00fe036f1e2d13fe04701704041a"],
+            ["03ff03fe02020100ff00fe036f1e2d13fe04701704041a"],
         )
         self.assertEqual(results, [True])
 

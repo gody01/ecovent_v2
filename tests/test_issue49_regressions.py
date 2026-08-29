@@ -227,7 +227,11 @@ class Issue49RegressionTest(unittest.TestCase):
         )
         self.assertLess(
             coordinator_sync_source.index("if not written"),
-            coordinator_sync_source.index("self._last_clock_sync = now"),
+            coordinator_sync_source.index("await self.async_refresh()"),
+        )
+        self.assertLess(
+            coordinator_sync_source.index("await self.async_refresh()"),
+            coordinator_sync_source.index("self._record_clock_sync(now)"),
         )
 
 

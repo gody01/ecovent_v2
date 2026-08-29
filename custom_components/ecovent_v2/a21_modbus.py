@@ -547,7 +547,9 @@ class A21ModbusDevice(Fan):
                 cached = words
             self._check_response(response, f"write {table.value} {address}")
             for offset, value in enumerate(cached):
-                self._raw[(table, address + offset)] = value
+                slot = (table, address + offset)
+                self._raw[slot] = value
+                self._unavailable.discard(slot)
             return True
 
     def read_register(self, key: str) -> Any:
@@ -556,7 +558,13 @@ class A21ModbusDevice(Fan):
         if not spec.access.readable:
             raise PermissionError(f"{key} is write-only")
         words = self.read_raw(spec.table, spec.address, spec.word_count)
-        value = spec.decode(words)
+        try:
+            value = spec.decode(words)
+        except ValueError:
+            self._evict_cached_range(spec.table, spec.address, spec.word_count)
+            self._clear_semantic_state()
+            self._apply_semantics()
+            raise
         self._decoded[key] = value
         self._apply_semantics()
         return value

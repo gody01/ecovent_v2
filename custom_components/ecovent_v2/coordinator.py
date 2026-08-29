@@ -567,5 +567,5 @@ class EcoVentCoordinator(DataUpdateCoordinator):
             raise RuntimeError(
                 f"Failed to synchronize device clock for {self._fan.name}"
             )
-        self._last_clock_sync = now
         await self.async_refresh()
+        self._record_clock_sync(now)

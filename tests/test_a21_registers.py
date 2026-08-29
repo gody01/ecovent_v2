@@ -90,6 +90,21 @@ def test_permissions_ranges_and_bad_records_reject():
         decode(Kind.BOOL, (2,))
 
 
+def test_register_decode_validates_structures_and_published_scalar_limits():
+    with pytest.raises(ValueError, match="outside documented range"):
+        get_register("IR_CurRH_Int").decode((101,))
+    with pytest.raises(ValueError, match="outside documented allowed ranges"):
+        get_register("HR_SetFILTER_TIMER").decode((69,))
+    with pytest.raises(ValueError, match="hours must be 0..23"):
+        get_register("HR_RTC_TIME").decode((0, 24))
+
+
+def test_register_decode_accepts_unknown_enum_value_within_documented_range():
+    spec = get_register("HR_OPERATION_MODE")
+    assert spec.enum is not None
+    assert spec.decode((2,)) == 2
+
+
 def test_bypass_rotor_type_preserves_the_pdf_maximum_discrepancy():
     spec = get_register("HR_BPS_ROTOR_TYPE")
     assert spec.maximum == 5

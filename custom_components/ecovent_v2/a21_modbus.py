@@ -566,8 +566,6 @@ class A21ModbusDevice(Fan):
         spec = get_register(key)
         if not spec.access.writable:
             raise PermissionError(f"{key} is read-only")
-        if spec.enum is not None and isinstance(value, int) and value not in spec.enum:
-            raise ValueError(f"{key} has no documented enum value {value}")
         words = spec.encode(value)
         self.write_raw(spec.table, spec.address, words)
         self._decoded[key] = value
@@ -646,6 +644,23 @@ class A21ModbusDevice(Fan):
         self._clear_semantic_state()
         self._apply_semantics()
 
+    def _evict_cached_range(self, table: Table, address: int, count: int) -> None:
+        """Forget values whose next read was not confirmed by the controller."""
+        for offset in range(count):
+            self._raw.pop((table, address + offset), None)
+        for spec in REGISTERS:
+            if (
+                spec.table is table
+                and spec.address < address + count
+                and address < spec.address + spec.word_count
+            ):
+                self._decoded.pop(spec.key, None)
+
+    def _evict_sensitive_cache(self) -> None:
+        for spec in REGISTERS:
+            if spec.key in _SENSITIVE_REGISTER_KEYS:
+                self._evict_cached_range(spec.table, spec.address, spec.word_count)
+
     def read_all_registers(self, *, include_sensitive: bool = False) -> bool:
         """Poll the complete readable published surface.
 
@@ -661,6 +676,8 @@ class A21ModbusDevice(Fan):
             (Table.HOLDING_REGISTER, 0, 124),
             (Table.HOLDING_REGISTER, 126, 57),
         )
+        if not include_sensitive:
+            self._evict_sensitive_cache()
         complete = True
         for table, address, count in ranges:
             complete = self._read_resilient(table, address, count) and complete
@@ -714,6 +731,7 @@ class A21ModbusDevice(Fan):
             (Table.INPUT_REGISTER, 0, 54),
             (Table.HOLDING_REGISTER, 0, 76),
         )
+        self._evict_sensitive_cache()
         complete = True
         for table, address, count in ranges:
             complete = self._read_resilient(table, address, count) and complete
@@ -723,7 +741,15 @@ class A21ModbusDevice(Fan):
         return not bool(_REQUIRED_POLL_SLOTS & self._unavailable)
 
     def update_preset_speed_settings(self) -> bool:
-        return self._read_resilient(Table.HOLDING_REGISTER, 5, 13)
+        try:
+            complete = self._read_resilient(Table.HOLDING_REGISTER, 5, 13)
+        except A21ModbusError:
+            self._evict_cached_range(Table.HOLDING_REGISTER, 5, 13)
+            self._clear_semantic_state()
+            self._apply_semantics()
+            return False
+        self._decode_cache()
+        return complete
 
     @staticmethod
     def _valid_temperature(value: Any) -> float | None:
@@ -860,7 +886,26 @@ class A21ModbusDevice(Fan):
         self.read_register(key)
         return True
 
-    def _semantic_value(self, parameter: str, value: Any) -> Any:
+    @staticmethod
+    def _rtc_value(parameter: str, value: Any) -> RtcTime | RtcCalendar:
+        expected = RtcTime if parameter == "rtc_time" else RtcCalendar
+        if isinstance(value, expected):
+            return value
+        if not isinstance(value, str):
+            raise ValueError(f"{parameter} requires {expected.__name__}")
+        try:
+            raw = bytes.fromhex(value)
+        except ValueError as err:
+            raise ValueError(f"Invalid {parameter} bytes: {value!r}") from err
+        if parameter == "rtc_time" and len(raw) == 3:
+            return RtcTime(hours=raw[2], minutes=raw[1], seconds=raw[0])
+        if parameter == "rtc_date" and len(raw) == 4:
+            return RtcCalendar(
+                day=raw[0], weekday=raw[1], month=raw[2], year=raw[3]
+            )
+        raise ValueError(f"Invalid {parameter} byte length")
+
+    def _semantic_value(self, parameter: str, value: Any) -> tuple[str, Any]:
         if parameter in {
             "state",
             "weekly_schedule_state",
@@ -871,32 +916,81 @@ class A21ModbusDevice(Fan):
         }:
             if value not in {"on", "off", True, False, 0, 1}:
                 raise ValueError(f"Invalid {parameter} state: {value!r}")
-            return value in {"on", True, 1}
+            return _SEMANTIC_REGISTERS[parameter], value in {"on", True, 1}
         if parameter in {"filter_timer_reset", "reset_alarms"}:
-            return True
+            return _SEMANTIC_REGISTERS[parameter], True
         if parameter == "speed":
             if value == "off":
-                self.write_register("CL_POWER", False)
-                return None
+                return "CL_POWER", False
             if value not in _A21_SPEED_VALUES:
                 raise ValueError(f"Invalid A21 speed: {value!r}")
-            return _A21_SPEED_VALUES[value]
+            return _SEMANTIC_REGISTERS[parameter], _A21_SPEED_VALUES[value]
         if parameter == "timer_mode":
             if value not in _A21_TIMER_VALUES:
                 raise ValueError(f"Invalid A21 timer mode: {value!r}")
-            return _A21_TIMER_VALUES[value]
+            return _SEMANTIC_REGISTERS[parameter], _A21_TIMER_VALUES[value]
         if parameter in {"rtc_time", "rtc_date"}:
-            return value
-        return _as_raw_number(value)
+            return _SEMANTIC_REGISTERS[parameter], self._rtc_value(parameter, value)
+        return _SEMANTIC_REGISTERS[parameter], _as_raw_number(value)
+
+    def _prepared_semantic_writes(
+        self, values: Mapping[str, Any]
+    ) -> list[tuple[str, Any]]:
+        prepared: list[tuple[str, Any]] = []
+        for parameter, value in values.items():
+            if parameter not in _SEMANTIC_REGISTERS:
+                raise ValueError(f"Unknown A21 parameter: {parameter}")
+            key, converted = self._semantic_value(parameter, value)
+            spec = get_register(key)
+            if not spec.access.writable:
+                raise PermissionError(f"{key} is read-only")
+            # Validate every batch row before any transport operation.
+            spec.encode(converted)
+            prepared.append((key, converted))
+        return prepared
+
+    def _write_prepared_groups(self, values: Sequence[tuple[str, Any]]) -> bool:
+        values = list(values)
+        rtc_indexes = [
+            index
+            for index, (key, _) in enumerate(values)
+            if key in {"HR_RTC_TIME", "HR_RTC_CALENDAR"}
+        ]
+        if len(rtc_indexes) == 2:
+            rtc_values = sorted(
+                (values[index] for index in rtc_indexes),
+                key=lambda item: get_register(item[0]).address,
+            )
+            first_index = rtc_indexes[0]
+            values = [
+                item
+                for index, item in enumerate(values)
+                if index not in rtc_indexes
+            ]
+            values[first_index:first_index] = rtc_values
+        index = 0
+        while index < len(values):
+            group = [values[index]]
+            previous = get_register(values[index][0])
+            index += 1
+            while index < len(values):
+                candidate = get_register(values[index][0])
+                if (
+                    candidate.table is not previous.table
+                    or candidate.address != previous.address + previous.word_count
+                ):
+                    break
+                group.append(values[index])
+                previous = candidate
+                index += 1
+            if len(group) == 1:
+                self.write_register(*group[0])
+            else:
+                self._write_register_group(group)
+        return True
 
     def set_param(self, parameter: str, value: Any) -> bool:
-        key = _SEMANTIC_REGISTERS.get(parameter)
-        if key is None:
-            return False
-        converted = self._semantic_value(parameter, value)
-        if converted is None:
-            return True
-        return self.write_register(key, converted)
+        return self.set_parameters({parameter: value})
 
     def set_parameters(
         self,
@@ -911,7 +1005,11 @@ class A21ModbusDevice(Fan):
                 targets.setdefault(key, value)
         if not targets:
             return False
-        success = all(self.set_param(key, value) for key, value in targets.items())
+        try:
+            prepared = self._prepared_semantic_writes(targets)
+            success = self._write_prepared_groups(prepared)
+        except (A21ModbusError, PermissionError, ValueError):
+            success = False
         if extra_parameters and (
             result_callback := getattr(
                 self, "extra_write_parameters_result_callback", None
@@ -932,16 +1030,25 @@ class A21ModbusDevice(Fan):
         labels = ("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")
         label = labels[day - 1]
         base = 126 + (day - 1) * 8
-        self.read_raw(Table.HOLDING_REGISTER, base, 8)
+        try:
+            complete = self._read_resilient(Table.HOLDING_REGISTER, base, 8)
+        except A21ModbusError:
+            self._evict_cached_range(Table.HOLDING_REGISTER, base, 8)
+            self._decode_cache()
+            return {}
         self._decode_cache()
+        if not complete:
+            return {}
         records: dict[int, WeeklyScheduleRecord] = {}
         for period in range(1, 5):
-            schedule = self._decoded[f"HR_SetWEEK_{label}_P{period}"]
-            end = self._decoded[f"HR_SetWEEK_{label}_P{period}_END"]
+            schedule = self._decoded.get(f"HR_SetWEEK_{label}_P{period}")
+            end = self._decoded.get(f"HR_SetWEEK_{label}_P{period}_END")
+            if not isinstance(schedule, SchedulePeriod) or not isinstance(end, ScheduleEnd):
+                return {}
             records[period] = WeeklyScheduleRecord(
                 day=day,
                 period=period,
-                speed=_A21_SPEEDS[schedule.speed],
+                speed=_A21_SPEEDS.get(schedule.speed, f"unknown_{schedule.speed}"),
                 end_hour=end.hour,
                 end_minute=end.minute,
                 reserved=schedule.temperature,

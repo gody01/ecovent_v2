@@ -333,7 +333,36 @@ class RegisterSpec:
     allowed_ranges: tuple[tuple[int, int], ...] = ()
 
     def decode(self, words: Iterable[int]) -> Any:
-        return decode(self.kind, words)
+        value = decode(self.kind, words)
+        # Decoding is untrusted input just as encoding is untrusted service
+        # input.  Reuse the type-specific codec validation for compound values
+        # (RTC, timers, schedules, etc.) and apply the catalogue's published
+        # scalar limits below.  An enum is display metadata, though: newer
+        # firmware may legally return a value the current map has not named.
+        if self.kind not in {
+            Kind.BOOL,
+            Kind.U8,
+            Kind.U16,
+            Kind.S16,
+            Kind.TENTHS_S16,
+        }:
+            encode(self.kind, value)
+            return value
+
+        numeric = (
+            int(value)
+            if self.kind is Kind.BOOL
+            else value * 10
+            if self.kind is Kind.TENTHS_S16
+            else value
+        )
+        if self.minimum is not None and not self.minimum <= numeric <= self.maximum:
+            raise ValueError(f"{self.key} outside documented range")
+        if self.allowed_ranges and not any(
+            low <= numeric <= high for low, high in self.allowed_ranges
+        ):
+            raise ValueError(f"{self.key} outside documented allowed ranges")
+        return value
 
     def encode(self, value: Any) -> tuple[int, ...]:
         if not self.access.writable:

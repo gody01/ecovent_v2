@@ -29,6 +29,7 @@ A21ModbusDevice = a21_modbus.A21ModbusDevice
 A21ModbusError = a21_modbus.A21ModbusError
 Table = a21_registers.Table
 WeeklyScheduleRecord = schedule_helpers.WeeklyScheduleRecord
+RtcCalendar = a21_registers.RtcCalendar
 
 
 class Response:
@@ -283,7 +284,7 @@ def test_write_permissions_ranges_and_enum_are_enforced():
         fan.write_register("IR_DeviceTYPE", 1)
     with pytest.raises(ValueError):
         fan.write_register("HR_SetTEMP", 99)
-    with pytest.raises(ValueError, match="enum value"):
+    with pytest.raises(ValueError, match="documented range"):
         fan.write_register("HR_OPERATION_MODE", 9)
     with pytest.raises(ValueError, match="documented range"):
         fan.write_register("CL_RESET_FILTER_TIMER", False)
@@ -441,14 +442,82 @@ def test_opportunistic_a21_write_reports_transport_result():
         "rtc_date": "1704041a",
     }
     fan.extra_write_parameters_result_callback = results.append
-    fan.set_param = lambda _key, _value: False
-
-    assert not fan.set_parameters({"state": "on"})
+    assert not fan.set_parameters({"state": "on", "bogus": "value"})
     assert results == [False]
-
-    fan.set_param = lambda _key, _value: True
     assert fan.set_parameters({"state": "on"})
     assert results == [False, True]
+
+
+def test_semantic_batch_validates_every_value_before_transport():
+    client = FakeModbusClient()
+    fan = device(client)
+
+    assert not fan.set_parameters({"state": "on", "temperature_treshold": 99})
+    assert not any(call[0].startswith("write_") for call in client.calls)
+
+
+def test_set_param_batches_callback_rtc_rows_and_reports_transport_failure():
+    class RejectRtcBatch(FakeModbusClient):
+        def write_registers(self, address, values, *, device_id):
+            self.calls.append(("write_registers", address, list(values), device_id))
+            return Response(error=True)
+
+    client = RejectRtcBatch()
+    fan = device(client)
+    results = []
+    fan.extra_write_parameters_callback = lambda: {
+        "rtc_time": "1e2d13",
+        "rtc_date": "1704041a",
+    }
+    fan.extra_write_parameters_result_callback = results.append
+
+    assert not fan.set_param("rtc_date", RtcCalendar(23, 4, 4, 26))
+    assert ("write_registers", 61, [0x2D1E, 19, 0x1704, 0x041A], 7) in client.calls
+    assert results == [False]
+
+
+def test_preset_poll_decodes_values_and_evicts_them_after_transport_failure():
+    client = FakeModbusClient()
+    fan = device(client)
+
+    assert fan.update_preset_speed_settings()
+    assert fan.supply_speed_low == 40
+    assert fan.man_speed == 50
+
+    class FailedPresetClient(FakeModbusClient):
+        def read_holding_registers(self, address, *, count, device_id):
+            if address == 5 and count == 13:
+                self.calls.append(("read_holding_registers", address, count, device_id))
+                return Response(error=True)
+            return super().read_holding_registers(address, count=count, device_id=device_id)
+
+    fan._client = FailedPresetClient()
+    assert not fan.update_preset_speed_settings()
+    assert fan.supply_speed_low is None
+    assert fan.man_speed is None
+
+
+def test_schedule_day_returns_empty_for_missing_or_invalid_optional_rows():
+    client = FakeModbusClient(fail_slots={("read_holding_registers", 129)})
+    fan = device(client)
+
+    assert fan.read_weekly_schedule_day(1) == {}
+
+    client.fail_slots.clear()
+    client.holding_registers[126] = 0xFF17
+    assert fan.read_weekly_schedule_day(1) == {}
+
+
+def test_normal_poll_evicts_engineer_password_cache():
+    client = FakeModbusClient()
+    client.holding_registers[124:126] = [0x3131, 0x3131]
+    fan = device(client)
+
+    assert fan.read_register("HR_ENGINEER_PWD") == "1111"
+    assert "HR_ENGINEER_PWD" in fan.decoded_registers
+    assert fan.read_all_registers()
+    assert "HR_ENGINEER_PWD" not in fan.decoded_registers
+    assert (Table.HOLDING_REGISTER, 124) not in fan.raw_registers
 
 
 def test_short_or_error_response_is_not_accepted_as_success():

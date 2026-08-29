@@ -256,7 +256,17 @@ class EcoVentCoordinator(DataUpdateCoordinator):
     def _load_schedule_days(self, days) -> None:
         """Read and cache selected weekly schedule days from the device."""
         for day in sorted(set(days)):
-            records = self._fan.read_weekly_schedule_day(day)
+            try:
+                records = self._fan.read_weekly_schedule_day(day)
+            except OSError as err:
+                _LOGGER.warning(
+                    "EcoVentCoordinator: preserving cached schedule for %s day %s "
+                    "after a read error: %s",
+                    self._fan.name,
+                    day,
+                    err,
+                )
+                continue
             if not records or set(records) != {1, 2, 3, 4}:
                 _LOGGER.warning(
                     "EcoVentCoordinator: preserving cached schedule for %s day %s "

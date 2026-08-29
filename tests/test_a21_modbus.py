@@ -225,6 +225,93 @@ def test_semantic_transactions_are_serialized_across_all_modbus_writes():
     assert writes[2][:3] == ("write_coil", 0, False)
 
 
+def test_typed_write_keeps_transport_and_semantic_cache_in_one_transaction():
+    first_raw_complete = threading.Event()
+    release_first = threading.Event()
+    client = FakeModbusClient()
+    fan = device(client)
+    original_write_raw = fan.write_raw
+
+    def paused_write_raw(table, address, values):
+        result = original_write_raw(table, address, values)
+        if address == 44 and tuple(values) == (24,):
+            first_raw_complete.set()
+            assert release_first.wait(timeout=1)
+        return result
+
+    fan.write_raw = paused_write_raw
+    results = []
+    first = threading.Thread(
+        target=lambda: results.append(fan.write_register("HR_SetTEMP", 24))
+    )
+    second = threading.Thread(
+        target=lambda: results.append(fan.write_register("HR_SetTEMP", 25))
+    )
+
+    first.start()
+    assert first_raw_complete.wait(timeout=1)
+    second.start()
+    second.join(timeout=0.05)
+    assert second.is_alive(), "second typed write entered a partial transaction"
+
+    release_first.set()
+    first.join(timeout=1)
+    second.join(timeout=1)
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert results == [True, True]
+    assert client.holding_registers[44] == 25
+    assert fan.raw_registers[(Table.HOLDING_REGISTER, 44)] == 25
+    assert fan.decoded_registers["HR_SetTEMP"] == 25
+    assert fan.temperature_treshold == 25
+
+
+def test_failed_poll_cannot_evict_a_newer_typed_write():
+    eviction_started = threading.Event()
+    release_eviction = threading.Event()
+    client = FakeModbusClient(fail_slots={("read_holding_registers", 44)})
+    fan = device(client)
+    fan.write_register("HR_SetTEMP", 24)
+    original_evict = fan._evict_cached_range
+
+    def paused_evict(table, address, count):
+        if table is Table.HOLDING_REGISTER and address == 44:
+            eviction_started.set()
+            assert release_eviction.wait(timeout=1)
+        return original_evict(table, address, count)
+
+    fan._evict_cached_range = paused_evict
+    results = {}
+    poll = threading.Thread(
+        target=lambda: results.setdefault(
+            "poll", fan._read_resilient(Table.HOLDING_REGISTER, 44, 1)
+        )
+    )
+    write = threading.Thread(
+        target=lambda: results.setdefault(
+            "write", fan.write_register("HR_SetTEMP", 25)
+        )
+    )
+
+    poll.start()
+    assert eviction_started.wait(timeout=1)
+    write.start()
+    write.join(timeout=0.05)
+    assert write.is_alive(), "typed write entered an unfinished poll transaction"
+
+    release_eviction.set()
+    poll.join(timeout=1)
+    write.join(timeout=1)
+    assert not poll.is_alive()
+    assert not write.is_alive()
+    assert results == {"poll": False, "write": True}
+    assert client.holding_registers[44] == 25
+    assert fan.raw_registers[(Table.HOLDING_REGISTER, 44)] == 25
+    assert fan.decoded_registers["HR_SetTEMP"] == 25
+    assert fan.temperature_treshold == 25
+    assert (Table.HOLDING_REGISTER, 44) not in fan.unavailable_addresses
+
+
 def test_invalid_opportunistic_write_does_not_block_primary_command():
     client = FakeModbusClient()
     fan = device(client)

@@ -554,56 +554,59 @@ class A21ModbusDevice(Fan):
 
     def read_register(self, key: str) -> Any:
         """Read and decode one official A21 register definition."""
-        spec = get_register(key)
-        if not spec.access.readable:
-            raise PermissionError(f"{key} is write-only")
-        words = self.read_raw(spec.table, spec.address, spec.word_count)
-        try:
-            value = spec.decode(words)
-        except ValueError:
-            self._evict_cached_range(spec.table, spec.address, spec.word_count)
-            self._clear_semantic_state()
+        with self._lock:
+            spec = get_register(key)
+            if not spec.access.readable:
+                raise PermissionError(f"{key} is write-only")
+            words = self.read_raw(spec.table, spec.address, spec.word_count)
+            try:
+                value = spec.decode(words)
+            except ValueError:
+                self._evict_cached_range(spec.table, spec.address, spec.word_count)
+                self._clear_semantic_state()
+                self._apply_semantics()
+                raise
+            self._decoded[key] = value
             self._apply_semantics()
-            raise
-        self._decoded[key] = value
-        self._apply_semantics()
-        return value
+            return value
 
     def write_register(self, key: str, value: Any) -> bool:
         """Validate and write one official A21 register definition."""
-        spec = get_register(key)
-        if not spec.access.writable:
-            raise PermissionError(f"{key} is read-only")
-        words = spec.encode(value)
-        self.write_raw(spec.table, spec.address, words)
-        self._decoded[key] = value
-        self._apply_semantics()
-        return True
+        with self._lock:
+            spec = get_register(key)
+            if not spec.access.writable:
+                raise PermissionError(f"{key} is read-only")
+            words = spec.encode(value)
+            self.write_raw(spec.table, spec.address, words)
+            self._decoded[key] = value
+            self._apply_semantics()
+            return True
 
     def _write_register_group(self, values: Sequence[tuple[str, Any]]) -> bool:
         """Write adjacent typed registers in one Modbus request."""
-        if not values:
-            return False
+        with self._lock:
+            if not values:
+                return False
 
-        encoded = []
-        decoded = []
-        first_spec = get_register(values[0][0])
-        table = first_spec.table
-        address = first_spec.address
-        next_address = address
-        for key, value in values:
-            spec = get_register(key)
-            if spec.table is not table or spec.address != next_address:
-                raise ValueError("A21 grouped registers must be contiguous")
-            words = spec.encode(value)
-            encoded.extend(words)
-            decoded.append((key, value))
-            next_address += len(words)
+            encoded = []
+            decoded = []
+            first_spec = get_register(values[0][0])
+            table = first_spec.table
+            address = first_spec.address
+            next_address = address
+            for key, value in values:
+                spec = get_register(key)
+                if spec.table is not table or spec.address != next_address:
+                    raise ValueError("A21 grouped registers must be contiguous")
+                words = spec.encode(value)
+                encoded.extend(words)
+                decoded.append((key, value))
+                next_address += len(words)
 
-        self.write_raw(table, address, encoded)
-        self._decoded.update(decoded)
-        self._apply_semantics()
-        return True
+            self.write_raw(table, address, encoded)
+            self._decoded.update(decoded)
+            self._apply_semantics()
+            return True
 
     def _read_resilient(
         self,
@@ -612,45 +615,48 @@ class A21ModbusDevice(Fan):
         count: int,
         split_budget: list[int] | None = None,
     ) -> bool:
-        if split_budget is None:
-            split_budget = [_MAX_ILLEGAL_ADDRESS_SPLITS]
-        try:
-            self.read_raw(table, address, count)
-            return True
-        except A21IllegalAddressError:
-            if split_budget[0] <= 0:
-                raise A21ModbusError(
-                    f"A21 {table.value} returned too many illegal-address responses"
+        with self._lock:
+            if split_budget is None:
+                split_budget = [_MAX_ILLEGAL_ADDRESS_SPLITS]
+            try:
+                self.read_raw(table, address, count)
+                return True
+            except A21IllegalAddressError:
+                if split_budget[0] <= 0:
+                    raise A21ModbusError(
+                        f"A21 {table.value} returned too many illegal-address responses"
+                    )
+                split_budget[0] -= 1
+                if count == 1:
+                    slot = (table, address)
+                    self._unavailable.add(slot)
+                    spec = get_by_address(table, address)
+                    self._evict_cached_range(spec.table, spec.address, spec.word_count)
+                    _LOGGER.debug(
+                        "A21 address unavailable: %s/%d", table.value, address
+                    )
+                    return False
+                left = count // 2
+                left_complete = self._read_resilient(
+                    table, address, left, split_budget
                 )
-            split_budget[0] -= 1
-            if count == 1:
-                slot = (table, address)
-                self._unavailable.add(slot)
-                spec = get_by_address(table, address)
-                self._evict_cached_range(spec.table, spec.address, spec.word_count)
-                _LOGGER.debug("A21 address unavailable: %s/%d", table.value, address)
-                return False
-            left = count // 2
-            left_complete = self._read_resilient(
-                table, address, left, split_budget
-            )
-            right_complete = self._read_resilient(
-                table, address + left, count - left, split_budget
-            )
-            complete = left_complete & right_complete
-            if not complete:
-                for unavailable_table, unavailable_address in tuple(
-                    self._unavailable
-                ):
-                    if (
-                        unavailable_table is table
-                        and address <= unavailable_address < address + count
+                right_complete = self._read_resilient(
+                    table, address + left, count - left, split_budget
+                )
+                complete = left_complete & right_complete
+                if not complete:
+                    for unavailable_table, unavailable_address in tuple(
+                        self._unavailable
                     ):
-                        spec = get_by_address(table, unavailable_address)
-                        self._evict_cached_range(
-                            spec.table, spec.address, spec.word_count
-                        )
-            return complete
+                        if (
+                            unavailable_table is table
+                            and address <= unavailable_address < address + count
+                        ):
+                            spec = get_by_address(table, unavailable_address)
+                            self._evict_cached_range(
+                                spec.table, spec.address, spec.word_count
+                            )
+                return complete
 
     def _decode_cache(self) -> None:
         for spec in REGISTERS:

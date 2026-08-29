@@ -93,6 +93,43 @@ class Issue16RegressionTest(unittest.TestCase):
             )
         )
 
+    def test_optional_schedule_read_error_preserves_cache_and_core_update(self):
+        method = _class_method(
+            ast.parse(COORDINATOR_PATH.read_text()),
+            "EcoVentCoordinator",
+            "_load_schedule_days",
+        )
+        namespace = {
+            "_LOGGER": types.SimpleNamespace(warning=lambda *_args: None),
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+                str(COORDINATOR_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+        cached_day = {period: f"old-{period}" for period in range(1, 5)}
+        fresh_day = {period: f"new-{period}" for period in range(1, 5)}
+
+        class Fan:
+            name = "Test fan"
+
+            def read_weekly_schedule_day(self, day):
+                if day == 1:
+                    raise OSError("schedule timeout")
+                return fresh_day
+
+        coordinator = types.SimpleNamespace(
+            _fan=Fan(),
+            _weekly_schedule={1: cached_day},
+        )
+        namespace["_load_schedule_days"](coordinator, [1, 2])
+
+        self.assertIs(coordinator._weekly_schedule[1], cached_day)
+        self.assertIs(coordinator._weekly_schedule[2], fresh_day)
+
     def test_schedule_state_write_reports_transport_failure(self):
         source = COORDINATOR_PATH.read_text()
         write_schedule = _class_method(

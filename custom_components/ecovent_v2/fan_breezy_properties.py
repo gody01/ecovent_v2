@@ -95,6 +95,11 @@ class FanBreezyPropertiesMixin:
             )
             return
 
+        if len(data) != 5:
+            raise ValueError(
+                "air_quality_status must contain either 1 or exactly 5 bytes"
+            )
+
         parts = []
         labels = ("humidity", "co2", "reserved_1", "reserved_2", "voc")
         for label, value in zip(labels, data):

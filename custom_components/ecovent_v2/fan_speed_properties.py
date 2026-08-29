@@ -183,7 +183,9 @@ class FanSpeedPropertiesMixin:
     @fan1_speed.setter
     def fan1_speed(self, input):
         val = int.from_bytes(
-            int(input, 16).to_bytes(2, "big"), byteorder="little", signed=False
+            self._decode_exact_bytes(input, 2, "fan1_speed"),
+            byteorder="little",
+            signed=False,
         )
         self._fan1_speed = str(val)
 
@@ -194,7 +196,9 @@ class FanSpeedPropertiesMixin:
     @fan2_speed.setter
     def fan2_speed(self, input):
         val = int.from_bytes(
-            int(input, 16).to_bytes(2, "big"), byteorder="little", signed=False
+            self._decode_exact_bytes(input, 2, "fan2_speed"),
+            byteorder="little",
+            signed=False,
         )
         self._fan2_speed = str(val)
 
@@ -259,7 +263,7 @@ class FanSpeedPropertiesMixin:
             self._rtc_time = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
             return
 
-        val = int(input, 16).to_bytes(3, "big")
+        val = self._decode_exact_bytes(input, 3, "rtc_time")
         self._rtc_time = f"{val[2]:02d}:{val[1]:02d}:{val[0]:02d}"
 
     @property
@@ -268,7 +272,7 @@ class FanSpeedPropertiesMixin:
 
     @silent_mode_start_time.setter
     def silent_mode_start_time(self, input):
-        val = int(input, 16).to_bytes(3, "big")
+        val = self._decode_exact_bytes(input, 3, "silent_mode_start_time")
         self._silent_mode_start_time = (
             str(val[2]) + "h " + str(val[1]) + "m " + str(val[0]) + "s "
         )
@@ -279,7 +283,7 @@ class FanSpeedPropertiesMixin:
 
     @silent_mode_end_time.setter
     def silent_mode_end_time(self, input):
-        val = int(input, 16).to_bytes(3, "big")
+        val = self._decode_exact_bytes(input, 3, "silent_mode_end_time")
         self._silent_mode_end_time = (
             str(val[2]) + "h " + str(val[1]) + "m " + str(val[0]) + "s "
         )
@@ -290,7 +294,7 @@ class FanSpeedPropertiesMixin:
 
     @rtc_date.setter
     def rtc_date(self, input):
-        val = int(input, 16).to_bytes(4, "big")
+        val = self._decode_exact_bytes(input, 4, "rtc_date")
         self._rtc_weekday = val[1]
         self._rtc_date = f"20{val[3]:02d}-{val[2]:02d}-{val[0]:02d}"
 
@@ -311,7 +315,7 @@ class FanSpeedPropertiesMixin:
 
     @weekly_schedule_setup.setter
     def weekly_schedule_setup(self, input):
-        val = int(input, 16).to_bytes(6, "big")
+        val = self._decode_exact_bytes(input, 6, "weekly_schedule_setup")
         speed = self._map_value(self.speeds, val[2], "weekly_schedule_speed")
         record = WeeklyScheduleRecord(
             day=val[0],

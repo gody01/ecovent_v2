@@ -105,7 +105,7 @@ class FanCorePropertiesMixin:
 
     @timer_counter.setter
     def timer_counter(self, input):
-        val = int(input, 16).to_bytes(3, "big")
+        val = self._decode_exact_bytes(input, 3, "timer_counter")
         self._timer_counter = (
             str(val[2]) + "h " + str(val[1]) + "m " + str(val[0]) + "s "
         )
@@ -147,7 +147,7 @@ class FanCorePropertiesMixin:
 
     @boost_timer_countdown.setter
     def boost_timer_countdown(self, input):
-        val = int(input, 16).to_bytes(3, "big")
+        val = self._decode_exact_bytes(input, 3, "boost_timer_countdown")
         self._boost_timer_countdown = (
             str(val[2]) + "h " + str(val[1]) + "m " + str(val[0]) + "s "
         )
@@ -331,7 +331,9 @@ class FanCorePropertiesMixin:
     @battery_voltage.setter
     def battery_voltage(self, input):
         val = int.from_bytes(
-            int(input, 16).to_bytes(2, "big"), byteorder="little", signed=False
+            self._decode_exact_bytes(input, 2, "battery_voltage"),
+            byteorder="little",
+            signed=False,
         )
         self._battery_voltage = str(val) + " mV"
 

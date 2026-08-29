@@ -64,7 +64,7 @@ class FanMiscPropertiesMixin:
 
     @night_mode_timer.setter
     def night_mode_timer(self, input):
-        val = int(input, 16).to_bytes(2, "big")
+        val = self._decode_exact_bytes(input, 2, "night_mode_timer")
         self._night_mode_timer = (
             str(val[1]).zfill(2) + "h " + str(val[0]).zfill(2) + "m"
         )
@@ -75,7 +75,7 @@ class FanMiscPropertiesMixin:
 
     @party_mode_timer.setter
     def party_mode_timer(self, input):
-        val = int(input, 16).to_bytes(2, "big")
+        val = self._decode_exact_bytes(input, 2, "party_mode_timer")
         self._party_mode_timer = (
             str(val[1]).zfill(2) + "h " + str(val[0]).zfill(2) + "m"
         )

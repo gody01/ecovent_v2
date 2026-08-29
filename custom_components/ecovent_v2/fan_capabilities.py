@@ -203,18 +203,30 @@ class FanCapabilitiesMixin:
         """Decode unsigned protocol integers from hex payload bytes."""
         return int.from_bytes(bytes.fromhex(input), byteorder=byteorder, signed=False)
 
+    def _decode_exact_bytes(self, input, expected_size, parameter):
+        """Decode a fixed-width protocol value without padding or truncation."""
+        value = bytes.fromhex(input)
+        if len(value) != expected_size:
+            raise ValueError(
+                f"{parameter} must contain exactly {expected_size} bytes, "
+                f"got {len(value)}"
+            )
+        return value
+
     def _decode_signed_temperature(self, input):
         """Decode Breezy/Freshpoint signed tenths-of-degree temperature values."""
-        value = int.from_bytes(bytes.fromhex(input), byteorder="little", signed=True)
+        value = int.from_bytes(
+            self._decode_exact_bytes(input, 2, "temperature"),
+            byteorder="little",
+            signed=True,
+        )
         if value in (-32768, 32767):
             return None
         return round(value / 10, 1)
 
     def _decode_time_minutes_hours(self, input):
         """Decode two-byte minute/hour protocol time into HH:MM text."""
-        value = bytes.fromhex(input)
-        if len(value) < 2:
-            return None
+        value = self._decode_exact_bytes(input, 2, "time")
         return f"{value[1]:02d}:{value[0]:02d}"
 
     def _set_device_profile(self, profile_key):

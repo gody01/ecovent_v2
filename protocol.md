@@ -311,7 +311,11 @@ as `0x00B9` (`unit_type`) are preserved on soft misses so the active profile is
 not lost during a degraded poll. Targeted reads remain all-required and bypass
 optional poll backoff. The response parser keeps the current `0xFF` high-byte
 page until another page marker changes it, as required by the guide's packet
-example.
+example. Fixed-width multi-byte rows are decoded only when their response value
+has the documented byte count; malformed rows remain reportable as unknown and
+cannot overwrite the last valid decoded state. Explicitly variable-width rows,
+such as the alarm list and observed filter countdown variants, retain their own
+format validation.
 
 Documented unit type values from parameter `0x00B9`:
 

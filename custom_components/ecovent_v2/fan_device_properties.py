@@ -23,9 +23,9 @@ class FanDevicePropertiesMixin:
 
     @machine_hours.setter
     def machine_hours(self, input):
-        val = int(input, 16).to_bytes(4, "big")
+        val = self._decode_exact_bytes(input, 4, "machine_hours")
         self._machine_hours = (
-            str(int.from_bytes(val[2:3], "big"))
+            str(int.from_bytes(val[2:4], byteorder="little", signed=False))
             + "d "
             + str(val[1])
             + "h "
@@ -81,7 +81,7 @@ class FanDevicePropertiesMixin:
 
     @firmware.setter
     def firmware(self, input):
-        val = int(input, 16).to_bytes(6, "big")
+        val = self._decode_exact_bytes(input, 6, "firmware")
         firmware = (
             str(val[0])
             + "."
@@ -180,7 +180,7 @@ class FanDevicePropertiesMixin:
 
     @wifi_assigned_ip.setter
     def wifi_assigned_ip(self, input):
-        val = int(input, 16).to_bytes(4, "big")
+        val = self._decode_exact_bytes(input, 4, "wifi_assigned_ip")
         self._wifi_assigned_ip = (
             str(val[0]) + "." + str(val[1]) + "." + str(val[2]) + "." + str(val[3])
         )
@@ -191,7 +191,7 @@ class FanDevicePropertiesMixin:
 
     @wifi_assigned_netmask.setter
     def wifi_assigned_netmask(self, input):
-        val = int(input, 16).to_bytes(4, "big")
+        val = self._decode_exact_bytes(input, 4, "wifi_assigned_netmask")
         self._wifi_assigned_netmask = (
             str(val[0]) + "." + str(val[1]) + "." + str(val[2]) + "." + str(val[3])
         )
@@ -202,7 +202,7 @@ class FanDevicePropertiesMixin:
 
     @wifi_main_gateway.setter
     def wifi_main_gateway(self, input):
-        val = int(input, 16).to_bytes(4, "big")
+        val = self._decode_exact_bytes(input, 4, "wifi_main_gateway")
         self._wifi_main_gateway = (
             str(val[0]) + "." + str(val[1]) + "." + str(val[2]) + "." + str(val[3])
         )
@@ -213,7 +213,7 @@ class FanDevicePropertiesMixin:
 
     @current_wifi_ip.setter
     def current_wifi_ip(self, input):
-        val = int(input, 16).to_bytes(4, "big")
+        val = self._decode_exact_bytes(input, 4, "current_wifi_ip")
         self._current_wifi_ip = (
             str(val[0]) + "." + str(val[1]) + "." + str(val[2]) + "." + str(val[3])
         )

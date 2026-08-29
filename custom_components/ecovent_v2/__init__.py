@@ -596,7 +596,7 @@ async def _async_migrate_statistics_metadata(
 
 
 async def _async_migrate_statistics_metadata_on_start(
-    hass: HomeAssistant, coordinator: EcoVentCoordinator
+    hass: HomeAssistant, entry: ConfigEntry, coordinator: EcoVentCoordinator
 ) -> None:
     """Run statistics migration now and again after recorder startup."""
     await _async_migrate_statistics_metadata(hass, coordinator)
@@ -604,7 +604,9 @@ async def _async_migrate_statistics_metadata_on_start(
     async def _async_run_at_start(_event) -> None:
         await _async_migrate_statistics_metadata(hass, coordinator)
 
-    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _async_run_at_start)
+    entry.async_on_unload(
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _async_run_at_start)
+    )
 
 
 async def _async_close_coordinator(
@@ -653,7 +655,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN][entry.entry_id] = coordinator
         await async_register_frontend(hass)
         _async_migrate_entity_registry(hass, coordinator)
-        await _async_migrate_statistics_metadata_on_start(hass, coordinator)
+        await _async_migrate_statistics_metadata_on_start(hass, entry, coordinator)
         await hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)
         _async_register_optional_poll_entity_sync(hass, entry, coordinator)
         return True

@@ -14,10 +14,6 @@ _LOGGER = logging.getLogger(__name__)
 MAX_BULK_READ_PARAMS = 12
 OPTIONAL_PARAM_RETRY_BACKOFF_READS = 10
 BULK_READ_REPROBE_READS = 10
-ACTION_PARAMETER_VALUES = {
-    "filter_timer_reset": "01",
-    "reset_alarms": "01",
-}
 PRESERVE_ON_SOFT_MISS_PARAMS = frozenset(
     {
         0x007C,  # device_search
@@ -788,8 +784,6 @@ class FanProtocolMixin:
         return available
 
     def set_param(self, param, value):
-        if value == "" and param in ACTION_PARAMETER_VALUES:
-            value = ACTION_PARAMETER_VALUES[param]
         valpar = self.get_params_values(param, value)
         # print ( "EcoventV2: " + " " + param + "/" + value , file = sys.stderr )
         if valpar[0] is not None:

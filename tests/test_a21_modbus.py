@@ -326,6 +326,39 @@ def test_resilient_poll_clears_stale_optional_semantic_value():
     assert fan.outdoor_temperature is None
 
 
+def test_resilient_poll_evicts_every_word_of_failed_multiword_value():
+    client = FakeModbusClient()
+    fan = device(client)
+    fan.read_register("IR_DeviceTYPE")
+
+    assert fan.update() is True
+    assert (Table.INPUT_REGISTER, 25) in fan.raw_registers
+    assert (Table.INPUT_REGISTER, 26) in fan.raw_registers
+
+    client.fail_slots.add(("read_input_registers", 26))
+
+    assert fan.update() is True
+    assert (Table.INPUT_REGISTER, 25) not in fan.raw_registers
+    assert (Table.INPUT_REGISTER, 26) not in fan.raw_registers
+    assert "IR_TimerCOUNT" not in fan.decoded_registers
+
+
+def test_quick_poll_refreshes_the_complete_alarm_bitmap():
+    client = FakeModbusClient()
+    fan = device(client)
+    fan.read_register("IR_DeviceTYPE")
+
+    assert fan.update() is True
+    assert fan.alarm_list == "none"
+
+    client.discrete_inputs[19] = True
+    client.calls.clear()
+    assert fan.quick_update() is True
+
+    assert fan.alarm_list == "0"
+    assert ("read_discrete_inputs", 0, 72, 7) in client.calls
+
+
 def test_poll_fails_when_a_required_operational_address_is_missing():
     client = FakeModbusClient(fail_slots={("read_coils", 0)})
     fan = device(client)

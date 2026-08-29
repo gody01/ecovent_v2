@@ -106,8 +106,12 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         """
         if not self.fan_initialized:
             _LOGGER.debug("EcoVentCoordinator: Initializing fan for the first time...")
-            await self.hass.async_add_executor_job(self._fan.init_device)
-            if self._fan.id is None or self._fan.id == "DEFAULT_DEVICEID":
+            initialized = await self.hass.async_add_executor_job(self._fan.init_device)
+            if (
+                not initialized
+                or self._fan.id is None
+                or self._fan.id == "DEFAULT_DEVICEID"
+            ):
                 _LOGGER.error(
                     "EcoVentCoordinator: Failed to initialize fan, check connection and configuration."
                 )
@@ -514,6 +518,9 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                         "Failed to write weekly schedule state "
                         f"{target!r} for {self._fan.name}"
                     )
+                # Confirm the new state through the normal coordinator path before
+                # listeners render the schedule summary.
+                await self.async_refresh()
 
         if days:
             day_payloads = []

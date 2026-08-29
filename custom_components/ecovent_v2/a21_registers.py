@@ -337,8 +337,7 @@ class RegisterSpec:
         # Decoding is untrusted input just as encoding is untrusted service
         # input.  Reuse the type-specific codec validation for compound values
         # (RTC, timers, schedules, etc.) and apply the catalogue's published
-        # scalar limits below.  An enum is display metadata, though: newer
-        # firmware may legally return a value the current map has not named.
+        # scalar limits and documented enum values below.
         if self.kind not in {
             Kind.BOOL,
             Kind.U8,
@@ -362,6 +361,8 @@ class RegisterSpec:
             low <= numeric <= high for low, high in self.allowed_ranges
         ):
             raise ValueError(f"{self.key} outside documented allowed ranges")
+        if self.enum is not None and numeric not in self.enum:
+            raise ValueError(f"{self.key} has no documented enum value {numeric}")
         return value
 
     def encode(self, value: Any) -> tuple[int, ...]:
@@ -388,6 +389,8 @@ class RegisterSpec:
                 low <= numeric <= high for low, high in self.allowed_ranges
             ):
                 raise ValueError(f"{self.key} outside documented allowed ranges")
+            if self.enum is not None and numeric not in self.enum:
+                raise ValueError(f"{self.key} has no documented enum value {numeric}")
         return words
 
 

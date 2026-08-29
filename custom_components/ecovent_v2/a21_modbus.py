@@ -618,8 +618,8 @@ class A21ModbusDevice(Fan):
             if count == 1:
                 slot = (table, address)
                 self._unavailable.add(slot)
-                self._raw.pop(slot, None)
-                self._decoded.pop(get_by_address(table, address).key, None)
+                spec = get_by_address(table, address)
+                self._evict_cached_range(spec.table, spec.address, spec.word_count)
                 _LOGGER.debug("A21 address unavailable: %s/%d", table.value, address)
                 return False
             left = count // 2
@@ -727,7 +727,10 @@ class A21ModbusDevice(Fan):
         """Refresh the high-frequency operational portion of the table."""
         ranges = (
             (Table.COIL, 0, 17),
-            (Table.DISCRETE_INPUT, 0, 19),
+            # Alarm bits are one contiguous Modbus read. Keeping them in the
+            # quick poll prevents the aggregate alarm state from reusing a
+            # previous full poll.
+            (Table.DISCRETE_INPUT, 0, 72),
             (Table.INPUT_REGISTER, 0, 54),
             (Table.HOLDING_REGISTER, 0, 76),
         )

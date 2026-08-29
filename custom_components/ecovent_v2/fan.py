@@ -636,7 +636,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
     async def async_reset_filter_timer(self, fan_target) -> None:
         """Reset Fan's filter timer."""
         await self.hass.async_add_executor_job(
-            self._set_param, "filter_timer_reset", ""
+            self._set_param, "filter_timer_reset", "01"
         )
         await self.coordinator.async_refresh()
 
@@ -644,7 +644,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
     async def async_reset_alarms(self, fan_target) -> None:
         """Reset Fan's Alarms."""
         await self.hass.async_add_executor_job(
-            self._set_param, "reset_alarms", ""
+            self._set_param, "reset_alarms", "01"
         )
         await self.coordinator.async_refresh()
 

@@ -1379,15 +1379,6 @@ class PacketBuilderTest(unittest.TestCase):
                 )
                 self.assertEqual(fan.unknown_params, {})
 
-    def test_blank_reset_action_is_encoded_as_the_explicit_action_byte(self):
-        fan = Fan("192.0.2.1")
-        calls = []
-        fan.send = lambda data: calls.append(data) or True
-        fan.receive = lambda: packet_with_payload([0x65, 0x01])
-
-        self.assertTrue(fan.set_param("filter_timer_reset", ""))
-        self.assertEqual(calls, ["036501"])
-
     def test_manual_speed_zero_write_reaches_device(self):
         fan = Fan("192.0.2.1")
         calls = []

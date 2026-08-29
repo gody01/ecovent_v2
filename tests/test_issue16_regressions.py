@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import ast
+import asyncio
 import logging
 import types
 import unittest
@@ -103,6 +104,61 @@ class Issue16RegressionTest(unittest.TestCase):
         self.assertIn('"weekly_schedule_state"', method_source)
         self.assertIn("if not written", method_source)
         self.assertIn("Failed to write weekly schedule state", method_source)
+
+    def test_schedule_state_write_refreshes_before_listener_notification(self):
+        method = _class_method(
+            ast.parse(COORDINATOR_PATH.read_text()),
+            "EcoVentCoordinator",
+            "async_write_schedule",
+        )
+        namespace = {
+            "SCHEDULE_DAY_TO_INDEX": {},
+            "changed_schedule_records": lambda *_args: [],
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+                str(COORDINATOR_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+
+        events = []
+
+        class Hass:
+            async def async_add_executor_job(self, callback, *args):
+                return callback(*args)
+
+        class Fan:
+            weekly_schedule_state = "off"
+            name = "Test fan"
+
+            def set_param(self, name, value):
+                events.append(("write", name, value))
+                return True
+
+        async def refresh():
+            events.append("refresh")
+
+        coordinator = types.SimpleNamespace(
+            hass=Hass(),
+            _fan=Fan(),
+            _schedule_day=1,
+            _weekly_schedule={},
+            async_refresh=refresh,
+            async_update_listeners=lambda: events.append("listeners"),
+        )
+
+        asyncio.run(
+            namespace["async_write_schedule"](
+                coordinator, weekly_schedule_enabled=True
+            )
+        )
+        self.assertEqual(
+            events,
+            [("write", "weekly_schedule_state", "on"), "refresh", "listeners"],
+        )
 
     def test_incomplete_schedule_read_preserves_last_complete_day(self):
         source = COORDINATOR_PATH.read_text()

@@ -1,3 +1,4 @@
+from dataclasses import replace
 import sys
 from pathlib import Path
 
@@ -99,10 +100,14 @@ def test_register_decode_validates_structures_and_published_scalar_limits():
         get_register("HR_RTC_TIME").decode((0, 24))
 
 
-def test_register_decode_accepts_unknown_enum_value_within_documented_range():
+def test_register_decode_rejects_unknown_enum_value_within_numeric_range():
     spec = get_register("HR_OPERATION_MODE")
     assert spec.enum is not None
-    assert spec.decode((2,)) == 2
+    restricted = replace(spec, enum={0: "off", 2: "on"})
+    with pytest.raises(ValueError, match="no documented enum value"):
+        restricted.decode((1,))
+    with pytest.raises(ValueError, match="no documented enum value"):
+        restricted.encode(1)
 
 
 def test_bypass_rotor_type_preserves_the_pdf_maximum_discrepancy():

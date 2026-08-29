@@ -898,6 +898,81 @@ class Issue35RegressionTest(unittest.TestCase):
                     for key in expected_fields:
                         self.assertNotEqual(labels[key], key)
 
+    def test_statistics_start_listener_is_owned_by_config_entry(self):
+        function = _module_function(
+            _tree(INIT_PATH), "_async_migrate_statistics_metadata_on_start"
+        )
+        events = []
+
+        async def migrate(_hass, _coordinator):
+            events.append("migrate")
+
+        namespace = {
+            "HomeAssistant": object,
+            "ConfigEntry": object,
+            "EcoVentCoordinator": object,
+            "EVENT_HOMEASSISTANT_STARTED": "started",
+            "_async_migrate_statistics_metadata": migrate,
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(
+                    ast.Module(body=[function], type_ignores=[])
+                ),
+                str(INIT_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+
+        def cancel():
+            events.append("cancel")
+
+        class Bus:
+            def async_listen_once(self, event, callback):
+                events.append(("listen", event, callback))
+                return cancel
+
+        class Entry:
+            def async_on_unload(self, callback):
+                events.append(("unload", callback))
+
+        asyncio.run(
+            namespace["_async_migrate_statistics_metadata_on_start"](
+                types.SimpleNamespace(bus=Bus()), Entry(), object()
+            )
+        )
+        self.assertEqual(events[0], "migrate")
+        self.assertEqual(events[1][0:2], ("listen", "started"))
+        self.assertEqual(events[2], ("unload", cancel))
+
+    def test_coordinator_rejects_false_initialization_even_when_id_was_assigned(self):
+        coordinator_path = COMPONENT_PATH / "coordinator.py"
+        source = coordinator_path.read_text()
+        method = _class_method(
+            ast.parse(source), "EcoVentCoordinator", "_async_update_data"
+        )
+        method_source = ast.get_source_segment(source, method)
+
+        self.assertIn("initialized = await", method_source)
+        self.assertIn("not initialized", method_source)
+        self.assertLess(
+            method_source.index("not initialized"),
+            method_source.index("self.fan_initialized = True"),
+        )
+
+    def test_reset_services_send_explicit_action_bytes(self):
+        source = FAN_PATH.read_text()
+        tree = ast.parse(source)
+        for method_name, parameter in (
+            ("async_reset_filter_timer", "filter_timer_reset"),
+            ("async_reset_alarms", "reset_alarms"),
+        ):
+            with self.subTest(method=method_name):
+                method = _class_method(tree, "VentoExpertFan", method_name)
+                method_source = ast.get_source_segment(source, method)
+                self.assertIn(f'"{parameter}", "01"', method_source)
+
 
 if __name__ == "__main__":
     unittest.main()

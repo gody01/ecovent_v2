@@ -362,24 +362,24 @@ def _async_migrate_entity_registry(
                     schedule_switch_entity_id,
                 )
 
-        schedule_helper_entity_ids = (
-            f"select.{device_slug}_schedule_day",
-            *[
-                f"select.{device_slug}_schedule_period_{period}_speed"
-                for period in range(1, 5)
-            ],
-            *[
-                f"time.{device_slug}_schedule_period_{period}_end"
-                for period in range(1, 4)
-            ],
+    schedule_helper_entity_ids = (
+        f"select.{device_slug}_schedule_day",
+        *[
+            f"select.{device_slug}_schedule_period_{period}_speed"
+            for period in range(1, 5)
+        ],
+        *[
+            f"time.{device_slug}_schedule_period_{period}_end"
+            for period in range(1, 4)
+        ],
+    )
+    for entity_id in schedule_helper_entity_ids:
+        if registry.async_get(entity_id) is None:
+            continue
+        registry.async_remove(entity_id)
+        _LOGGER.info(
+            "Removed EcoVent V2 legacy schedule helper entity %s", entity_id
         )
-        for entity_id in schedule_helper_entity_ids:
-            if registry.async_get(entity_id) is None:
-                continue
-            registry.async_remove(entity_id)
-            _LOGGER.info(
-                "Removed EcoVent V2 legacy schedule helper entity %s", entity_id
-            )
 
     _async_update_unsupported_optional_poll_entities(registry, fan)
 
@@ -513,10 +513,11 @@ def _async_register_optional_poll_entity_sync(
         if not coordinator.last_update_success:
             return
 
+        current_firmware = coordinator._fan.firmware
         current_identity = (
             coordinator._fan.profile_key,
             getattr(coordinator._fan, "_unit_type_id", None),
-            coordinator._fan.firmware,
+            current_firmware if current_firmware is not None else loaded_identity[2],
         )
         if current_identity != loaded_identity:
             if not reload_requested:

@@ -457,9 +457,43 @@ class Issue35RegressionTest(unittest.TestCase):
         self.assertEqual(reloads, [])
 
         coordinator.last_update_success = True
+        coordinator._fan.firmware = None
+        coordinator.listener()
+        self.assertEqual(reloads, [])
+
+        coordinator._fan.firmware = "0.6 2021-05-17"
         coordinator.listener()
         coordinator.listener()
         self.assertEqual(reloads, ["entry-1"])
+
+    def test_legacy_schedule_helpers_are_removed_even_when_schedule_is_unsupported(
+        self,
+    ):
+        migrate = _module_function(_tree(INIT_PATH), "_async_migrate_entity_registry")
+        schedule_support_branch = next(
+            node
+            for node in ast.walk(migrate)
+            if isinstance(node, ast.If)
+            and any(
+                isinstance(child, ast.Constant)
+                and child.value == "weekly_schedule_setup"
+                for child in ast.walk(node.test)
+            )
+        )
+
+        self.assertFalse(
+            any(
+                isinstance(child, ast.Name) and child.id == "schedule_helper_entity_ids"
+                for statement in schedule_support_branch.body
+                for child in ast.walk(statement)
+            )
+        )
+        self.assertTrue(
+            any(
+                isinstance(node, ast.Name) and node.id == "schedule_helper_entity_ids"
+                for node in ast.walk(migrate)
+            )
+        )
 
     def test_hardware_profile_repairs_issue_is_unloaded_cleanly(self):
         init_source = INIT_PATH.read_text()

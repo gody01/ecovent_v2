@@ -270,12 +270,50 @@ class Issue49RegressionTest(unittest.TestCase):
             ),
             _device_clock_now=lambda: "NOW",
             async_refresh=refresh,
+            last_update_success=False,
             _record_clock_sync=lambda now: events.append(("record", now)),
         )
 
         with self.assertRaisesRegex(RuntimeError, "refresh failed"):
             asyncio.run(namespace["async_sync_device_clock"](coordinator))
         self.assertEqual(events, [("write", "NOW"), "refresh"])
+
+    def test_manual_clock_sync_checks_swallowed_refresh_failure(self):
+        method = _class_method(
+            _tree(COORDINATOR_PATH), "EcoVentCoordinator", "async_sync_device_clock"
+        )
+        namespace = {}
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+                str(COORDINATOR_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+        events = []
+
+        class Hass:
+            async def async_add_executor_job(self, callback, *args):
+                return callback(*args)
+
+        async def refresh():
+            events.append("refresh-failed-but-swallowed")
+
+        coordinator = types.SimpleNamespace(
+            hass=Hass(),
+            _fan=types.SimpleNamespace(
+                name="Test fan", set_rtc_datetime=lambda now: True
+            ),
+            _device_clock_now=lambda: "NOW",
+            async_refresh=refresh,
+            last_update_success=False,
+            _record_clock_sync=lambda now: events.append(("record", now)),
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "Failed to confirm"):
+            asyncio.run(namespace["async_sync_device_clock"](coordinator))
+        self.assertEqual(events, ["refresh-failed-but-swallowed"])
 
 
 if __name__ == "__main__":

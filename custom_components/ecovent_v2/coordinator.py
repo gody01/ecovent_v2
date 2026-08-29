@@ -542,6 +542,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                     current_records,
                     day_payload.get("periods", []),
                 )
+                expected_records = dict(current_records)
 
                 for record in records_to_write:
                     written = await self.hass.async_add_executor_job(
@@ -553,7 +554,29 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                             "Failed to write schedule record "
                             f"{day_label} period {record.period}"
                         )
-                    self._weekly_schedule.setdefault(day, {})[record.period] = record
+                    expected_records[record.period] = record
+
+                if records_to_write:
+                    confirmed_records = await self.hass.async_add_executor_job(
+                        self._fan.read_weekly_schedule_day,
+                        day,
+                    )
+                    if set(confirmed_records) != {1, 2, 3, 4}:
+                        self._weekly_schedule.pop(day, None)
+                        raise RuntimeError(
+                            "Incomplete schedule readback after writing "
+                            f"{day_label} for {self._fan.name}"
+                        )
+                    self._weekly_schedule[day] = confirmed_records
+                    if any(
+                        confirmed_records.get(record.period)
+                        != expected_records[record.period]
+                        for record in records_to_write
+                    ):
+                        raise RuntimeError(
+                            "Device did not confirm schedule write for "
+                            f"{day_label} on {self._fan.name}"
+                        )
 
         self.async_update_listeners()
 
@@ -568,4 +591,8 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                 f"Failed to synchronize device clock for {self._fan.name}"
             )
         await self.async_refresh()
+        if not self.last_update_success:
+            raise RuntimeError(
+                f"Failed to confirm synchronized device clock for {self._fan.name}"
+            )
         self._record_clock_sync(now)

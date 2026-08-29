@@ -160,6 +160,65 @@ class Issue16RegressionTest(unittest.TestCase):
             [("write", "weekly_schedule_state", "on"), "refresh", "listeners"],
         )
 
+    def test_schedule_record_write_requires_complete_matching_readback(self):
+        method = _class_method(
+            ast.parse(COORDINATOR_PATH.read_text()),
+            "EcoVentCoordinator",
+            "async_write_schedule",
+        )
+        requested = types.SimpleNamespace(period=1, value="requested")
+        actual = {
+            period: types.SimpleNamespace(period=period, value="actual")
+            for period in range(1, 5)
+        }
+        namespace = {
+            "SCHEDULE_DAY_TO_INDEX": {"Monday": 1},
+            "changed_schedule_records": lambda *_args: [requested],
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+                str(COORDINATOR_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+
+        class Hass:
+            async def async_add_executor_job(self, callback, *args):
+                return callback(*args)
+
+        class Fan:
+            weekly_schedule_state = "off"
+            name = "Test fan"
+
+            def supports_parameter(self, _name):
+                return False
+
+            def write_weekly_schedule_record(self, _record):
+                return True
+
+            def read_weekly_schedule_day(self, _day):
+                return actual
+
+        coordinator = types.SimpleNamespace(
+            hass=Hass(),
+            _fan=Fan(),
+            _schedule_day=1,
+            _weekly_schedule={1: {}},
+            schedule_day_records=lambda _day: {},
+            async_update_listeners=lambda: None,
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "did not confirm schedule write"):
+            asyncio.run(
+                namespace["async_write_schedule"](
+                    coordinator,
+                    days=[{"day": "Monday", "periods": []}],
+                )
+            )
+        self.assertEqual(coordinator._weekly_schedule[1], actual)
+
     def test_incomplete_schedule_read_preserves_last_complete_day(self):
         source = COORDINATOR_PATH.read_text()
         load_schedule_days = _class_method(

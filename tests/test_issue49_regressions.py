@@ -2,6 +2,8 @@
 
 from pathlib import Path
 import ast
+import asyncio
+import types
 import unittest
 
 
@@ -233,6 +235,47 @@ class Issue49RegressionTest(unittest.TestCase):
             coordinator_sync_source.index("await self.async_refresh()"),
             coordinator_sync_source.index("self._record_clock_sync(now)"),
         )
+
+    def test_manual_clock_sync_does_not_advance_marker_after_failed_refresh(self):
+        method = _class_method(
+            _tree(COORDINATOR_PATH), "EcoVentCoordinator", "async_sync_device_clock"
+        )
+        namespace = {}
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+                str(COORDINATOR_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+        events = []
+
+        class Hass:
+            async def async_add_executor_job(self, callback, *args):
+                return callback(*args)
+
+        def set_rtc_datetime(now):
+            events.append(("write", now))
+            return True
+
+        async def refresh():
+            events.append("refresh")
+            raise RuntimeError("refresh failed")
+
+        coordinator = types.SimpleNamespace(
+            hass=Hass(),
+            _fan=types.SimpleNamespace(
+                name="Test fan", set_rtc_datetime=set_rtc_datetime
+            ),
+            _device_clock_now=lambda: "NOW",
+            async_refresh=refresh,
+            _record_clock_sync=lambda now: events.append(("record", now)),
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "refresh failed"):
+            asyncio.run(namespace["async_sync_device_clock"](coordinator))
+        self.assertEqual(events, [("write", "NOW"), "refresh"])
 
 
 if __name__ == "__main__":

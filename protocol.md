@@ -189,6 +189,12 @@ identity check. The reported `0x0100`/`vento` behavior remains the runtime
 evidence for the specific DF270 Connect device; it does not prove that DF270
 and VUT 270 are the same model.
 
+Resilient A21 polling evicts the raw, decoded, and HA-facing value for an
+address that is isolated as unavailable. Optional read failures may leave the
+device available, but they must not republish a value from an earlier poll.
+The aggregate alarm list is likewise unknown unless all 53 published alarm
+bits were decoded in the current cache.
+
 The A21 implementation covers the complete published address surface: coils
 `0..25`, discrete inputs `0..71`, input registers `0..53`, and holding
 registers `0..182`, including multi-register timers, firmware, RTC, engineering
@@ -311,11 +317,14 @@ as `0x00B9` (`unit_type`) are preserved on soft misses so the active profile is
 not lost during a degraded poll. Targeted reads remain all-required and bypass
 optional poll backoff. The response parser keeps the current `0xFF` high-byte
 page until another page marker changes it, as required by the guide's packet
-example. Fixed-width multi-byte rows are decoded only when their response value
-has the documented byte count; malformed rows remain reportable as unknown and
+example. Fixed-width rows, including one-byte enums/scalars, identity fields,
+and structured multi-byte values, are decoded only when their response value
+has the documented byte count. Malformed rows remain reportable as unknown and
 cannot overwrite the last valid decoded state. Explicitly variable-width rows,
 such as the alarm list and observed filter countdown variants, retain their own
-format validation.
+format validation. The extract-fan three-byte BOOST/SILENT counters are
+little-endian totals in seconds, not the component-byte time format used by
+other profiles.
 
 Documented unit type values from parameter `0x00B9`:
 

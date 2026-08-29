@@ -28,7 +28,9 @@ class FanMiscPropertiesMixin:
 
     @unit_type.setter
     def unit_type(self, input):
-        val = int(input, 16)
+        val = int.from_bytes(
+            self._decode_exact_bytes(input, 2, "unit_type"), byteorder="big"
+        )
         previous_unit_type_id = getattr(self, "_unit_type_id", None)
         if previous_unit_type_id is not None and previous_unit_type_id != val:
             self._reset_learned_protocol_capabilities()

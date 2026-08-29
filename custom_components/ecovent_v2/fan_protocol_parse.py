@@ -1,5 +1,39 @@
 """EcoVent Fan mixin extracted from the vendored protocol client."""
 
+
+_FIXED_VALUE_SIZES = {
+    "air_quality": 2,
+    "air_quality_treshold": 2,
+    "analogV": 1,
+    "analogV_treshold": 1,
+    "boost_time": 1,
+    "co2": 2,
+    "co2_treshold": 2,
+    "exhaust_speed_4": 1,
+    "exhaust_speed_5": 1,
+    "exhaust_speed_high": 1,
+    "exhaust_speed_low": 1,
+    "exhaust_speed_medium": 1,
+    "humidity": 1,
+    "humidity_treshold": 1,
+    "interval_ventilation_speed_setpoint": 1,
+    "man_speed": 1,
+    "max_speed_setpoint": 1,
+    "recovery_efficiency": 1,
+    "screen_brightness": 1,
+    "silent_speed_setpoint": 1,
+    "supply_speed_4": 1,
+    "supply_speed_5": 1,
+    "supply_speed_high": 1,
+    "supply_speed_low": 1,
+    "supply_speed_medium": 1,
+    "temperature": 1,
+    "temperature_treshold": 1,
+    "turn_on_delay_timer": 1,
+    "voc": 2,
+    "voc_treshold": 2,
+}
+
 class FanProtocolParseMixin:
     def parse_response(self, data, *, allow_any_device_id=False):
         self._last_response_param_ids = None
@@ -142,8 +176,16 @@ class FanProtocolParseMixin:
         if param_id not in self.params:
             self._unknown_params[param_id] = value
             return False
+        definition = self.params[param_id]
+        parameter = definition[0]
+        expected_size = _FIXED_VALUE_SIZES.get(parameter)
+        if definition[1] is not None and parameter != "unit_type":
+            expected_size = 1
+        if expected_size is not None and len(response) != expected_size + 2:
+            self._unknown_params[param_id] = value
+            return False
         try:
-            setattr(self, self.params[param_id][0], value)
+            setattr(self, parameter, value)
         except (AttributeError, KeyError, TypeError, ValueError, OverflowError):
             self._unknown_params[param_id] = value
             return False

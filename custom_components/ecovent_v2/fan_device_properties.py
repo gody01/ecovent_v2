@@ -7,7 +7,9 @@ class FanDevicePropertiesMixin:
 
     @device_search.setter
     def device_search(self, val):
-        self._device_search = self.hex2str(val)
+        self._device_search = self.hex2str(
+            self._decode_exact_bytes(val, 16, "device_search").hex()
+        )
 
     @property
     def device_password(self):

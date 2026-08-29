@@ -340,7 +340,7 @@ class PacketBuilderTest(unittest.TestCase):
                 int(param[i : i + 4], 16) for i in range(0, len(param), 4)
             }
             if requested == {0x007C}:
-                fan.device_search = "4d494352412d4944"
+                fan.device_search = fan.str2hex("MICRA-ID-0000000")
                 fan._last_response_param_ids = requested
                 return True
             if requested == {0x00B9}:
@@ -358,7 +358,7 @@ class PacketBuilderTest(unittest.TestCase):
         fan.send_command = send_command
 
         self.assertTrue(fan.init_device())
-        self.assertEqual(fan.id, "MICRA-ID")
+        self.assertEqual(fan.id, "MICRA-ID-0000000")
         self.assertEqual(fan.profile_key, "freshbox")
         self.assertEqual(fan.last_missing_required_params, set())
         self.assertEqual(fan.last_missing_optional_params, missing_optional)
@@ -967,7 +967,7 @@ class PacketBuilderTest(unittest.TestCase):
                 int(param[i : i + 4], 16) for i in range(0, len(param), 4)
             }
             if requested == {0x007C}:
-                fan.device_search = "56454e544f2d4944"
+                fan.device_search = fan.str2hex("VENTO-ID-0000000")
                 fan._last_response_param_ids = requested
                 return True
             if requested == {0x00B9}:
@@ -986,7 +986,7 @@ class PacketBuilderTest(unittest.TestCase):
         fan.send_command = send_command
 
         self.assertTrue(fan.init_device())
-        self.assertEqual(fan.id, "VENTO-ID")
+        self.assertEqual(fan.id, "VENTO-ID-0000000")
         self.assertEqual(fan.profile_key, "vento")
         self.assertEqual(fan.last_missing_required_params, set())
         self.assertLessEqual(missing_optional, fan.last_missing_optional_params)

@@ -314,12 +314,16 @@ class A21ModbusDevice(Fan):
         )
 
     def _initialize_semantic_state(self) -> None:
+        self._clear_semantic_state()
+        self._profile_key = "a21_modbus"
+        self.audible_write_command_count = 0
+
+    def _clear_semantic_state(self) -> None:
+        """Clear HA-facing values before rebuilding them from decoded registers."""
         for semantic in _SEMANTIC_REGISTERS:
             setattr(self, f"_{semantic}", None)
         self._alarm_list = None
         self._firmware = None
-        self._profile_key = "a21_modbus"
-        self.audible_write_command_count = 0
 
     @property
     def device_profile(self) -> DeviceProfile:
@@ -589,7 +593,10 @@ class A21ModbusDevice(Fan):
                 )
             split_budget[0] -= 1
             if count == 1:
-                self._unavailable.add((table, address))
+                slot = (table, address)
+                self._unavailable.add(slot)
+                self._raw.pop(slot, None)
+                self._decoded.pop(get_by_address(table, address).key, None)
                 _LOGGER.debug("A21 address unavailable: %s/%d", table.value, address)
                 return False
             left = count // 2
@@ -609,7 +616,9 @@ class A21ModbusDevice(Fan):
             try:
                 self._decoded[spec.key] = spec.decode(self._raw[slot] for slot in slots)
             except ValueError:
+                self._decoded.pop(spec.key, None)
                 _LOGGER.debug("Invalid A21 value for %s", spec.key, exc_info=True)
+        self._clear_semantic_state()
         self._apply_semantics()
 
     def read_all_registers(self, *, include_sensitive: bool = False) -> bool:
@@ -639,6 +648,12 @@ class A21ModbusDevice(Fan):
 
     def _verify_cached_identity(self) -> None:
         identity = self._decoded.get(A21_IDENTITY_REGISTER.key)
+        identity_slot = (
+            A21_IDENTITY_REGISTER.table,
+            A21_IDENTITY_REGISTER.address,
+        )
+        if identity is None and identity_slot in self._unavailable:
+            return
         if identity != A21_IDENTITY_VALUE:
             self.identity_probe_failed = True
             raise A21IdentityError(
@@ -790,10 +805,12 @@ class A21ModbusDevice(Fan):
             self._alarm_status = {0: "no", 1: "alarm", 2: "warning"}.get(
                 value("IR_ALARM"), f"unknown_{value('IR_ALARM')}"
             )
-        alarm_codes = [
-            str(code) for code in range(53) if value(f"DI_AlarmCODE{code}") is True
-        ]
-        self._alarm_list = ", ".join(alarm_codes) if alarm_codes else "none"
+        alarm_keys = [f"DI_AlarmCODE{code}" for code in range(53)]
+        if all(key in self._decoded for key in alarm_keys):
+            alarm_codes = [
+                str(code) for code, key in enumerate(alarm_keys) if value(key) is True
+            ]
+            self._alarm_list = ", ".join(alarm_codes) if alarm_codes else "none"
         if "IR_CurWeekSpeed" in self._decoded:
             self._schedule_speed = _A21_SPEEDS.get(
                 value("IR_CurWeekSpeed"),

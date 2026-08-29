@@ -229,6 +229,17 @@ class FanCapabilitiesMixin:
         value = self._decode_exact_bytes(input, 2, "time")
         return f"{value[1]:02d}:{value[0]:02d}"
 
+    def _decode_duration_seconds(self, input, parameter):
+        """Decode a three-byte little-endian duration into h/m/s components."""
+        value = int.from_bytes(
+            self._decode_exact_bytes(input, 3, parameter),
+            byteorder="little",
+            signed=False,
+        )
+        hours, remainder = divmod(value, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return hours, minutes, seconds
+
     def _set_device_profile(self, profile_key):
         """Apply protocol maps for the selected device family."""
         profile = self.device_profiles[profile_key]

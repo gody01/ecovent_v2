@@ -147,10 +147,10 @@ class FanCorePropertiesMixin:
 
     @boost_timer_countdown.setter
     def boost_timer_countdown(self, input):
-        val = self._decode_exact_bytes(input, 3, "boost_timer_countdown")
-        self._boost_timer_countdown = (
-            str(val[2]) + "h " + str(val[1]) + "m " + str(val[0]) + "s "
+        hours, minutes, seconds = self._decode_duration_seconds(
+            input, "boost_timer_countdown"
         )
+        self._boost_timer_countdown = f"{hours}h {minutes}m {seconds}s "
 
     @property
     def timer_status(self):

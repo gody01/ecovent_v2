@@ -90,3 +90,17 @@ class ExtractFanCapabilityTest(unittest.TestCase):
         self.assertFalse(
             fan.supports_entity(required_params=("analogV",))
         )
+
+    def test_extract_fan_three_byte_durations_are_total_seconds(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0600"
+
+        fan.boost_timer_countdown = "100e00"
+        fan.silent_mode_start_time = "4d0e00"
+        fan.silent_mode_end_time = "805101"
+        fan.rtc_time = "4d0e00"
+
+        self.assertEqual(fan.boost_timer_countdown, "1h 0m 0s ")
+        self.assertEqual(fan.silent_mode_start_time, "1h 1m 1s ")
+        self.assertEqual(fan.silent_mode_end_time, "24h 0m 0s ")
+        self.assertEqual(fan.rtc_time, "01:01:01")

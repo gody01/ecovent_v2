@@ -99,6 +99,106 @@ class ParseRobustnessTest(unittest.TestCase):
         self.assertEqual(fan.speed, "Unknown speed 153")
         self.assertEqual(fan.airflow, "Unknown airflow 68")
 
+    def test_enum_rows_reject_noncanonical_value_width(self):
+        cases = (
+            (0x0001, "state", "on"),
+            (0x0002, "speed", "low"),
+            (0x00B7, "airflow", "heat_recovery"),
+        )
+
+        for parameter, attribute, expected in cases:
+            with self.subTest(parameter=parameter):
+                fan = Fan("192.0.2.1")
+                low_byte = parameter & 0xFF
+                prefix = [0xFF, parameter >> 8] if parameter > 0xFF else []
+                self.assertTrue(
+                    fan.parse_response(
+                        packet_with_payload([*prefix, low_byte, 0x01])
+                    )
+                )
+                self.assertEqual(getattr(fan, attribute), expected)
+
+                self.assertTrue(
+                    fan.parse_response(
+                        packet_with_payload(
+                            [*prefix, 0xFE, 0x02, low_byte, 0x00, 0x01]
+                        )
+                    )
+                )
+                self.assertEqual(getattr(fan, attribute), expected)
+                self.assertEqual(fan.unknown_params, {parameter: "0001"})
+                self.assertEqual(fan._last_response_param_ids, set())
+
+    def test_scalar_rows_reject_noncanonical_value_width(self):
+        cases = (
+            (0x0019, "humidity_treshold", 55, "55"),
+            (0x0044, "man_speed", 128, 50),
+            (0x0066, "boost_time", 15, "15 m"),
+            (0x00B8, "analogV_treshold", 50, "50"),
+        )
+
+        for parameter, attribute, value, expected in cases:
+            with self.subTest(parameter=parameter):
+                fan = Fan("192.0.2.1")
+                low_byte = parameter & 0xFF
+                prefix = [0xFF, parameter >> 8] if parameter > 0xFF else []
+                self.assertTrue(
+                    fan.parse_response(
+                        packet_with_payload([*prefix, low_byte, value])
+                    )
+                )
+                self.assertEqual(getattr(fan, attribute), expected)
+
+                self.assertTrue(
+                    fan.parse_response(
+                        packet_with_payload(
+                            [*prefix, 0xFE, 0x02, low_byte, 0x01, 0x01]
+                        )
+                    )
+                )
+                self.assertEqual(getattr(fan, attribute), expected)
+                self.assertEqual(fan.unknown_params, {parameter: "0101"})
+                self.assertEqual(fan._last_response_param_ids, set())
+
+    def test_profile_scalars_reject_noncanonical_value_width(self):
+        cases = (
+            ("1100", 0x001A, "co2_treshold", [0x20, 0x03], 800),
+            ("1100", 0x0129, "recovery_efficiency", [0x58], 88),
+            ("0d00", 0x031F, "air_quality_treshold", [0xC8, 0x00], 200),
+        )
+
+        for unit_type, parameter, attribute, value, expected in cases:
+            with self.subTest(parameter=parameter):
+                fan = Fan("192.0.2.1")
+                fan.unit_type = unit_type
+                low_byte = parameter & 0xFF
+                prefix = [0xFF, parameter >> 8] if parameter > 0xFF else []
+                encoded_value = (
+                    [*prefix, low_byte, *value]
+                    if len(value) == 1
+                    else [*prefix, 0xFE, len(value), low_byte, *value]
+                )
+                self.assertTrue(
+                    fan.parse_response(
+                        packet_with_payload(encoded_value)
+                    )
+                )
+                self.assertEqual(getattr(fan, attribute), expected)
+
+                malformed = [0x00, *value]
+                self.assertTrue(
+                    fan.parse_response(
+                        packet_with_payload(
+                            [*prefix, 0xFE, len(malformed), low_byte, *malformed]
+                        )
+                    )
+                )
+                self.assertEqual(getattr(fan, attribute), expected)
+                self.assertEqual(
+                    fan.unknown_params, {parameter: bytes(malformed).hex()}
+                )
+                self.assertEqual(fan._last_response_param_ids, set())
+
     def test_default_airflow_enum_three_stays_unknown(self):
         fan = Fan("192.0.2.1")
         fan.airflow = "03"
@@ -325,6 +425,58 @@ class ParseRobustnessTest(unittest.TestCase):
         )
         self.assertEqual(fan.machine_hours, "300d 8h 17m ")
         self.assertEqual(fan.unknown_params, {0x007E: bytes(malformed).hex()})
+        self.assertEqual(fan._last_response_param_ids, set())
+
+    def test_identity_rows_reject_noncanonical_lengths(self):
+        fan = Fan("192.0.2.1")
+        controller_id = b"VENTO-ID-0000000"
+
+        self.assertTrue(
+            fan.parse_response(
+                packet_with_payload([0xFE, 0x10, 0x7C, *controller_id])
+            )
+        )
+        self.assertEqual(fan.device_search, controller_id.decode())
+
+        short_id = controller_id[:-1]
+        self.assertTrue(
+            fan.parse_response(
+                packet_with_payload([0xFE, len(short_id), 0x7C, *short_id])
+            )
+        )
+        self.assertEqual(fan.device_search, controller_id.decode())
+        self.assertEqual(fan.unknown_params, {0x007C: short_id.hex()})
+
+        self.assertTrue(
+            fan.parse_response(packet_with_payload([0xFE, 0x02, 0xB9, 0x06, 0x00]))
+        )
+        self.assertEqual(fan.profile_key, "extract_fan")
+
+        malformed_type = [0x00, 0x06, 0x00]
+        self.assertTrue(
+            fan.parse_response(
+                packet_with_payload(
+                    [0xFE, len(malformed_type), 0xB9, *malformed_type]
+                )
+            )
+        )
+        self.assertEqual(fan.profile_key, "extract_fan")
+        self.assertEqual(fan.unknown_params[0x00B9], bytes(malformed_type).hex())
+        self.assertEqual(fan._last_response_param_ids, set())
+
+    def test_extract_rtc_rejects_noncanonical_length(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0600"
+        fan.rtc_time = "4d0e00"
+
+        malformed = [0xFF, 0xFF, 0xFF, 0xFF]
+        self.assertTrue(
+            fan.parse_response(
+                packet_with_payload([0xFE, len(malformed), 0x21, *malformed])
+            )
+        )
+        self.assertEqual(fan.rtc_time, "01:01:01")
+        self.assertEqual(fan.unknown_params, {0x0021: bytes(malformed).hex()})
         self.assertEqual(fan._last_response_param_ids, set())
 
     def test_parse_response_skips_no_value_parameter_markers(self):

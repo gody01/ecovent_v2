@@ -265,9 +265,12 @@ class FanSpeedPropertiesMixin:
 
     @rtc_time.setter
     def rtc_time(self, input):
-        raw = bytes.fromhex(input)
         if self.profile_key == "extract_fan":
-            total_seconds = int.from_bytes(raw, byteorder="little", signed=False)
+            total_seconds = int.from_bytes(
+                self._decode_exact_bytes(input, 3, "rtc_time"),
+                byteorder="little",
+                signed=False,
+            )
             hours, remainder = divmod(total_seconds, 3600)
             minutes, seconds = divmod(remainder, 60)
             self._rtc_time = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
@@ -282,10 +285,15 @@ class FanSpeedPropertiesMixin:
 
     @silent_mode_start_time.setter
     def silent_mode_start_time(self, input):
-        val = self._decode_exact_bytes(input, 3, "silent_mode_start_time")
-        self._silent_mode_start_time = (
-            str(val[2]) + "h " + str(val[1]) + "m " + str(val[0]) + "s "
-        )
+        if self.profile_key == "extract_fan":
+            hours, minutes, seconds = self._decode_duration_seconds(
+                input, "silent_mode_start_time"
+            )
+        else:
+            seconds, minutes, hours = self._decode_exact_bytes(
+                input, 3, "silent_mode_start_time"
+            )
+        self._silent_mode_start_time = f"{hours}h {minutes}m {seconds}s "
 
     @property
     def silent_mode_end_time(self):
@@ -293,10 +301,15 @@ class FanSpeedPropertiesMixin:
 
     @silent_mode_end_time.setter
     def silent_mode_end_time(self, input):
-        val = self._decode_exact_bytes(input, 3, "silent_mode_end_time")
-        self._silent_mode_end_time = (
-            str(val[2]) + "h " + str(val[1]) + "m " + str(val[0]) + "s "
-        )
+        if self.profile_key == "extract_fan":
+            hours, minutes, seconds = self._decode_duration_seconds(
+                input, "silent_mode_end_time"
+            )
+        else:
+            seconds, minutes, hours = self._decode_exact_bytes(
+                input, 3, "silent_mode_end_time"
+            )
+        self._silent_mode_end_time = f"{hours}h {minutes}m {seconds}s "
 
     @property
     def rtc_date(self):

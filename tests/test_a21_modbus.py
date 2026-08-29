@@ -305,6 +305,26 @@ def test_resilient_full_poll_records_one_missing_optional_address():
     assert fan.id == "DEFAULT_DEVICEID"
 
 
+def test_resilient_poll_clears_stale_optional_semantic_value():
+    client = FakeModbusClient()
+    fan = device(client)
+    fan.read_register("IR_DeviceTYPE")
+
+    assert fan.update() is True
+    assert fan.outdoor_temperature == 5.0
+    assert fan.decoded_registers["IR_CurTEMP_SuAirIn"] == 5.0
+
+    client.fail_slots.add(("read_input_registers", 1))
+    client.input_registers[1] = 2500
+
+    assert fan.update() is True
+    assert fan.last_poll_complete is False
+    assert (Table.INPUT_REGISTER, 1) in fan.unavailable_addresses
+    assert (Table.INPUT_REGISTER, 1) not in fan.raw_registers
+    assert "IR_CurTEMP_SuAirIn" not in fan.decoded_registers
+    assert fan.outdoor_temperature is None
+
+
 def test_poll_fails_when_a_required_operational_address_is_missing():
     client = FakeModbusClient(fail_slots={("read_coils", 0)})
     fan = device(client)

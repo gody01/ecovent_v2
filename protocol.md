@@ -195,6 +195,10 @@ device available, but they must not republish a value from an earlier poll.
 The aggregate alarm list is likewise unknown unless all 53 published alarm
 bits were decoded in the current cache.
 
+Adjacent A21 RTC time/calendar words and schedule period/end words are written
+as one Modbus multi-register request. A rejected request therefore cannot leave
+only the first semantic half applied or cached.
+
 The A21 implementation covers the complete published address surface: coils
 `0..25`, discrete inputs `0..71`, input registers `0..53`, and holding
 registers `0..182`, including multi-register timers, firmware, RTC, engineering

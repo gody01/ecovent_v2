@@ -574,6 +574,31 @@ class A21ModbusDevice(Fan):
         self._apply_semantics()
         return True
 
+    def _write_register_group(self, values: Sequence[tuple[str, Any]]) -> bool:
+        """Write adjacent typed registers in one Modbus request."""
+        if not values:
+            return False
+
+        encoded = []
+        decoded = []
+        first_spec = get_register(values[0][0])
+        table = first_spec.table
+        address = first_spec.address
+        next_address = address
+        for key, value in values:
+            spec = get_register(key)
+            if spec.table is not table or spec.address != next_address:
+                raise ValueError("A21 grouped registers must be contiguous")
+            words = spec.encode(value)
+            encoded.extend(words)
+            decoded.append((key, value))
+            next_address += len(words)
+
+        self.write_raw(table, address, encoded)
+        self._decoded.update(decoded)
+        self._apply_semantics()
+        return True
+
     def _read_resilient(
         self,
         table: Table,
@@ -931,18 +956,17 @@ class A21ModbusDevice(Fan):
         labels = ("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")
         prefix = f"HR_SetWEEK_{labels[record.day - 1]}_P{record.period}"
         speed = _A21_SPEED_VALUES[record.speed]
-        written = self.write_register(
-            prefix, SchedulePeriod(speed=speed, temperature=record.reserved)
-        )
+        values = [
+            (prefix, SchedulePeriod(speed=speed, temperature=record.reserved))
+        ]
         if record.period < 4:
-            written = (
-                self.write_register(
+            values.append(
+                (
                     f"{prefix}_END",
                     ScheduleEnd(hour=record.end_hour, minute=record.end_minute),
                 )
-                and written
             )
-        return written
+        return self._write_register_group(values)
 
     def rtc_datetime_params(self, value: datetime) -> dict[str, Any]:
         return {
@@ -953,6 +977,10 @@ class A21ModbusDevice(Fan):
         }
 
     def set_rtc_datetime(self, value: datetime) -> bool:
-        return self.set_parameters(
-            self.rtc_datetime_params(value), include_extra_write_parameters=False
+        params = self.rtc_datetime_params(value)
+        return self._write_register_group(
+            (
+                ("HR_RTC_TIME", params["rtc_time"]),
+                ("HR_RTC_CALENDAR", params["rtc_date"]),
+            )
         )

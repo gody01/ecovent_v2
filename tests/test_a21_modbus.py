@@ -400,9 +400,37 @@ def test_semantic_writes_schedule_and_rtc_preserve_a21_encoding():
         WeeklyScheduleRecord(1, 2, "speed_5", 10, 30, reserved=24)
     )
     assert client.holding_registers[128:130] == [0x0518, 0x0A1E]
+    assert ("write_registers", 128, [0x0518, 0x0A1E], 7) in client.calls
 
     assert fan.set_rtc_datetime(datetime(2026, 7, 16, 12, 34, 56))
     assert client.holding_registers[61:65] == [0x2238, 12, 0x1004, 0x071A]
+    assert ("write_registers", 61, [0x2238, 12, 0x1004, 0x071A], 7) in client.calls
+
+
+def test_grouped_a21_writes_fail_without_partial_state():
+    class RejectGroupedWrites(FakeModbusClient):
+        def write_registers(self, address, values, *, device_id):
+            self.calls.append(("write_registers", address, list(values), device_id))
+            return Response(error=True)
+
+    client = RejectGroupedWrites()
+    fan = device(client)
+    rtc_before = list(client.holding_registers[61:65])
+    schedule_before = list(client.holding_registers[128:130])
+
+    with pytest.raises(A21ModbusError):
+        fan.set_rtc_datetime(datetime(2026, 7, 16, 12, 34, 56))
+    assert client.holding_registers[61:65] == rtc_before
+    assert "HR_RTC_TIME" not in fan.decoded_registers
+    assert "HR_RTC_CALENDAR" not in fan.decoded_registers
+
+    with pytest.raises(A21ModbusError):
+        fan.write_weekly_schedule_record(
+            WeeklyScheduleRecord(1, 2, "speed_5", 10, 30, reserved=24)
+        )
+    assert client.holding_registers[128:130] == schedule_before
+    assert "HR_SetWEEK_Mo_P2" not in fan.decoded_registers
+    assert "HR_SetWEEK_Mo_P2_END" not in fan.decoded_registers
 
 
 def test_opportunistic_a21_write_reports_transport_result():

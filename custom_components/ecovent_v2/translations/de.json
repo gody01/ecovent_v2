@@ -1,7 +1,8 @@
 {
     "config": {
         "abort": {
-            "already_configured": "Der Lüfter ist bereits konfiguriert."
+            "already_configured": "Der Lüfter ist bereits konfiguriert.",
+            "wrong_device": "Das erkannte Gerät entspricht nicht dem konfigurierten Gerät."
         },
         "error": {
             "cannot_connect": "Es kann keine Verbindung zum Lüfter aufgebaut werden.",

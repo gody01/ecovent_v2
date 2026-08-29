@@ -1,7 +1,8 @@
 {
     "config": {
         "abort": {
-            "already_configured": "Urządzenie jest już skonfigurowane."
+            "already_configured": "Urządzenie jest już skonfigurowane.",
+            "wrong_device": "Wykryte urządzenie nie jest zgodne ze skonfigurowanym urządzeniem."
         },
         "error": {
             "cannot_connect": "Nie udało się połączyć.",

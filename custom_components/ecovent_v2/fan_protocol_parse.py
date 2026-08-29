@@ -10,19 +10,28 @@ class FanProtocolParseMixin:
         length = len(data) - 2
         if len(data) < pointer + 2:
             return False
-        pointer += 1  # packet type
+        packet_type = data[pointer]
+        pointer += 1
+        if packet_type != int(self._type, 16):
+            return False
         id_size = data[pointer]
         pointer += 1
+        if id_size != 0x10:
+            return False
         if len(data) < pointer + id_size + 3:
             return False
         pointer += id_size
         pwd_size = data[pointer]
         pointer += 1
+        if pwd_size > 0x08:
+            return False
         if len(data) < pointer + pwd_size + 3:
             return False
         pointer += pwd_size
-        # function = data[pointer]  not used
+        function = data[pointer]
         pointer += 1
+        if function != int(self.func["resp"], 16):
+            return False
         # from here parsing of parameters begin
         payload = data[pointer:length]
         response = bytearray()
@@ -32,6 +41,7 @@ class FanProtocolParseMixin:
         parameter = 1
         response_param_ids = set()
         unsupported_param_ids = set()
+        parsed_responses = []
         for p in payload:
             if parameter and p == 0xFF:
                 ext_function = 0xFF
@@ -70,12 +80,14 @@ class FanProtocolParseMixin:
                 if len(response) < 2:
                     return False
                 response_param_ids.add(int(response[:2].hex(), 16))
-                self._store_param(response)
+                parsed_responses.append(bytes(response))
                 response = bytearray()
         valid = (
             ext_function == 0 and parameter == 1 and value_counter == 1 and not response
         )
         if valid:
+            for parsed_response in parsed_responses:
+                self._store_param(parsed_response)
             self._last_response_param_ids = response_param_ids
             self._last_unsupported_param_ids = unsupported_param_ids
         return valid

@@ -29,6 +29,27 @@ class ParseRobustnessTest(unittest.TestCase):
         self.assertFalse(fan.parse_response(bad_checksum))
         self.assertIsNone(fan.state)
 
+    def test_parse_response_rejects_wrong_function(self):
+        fan = Fan("192.0.2.1")
+
+        self.assertFalse(fan.parse_response(packet_with_payload([], function=0x01)))
+        self.assertTrue(
+            fan.parse_response(
+                packet_with_payload([], function=int(fan.func["resp"], 16))
+            )
+        )
+
+    def test_parse_response_rejects_invalid_envelope_fields(self):
+        fan = Fan("192.0.2.1")
+
+        self.assertFalse(fan.parse_response(packet_with_payload([], packet_type=0x01)))
+        self.assertFalse(
+            fan.parse_response(packet_with_payload([], device_id=b"X" * 17))
+        )
+        self.assertFalse(
+            fan.parse_response(packet_with_payload([], password=b"X" * 9))
+        )
+
     def test_parse_response_rejects_short_packet(self):
         fan = Fan("192.0.2.1")
         self.assertFalse(fan.parse_response(b"\xfd\xfd"))
@@ -84,6 +105,16 @@ class ParseRobustnessTest(unittest.TestCase):
     def test_parse_response_rejects_dangling_extended_marker(self):
         fan = Fan("192.0.2.1")
         self.assertFalse(fan.parse_response(packet_with_payload([0xFF])))
+
+    def test_invalid_payload_does_not_apply_valid_prefix(self):
+        fan = Fan("192.0.2.1")
+
+        self.assertFalse(fan.parse_response(packet_with_payload([0x01, 0x01, 0xFF])))
+        self.assertIsNone(fan.state)
+        self.assertIsNone(fan._last_response_param_ids)
+
+        self.assertTrue(fan.parse_response(packet_with_payload([0x01, 0x01])))
+        self.assertEqual(fan.state, "on")
 
     def test_parse_response_keeps_known_params_with_bad_value_as_unknown(self):
         fan = Fan("192.0.2.1")

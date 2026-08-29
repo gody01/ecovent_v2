@@ -15,9 +15,21 @@ SPEC.loader.exec_module(ecoventv2)
 Fan = ecoventv2.Fan
 
 
-def packet_with_payload(payload):
+def packet_with_payload(
+    payload,
+    *,
+    packet_type=0x02,
+    device_id=b"DEFAULT_DEVICEID",
+    password=b"",
+    function=0x06,
+):
     body = (
-        bytes([0x02, 0x10]) + b"DEFAULT_DEVICEID" + bytes([0x00, 0x06]) + bytes(payload)
+        bytes([packet_type, len(device_id)])
+        + device_id
+        + bytes([len(password)])
+        + password
+        + bytes([function])
+        + bytes(payload)
     )
     checksum = sum(body) & 0xFFFF
     return b"\xfd\xfd" + body + checksum.to_bytes(2, byteorder="little")

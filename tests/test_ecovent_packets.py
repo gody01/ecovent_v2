@@ -1375,6 +1375,20 @@ class PacketBuilderTest(unittest.TestCase):
 
         self.assertEqual(results, [False])
 
+    def test_wrong_function_response_does_not_confirm_write_or_clock_sync(self):
+        fan = Fan("192.0.2.1")
+        results = []
+        fan.extra_write_parameters_callback = lambda: {
+            "rtc_time": "1e2d13",
+            "rtc_date": "1704041a",
+        }
+        fan.extra_write_parameters_result_callback = results.append
+        fan.send = lambda _data: True
+        fan.receive = lambda: packet_with_payload([], function=0x01)
+
+        self.assertFalse(fan.set_param("state", "on"))
+        self.assertEqual(results, [False])
+
     def test_explicit_clock_sync_does_not_reappend_opportunistic_clock_rows(self):
         fan = Fan("192.0.2.1")
         calls = []

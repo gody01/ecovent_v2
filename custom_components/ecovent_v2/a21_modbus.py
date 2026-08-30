@@ -777,7 +777,14 @@ class A21ModbusDevice(Fan):
             failed_slots = (
                 self._unavailable | self._invalid_response_slots | invalid_slots
             )
-            return not bool(_REQUIRED_POLL_SLOTS & failed_slots)
+            required_failed = bool(_REQUIRED_POLL_SLOTS & failed_slots)
+            if required_failed:
+                # A failed core poll must not expose a mixture of cleared
+                # required values and freshly decoded optional values.  The
+                # coordinator rejects this update, so keep the entire semantic
+                # surface unknown until a complete core poll succeeds.
+                self._clear_semantic_state()
+            return not required_failed
 
     def _verify_cached_identity(self) -> None:
         identity_slot = (
@@ -861,7 +868,10 @@ class A21ModbusDevice(Fan):
             failed_slots = (
                 self._unavailable | self._invalid_response_slots | invalid_slots
             )
-            return not bool(_REQUIRED_POLL_SLOTS & failed_slots)
+            required_failed = bool(_REQUIRED_POLL_SLOTS & failed_slots)
+            if required_failed:
+                self._clear_semantic_state()
+            return not required_failed
 
     def update_preset_speed_settings(self) -> bool:
         with self._lock:

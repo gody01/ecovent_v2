@@ -438,6 +438,24 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         ):
             preset_mode = speed
 
+        if preset_mode is None and percentage is None:
+            if self._silent_mode_controls_manual_speed:
+                silent_preset = self.coordinator.silent_preset_mode or "manual"
+                if self._is_preset_mode_unchanged(silent_preset):
+                    self.coordinator.set_silent_preset_mode(silent_preset)
+                    self.async_write_ha_state()
+                    _LOGGER.debug(
+                        "Skipping unchanged turn_on command for %s",
+                        self._fan.name,
+                    )
+                    return
+            elif self._fan.state == "on":
+                _LOGGER.debug(
+                    "Skipping unchanged turn_on command for %s",
+                    self._fan.name,
+                )
+                return
+
         try:
             if preset_mode is not None:
                 await self.hass.async_add_executor_job(
@@ -454,13 +472,12 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
 
             if preset_mode is None and percentage is None:
                 if self._silent_mode_controls_manual_speed:
+                    silent_preset = self.coordinator.silent_preset_mode or "manual"
                     await self.hass.async_add_executor_job(
                         partial(
                             self._set_silent_manual_percentage,
-                            self._silent_preset_percentage(
-                                self.coordinator.silent_preset_mode or "manual"
-                            ),
-                            preset_mode=self.coordinator.silent_preset_mode or "manual",
+                            self._silent_preset_percentage(silent_preset),
+                            preset_mode=silent_preset,
                         ),
                     )
                     return

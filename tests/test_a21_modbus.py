@@ -585,6 +585,10 @@ def test_profile_entity_requirements_use_modbus_semantics():
     assert not fan.profile_has_entity_requirements(
         required_params=("analogV",),
     )
+    assert fan.profile_has_entity_requirements(
+        required_params=("alarm_status",),
+        required_capabilities=("a21_modbus",),
+    )
 
 
 def test_raw_api_uses_all_published_modbus_function_shapes():
@@ -780,13 +784,27 @@ def test_successful_write_clears_prior_unavailable_marker():
 
 
 def test_poll_fails_when_a_required_operational_address_is_missing():
-    client = FakeModbusClient(fail_slots={("read_coils", 0)})
+    client = FakeModbusClient()
     fan = device(client)
     fan.read_register("IR_DeviceTYPE")
+
+    assert fan.update() is True
+    assert fan.state == "off"
+    assert fan.speed == "speed_1"
+
+    client.fail_slots.add(("read_coils", 0))
+    client.holding_registers[2] = 5
 
     assert fan.update() is False
     assert fan.last_poll_complete is False
     assert (Table.COIL, 0) in fan.unavailable_addresses
+    assert fan.state is None
+    assert fan.speed is None
+
+    client.fail_slots.clear()
+    assert fan.update() is True
+    assert fan.state == "off"
+    assert fan.speed == "speed_5"
 
 
 def test_poll_fails_and_evicts_a_malformed_required_value():

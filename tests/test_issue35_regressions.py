@@ -1070,6 +1070,31 @@ class Issue35RegressionTest(unittest.TestCase):
         self.assertIn('"Trigger mode on air quality"', select_source)
         self.assertIn('"Timer mode"', select_source)
 
+    def test_alarm_list_sensor_has_bgcp_and_a21_variants(self):
+        tree = _tree(SENSOR_SPECS_PATH)
+        variants = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if not isinstance(node.func, ast.Name) or node.func.id != "SensorSpec":
+                continue
+            if not node.args or not isinstance(node.args[0], ast.Constant):
+                continue
+            if node.args[0].value != "_alarm_list":
+                continue
+            keywords = {keyword.arg: keyword.value for keyword in node.keywords}
+            capabilities = ast.literal_eval(keywords["required_capabilities"])
+            params = ast.literal_eval(keywords.get("required_params", ast.Tuple()))
+            variants.append((params, capabilities))
+
+        self.assertEqual(
+            set(variants),
+            {
+                ((), ("air_quality",)),
+                (("alarm_status",), ("a21_modbus",)),
+            },
+        )
+
     def test_preset_translations_group_boost_modes(self):
         translation_paths = [STRINGS_PATH, *TRANSLATIONS_PATH.glob("*.json")]
 

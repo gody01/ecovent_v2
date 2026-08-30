@@ -257,6 +257,16 @@ SENSOR_SPECS = (
         required_capabilities=("air_quality",),
     ),
     SensorSpec(
+        "_alarm_list",
+        "Alarm list",
+        "alarm_list",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        enable_by_default=False,
+        icon="mdi:alert-box-outline",
+        required_params=("alarm_status",),
+        required_capabilities=("a21_modbus",),
+    ),
+    SensorSpec(
         "_heater_status",
         "Heater status",
         "heater_status",

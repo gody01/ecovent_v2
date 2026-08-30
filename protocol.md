@@ -192,8 +192,11 @@ and VUT 270 are the same model.
 Resilient A21 polling evicts the raw, decoded, and HA-facing value for an
 address that is isolated as unavailable. Optional read failures may leave the
 device available, but they must not republish a value from an earlier poll.
-The aggregate alarm list is likewise unknown unless all 53 published alarm
-bits were decoded in the current cache.
+If any required operational address fails, the poll is rejected and the whole
+HA-facing semantic surface remains unknown until the next successful core poll;
+new optional values from that rejected poll are not published on their own. The
+disabled-by-default aggregate alarm sensor is likewise unknown unless all 53
+published alarm bits were decoded in the current cache.
 
 Adjacent A21 RTC time/calendar words and schedule period/end words are written
 as one Modbus multi-register request. A rejected request therefore cannot leave

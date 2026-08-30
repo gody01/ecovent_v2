@@ -909,11 +909,11 @@ def test_malformed_optional_value_keeps_core_update_but_marks_poll_incomplete():
 
     fan._read_resilient = lambda *_args: True
     fan._verify_cached_identity = lambda: None
-    fan._decode_cache = lambda: invalid_slots
+    fan._decode_cache = lambda **_kwargs: invalid_slots
     assert fan.read_all_registers() is True
     assert fan.last_poll_complete is False
 
-    fan._decode_cache = lambda: frozenset()
+    fan._decode_cache = lambda **_kwargs: frozenset()
     assert fan.read_all_registers() is True
     assert fan.last_poll_complete is True
 
@@ -1198,6 +1198,18 @@ def test_normal_poll_evicts_engineer_password_cache():
     assert fan.read_all_registers()
     assert "HR_ENGINEER_PWD" not in fan.decoded_registers
     assert (Table.HOLDING_REGISTER, 124) not in fan.raw_registers
+
+
+def test_sensitive_opt_in_poll_refreshes_decoded_engineer_password():
+    client = FakeModbusClient()
+    client.holding_registers[124:126] = [0x3131, 0x3131]
+    fan = device(client)
+
+    assert fan.read_register("HR_ENGINEER_PWD") == "1111"
+    client.holding_registers[124:126] = [0x3232, 0x3232]
+
+    assert fan.read_all_registers(include_sensitive=True)
+    assert fan.decoded_registers["HR_ENGINEER_PWD"] == "2222"
 
 
 def test_short_or_error_response_is_not_accepted_as_success():

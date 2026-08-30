@@ -710,10 +710,14 @@ class A21ModbusDevice(Fan):
                             )
                 return complete
 
-    def _decode_cache(self) -> frozenset[tuple[Table, int]]:
+    def _decode_cache(
+        self, *, include_sensitive: bool = False
+    ) -> frozenset[tuple[Table, int]]:
         invalid_slots: set[tuple[Table, int]] = set()
         for spec in REGISTERS:
-            if not spec.access.readable or spec.key in _SENSITIVE_REGISTER_KEYS:
+            if not spec.access.readable or (
+                spec.key in _SENSITIVE_REGISTER_KEYS and not include_sensitive
+            ):
                 continue
             slots = tuple(
                 (spec.table, spec.address + offset) for offset in range(spec.word_count)
@@ -791,7 +795,7 @@ class A21ModbusDevice(Fan):
                 self._clear_cached_state()
                 raise
             self._verify_cached_identity()
-            invalid_slots = self._decode_cache()
+            invalid_slots = self._decode_cache(include_sensitive=include_sensitive)
             self.last_poll_complete = complete and not invalid_slots
             failed_slots = (
                 self._unavailable | self._invalid_response_slots | invalid_slots

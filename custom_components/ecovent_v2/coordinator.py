@@ -234,7 +234,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
 
     def _should_refresh_schedule_week(self) -> bool:
         """Return whether full weekly schedule reads are useful right now."""
-        if not self._fan.supports_parameter("weekly_schedule_setup"):
+        if not self._fan.profile_supports_parameter("weekly_schedule_setup"):
             return False
 
         state = self._fan.weekly_schedule_state
@@ -601,7 +601,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
 
         if (
             weekly_schedule_enabled is not None or days
-        ) and not self._fan.supports_parameter("weekly_schedule_setup"):
+        ) and not self._fan.profile_supports_parameter("weekly_schedule_setup"):
             raise RuntimeError(
                 f"Weekly schedules are not supported by {self._fan.name}"
             )
@@ -655,7 +655,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                 day_payloads.append((day_label, day, day_payload))
 
             requested_days = {day for _, day, _ in day_payloads}
-            if self._fan.supports_parameter("weekly_schedule_setup"):
+            if self._fan.profile_supports_parameter("weekly_schedule_setup"):
                 refreshed_days = await self.hass.async_add_executor_job(
                     self._load_schedule_days,
                     requested_days,

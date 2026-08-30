@@ -126,6 +126,31 @@ def _silent_entity(*, speed="manual", man_speed=63):
 
 
 class SilentFanEntityTest(unittest.TestCase):
+    def test_turn_on_rejects_successful_refresh_that_does_not_confirm_power(self):
+        async def run_test():
+            entity, fan, calls = _silent_entity(speed="high", man_speed=30)
+            fan._state = "off"
+
+            class Hass:
+                async def async_add_executor_job(self, callback, *args):
+                    return callback(*args)
+
+            async def ignored_write_readback():
+                fan._state = "off"
+                fan._speed = "high"
+
+            entity.hass = Hass()
+            entity.async_write_ha_state = lambda: None
+            entity.coordinator.async_refresh_confirmed = ignored_write_readback
+
+            with self.assertRaisesRegex(RuntimeError, "did not confirm power on"):
+                await entity.async_turn_on()
+
+            self.assertGreaterEqual(len(calls), 1)
+            self.assertEqual(fan.state, "off")
+
+        asyncio.run(run_test())
+
     def test_unchanged_turn_on_skips_write_and_confirmation_refresh(self):
         async def run_test():
             entity, fan, calls = _silent_entity(speed="manual", man_speed=63)

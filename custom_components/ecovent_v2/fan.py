@@ -256,6 +256,17 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             )
         return True
 
+    def _confirmed_percentage_target(self, percentage: int) -> int:
+        """Return the percentage the selected device path can represent."""
+        target = int(percentage)
+        if (
+            0 < target < 2
+            and not self._silent_mode_controls_manual_speed
+            and not self._fan.uses_operating_mode_presets
+        ):
+            return 2
+        return target
+
     def _manual_speed_value(self, percentage: int) -> str:
         """Encode a manual speed percentage for a raw protocol batch write."""
         return encode_speed_percent(
@@ -480,12 +491,37 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
                             preset_mode=silent_preset,
                         ),
                     )
-                    return
-                await self.hass.async_add_executor_job(
-                    self._set_param_if_changed, "state", "on"
-                )
+                else:
+                    await self.hass.async_add_executor_job(
+                        self._set_param_if_changed, "state", "on"
+                    )
         finally:
             await self.coordinator.async_refresh_confirmed()
+
+        if preset_mode is not None and self.preset_mode != preset_mode:
+            raise RuntimeError(
+                f"Device did not confirm preset {preset_mode!r} for {self._fan.name}"
+            )
+        if (
+            percentage is not None
+            and self.percentage != self._confirmed_percentage_target(percentage)
+        ):
+            raise RuntimeError(
+                f"Device did not confirm speed {percentage}% for {self._fan.name}"
+            )
+        if preset_mode is None and percentage is None:
+            if self.is_on is not True:
+                raise RuntimeError(
+                    f"Device did not confirm power on for {self._fan.name}"
+                )
+            if (
+                self._silent_mode_controls_manual_speed
+                and self.preset_mode != silent_preset
+            ):
+                raise RuntimeError(
+                    f"Device did not confirm preset {silent_preset!r} "
+                    f"for {self._fan.name}"
+                )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the entity."""
@@ -499,6 +535,8 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             )
         finally:
             await self.coordinator.async_refresh_confirmed()
+        if self.is_on is not False:
+            raise RuntimeError(f"Device did not confirm power off for {self._fan.name}")
 
     def set_preset_mode(self, preset_mode: str, turn_on: bool = True) -> None:
         """Set the preset mode of the fan."""
@@ -557,6 +595,10 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             )
         finally:
             await self.coordinator.async_refresh_confirmed()
+        if self.preset_mode != preset_mode:
+            raise RuntimeError(
+                f"Device did not confirm preset {preset_mode!r} for {self._fan.name}"
+            )
 
     def set_percentage(self, percentage: int, turn_on: bool = True) -> None:
         """Set the speed of the fan, as a percentage."""
@@ -630,6 +672,10 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             )
         finally:
             await self.coordinator.async_refresh_confirmed()
+        if self.percentage != self._confirmed_percentage_target(percentage):
+            raise RuntimeError(
+                f"Device did not confirm speed {percentage}% for {self._fan.name}"
+            )
 
     async def async_set_direction(self, direction: str) -> None:
         """Set the direction of the fan."""
@@ -637,6 +683,10 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             await self.hass.async_add_executor_job(self.set_direction, direction)
         finally:
             await self.coordinator.async_refresh_confirmed()
+        if self.current_direction != direction:
+            raise RuntimeError(
+                f"Device did not confirm direction {direction!r} for {self._fan.name}"
+            )
 
     def set_direction(self, direction: str) -> None:
         """Set the direction of the fan."""
@@ -655,6 +705,11 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             await self.hass.async_add_executor_job(self.set_oscillating, oscillating)
         finally:
             await self.coordinator.async_refresh_confirmed()
+        if self.oscillating is not oscillating:
+            raise RuntimeError(
+                f"Device did not confirm oscillation={oscillating!r} "
+                f"for {self._fan.name}"
+            )
         # self.schedule_update_ha_state()
 
     def set_oscillating(self, oscillating: bool) -> None:

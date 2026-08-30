@@ -300,6 +300,7 @@ class Fan(
         name="ecofanv2",
         port=4000,
     ):
+        self.transport = "bgcp_udp"
         self._name = name
         self._host = host
         self._port = port

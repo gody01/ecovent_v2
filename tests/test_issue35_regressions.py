@@ -1375,6 +1375,110 @@ class Issue35RegressionTest(unittest.TestCase):
         asyncio.run(namespace["async_refresh_confirmed"](coordinator))
         self.assertEqual(events, ["refresh", "refresh"])
 
+    def test_entity_writes_reject_refresh_that_does_not_match_target(self):
+        async def executor(callback, *args):
+            return callback(*args)
+
+        async def refresh():
+            return None
+
+        hass = types.SimpleNamespace(async_add_executor_job=executor)
+        coordinator = types.SimpleNamespace(async_refresh_confirmed=refresh)
+
+        switch_method = _class_method(
+            _tree(SWITCH_PATH), "VentoSwitch", "async_turn_on"
+        )
+        switch_namespace = {}
+        exec(
+            compile(
+                ast.fix_missing_locations(
+                    ast.Module(body=[switch_method], type_ignores=[])
+                ),
+                str(SWITCH_PATH),
+                "exec",
+            ),
+            switch_namespace,
+        )
+        switch = types.SimpleNamespace(
+            hass=hass,
+            coordinator=coordinator,
+            _fan=types.SimpleNamespace(
+                name="Test fan", set_param=lambda *_args: True
+            ),
+            _func="humidity_sensor_state",
+            is_on=False,
+        )
+        with self.assertRaisesRegex(RuntimeError, "did not confirm"):
+            asyncio.run(switch_namespace["async_turn_on"](switch))
+        switch.is_on = True
+        asyncio.run(switch_namespace["async_turn_on"](switch))
+
+        select_method = _class_method(
+            _tree(SELECT_PATH), "VentoSelect", "async_select_option"
+        )
+        select_namespace = {}
+        exec(
+            compile(
+                ast.fix_missing_locations(
+                    ast.Module(body=[select_method], type_ignores=[])
+                ),
+                str(SELECT_PATH),
+                "exec",
+            ),
+            select_namespace,
+        )
+        select = types.SimpleNamespace(
+            hass=hass,
+            coordinator=coordinator,
+            _fan=types.SimpleNamespace(
+                name="Test fan", set_param=lambda *_args: True
+            ),
+            _method="airflow",
+            options=["air_supply", "ventilation"],
+            current_option="ventilation",
+        )
+        with self.assertRaisesRegex(RuntimeError, "did not confirm"):
+            asyncio.run(
+                select_namespace["async_select_option"](select, "air_supply")
+            )
+        select.current_option = "air_supply"
+        asyncio.run(select_namespace["async_select_option"](select, "air_supply"))
+
+        number_method = _class_method(
+            _tree(NUMBER_PATH), "VentoNumber", "async_set_native_value"
+        )
+        number_namespace = {
+            "encode_number_write_value": lambda value, *_args, **_kwargs: int(value),
+            "encode_speed_percent": lambda value, *_args: str(int(value)),
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(
+                    ast.Module(body=[number_method], type_ignores=[])
+                ),
+                str(NUMBER_PATH),
+                "exec",
+            ),
+            number_namespace,
+        )
+        number = types.SimpleNamespace(
+            hass=hass,
+            coordinator=coordinator,
+            _fan=types.SimpleNamespace(
+                name="Test fan",
+                set_param=lambda *_args: True,
+                supports_capability=lambda *_args: False,
+            ),
+            _func="humidity_treshold",
+            _write_mode="raw",
+            _value_bytes=1,
+            native_value=45.0,
+        )
+        with self.assertRaisesRegex(RuntimeError, "did not confirm"):
+            asyncio.run(number_namespace["async_set_native_value"](number, 55.0))
+        number.native_value = 55.0
+        asyncio.run(number_namespace["async_set_native_value"](number, 55.0))
+
 
 if __name__ == "__main__":
     unittest.main()

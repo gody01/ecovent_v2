@@ -418,11 +418,132 @@ class ParseRobustnessTest(unittest.TestCase):
 
         self.assertTrue(
             fan.parse_response(
-                packet_with_payload([0xFE, 0x02, 0x24, 0x12, 0x34])
+                packet_with_payload([0xFE, 0x02, 0x24, 0x54, 0x0D])
             )
         )
-        self.assertEqual(fan.battery_voltage, "13330 mV")
+        self.assertEqual(fan.battery_voltage, "3412 mV")
         self.assertEqual(fan.unknown_params, {})
+
+    def test_documented_scalar_ranges_reject_invalid_device_values(self):
+        cases = (
+            ("0500", 0x0019, "humidity_treshold", [40], [39], "40"),
+            (
+                "0500",
+                0x0024,
+                "battery_voltage",
+                [0x88, 0x13],
+                [0x89, 0x13],
+                "5000 mV",
+            ),
+            ("0500", 0x0025, "humidity", [100], [101], "100"),
+            ("0500", 0x002D, "analogV", [100], [101], "100"),
+            (
+                "0500",
+                0x0063,
+                "filter_timer_setpoint",
+                [0x6D, 0x01],
+                [0x6E, 0x01],
+                "365 d",
+            ),
+            ("0500", 0x0066, "boost_time", [60], [61], "60 m"),
+            ("0500", 0x00B8, "analogV_treshold", [5], [4], "5"),
+            ("0500", 0x003A, "supply_speed_low", [10], [9], 4),
+            ("0600", 0x0018, "max_speed_setpoint", [30], [29], 30),
+            ("0600", 0x001A, "silent_speed_setpoint", [100], [101], 100),
+            (
+                "0600",
+                0x001B,
+                "interval_ventilation_speed_setpoint",
+                [30],
+                [29],
+                30,
+            ),
+            (
+                "0600",
+                0x0004,
+                "fan1_speed",
+                [0x70, 0x17],
+                [0x71, 0x17],
+                "6000",
+            ),
+            ("1100", 0x0019, "humidity_treshold", [80], [81], "80"),
+            (
+                "1100",
+                0x001A,
+                "co2_treshold",
+                [0xD0, 0x07],
+                [0xD1, 0x07],
+                2000,
+            ),
+            ("1100", 0x0027, "co2", [0xD0, 0x07], [0xD1, 0x07], 2000),
+            ("1100", 0x003A, "supply_speed_low", [10], [9], 10),
+            ("1100", 0x0044, "man_speed", [10], [9], 10),
+            (
+                "1100",
+                0x004A,
+                "fan1_speed",
+                [0x88, 0x13],
+                [0x89, 0x13],
+                "5000",
+            ),
+            (
+                "1100",
+                0x0063,
+                "filter_timer_setpoint",
+                [70, 0],
+                [69, 0],
+                "70 d",
+            ),
+            ("1100", 0x0129, "recovery_efficiency", [100], [101], 100),
+            ("1100", 0x031F, "voc_treshold", [250, 0], [251, 0], 250),
+            ("1100", 0x0320, "voc", [0xF4, 0x01], [0xF5, 0x01], 500),
+            ("1100", 0x0400, "screen_brightness", [100], [101], 100),
+            ("0d00", 0x0019, "humidity_treshold", [80], [81], "80"),
+            (
+                "0d00",
+                0x004B,
+                "fan1_speed",
+                [0x88, 0x13],
+                [0x89, 0x13],
+                "5000",
+            ),
+            (
+                "0d00",
+                0x031F,
+                "air_quality_treshold",
+                [0xF4, 0x01],
+                [0xF5, 0x01],
+                500,
+            ),
+            ("0d00", 0x0320, "air_quality", [0xF4, 0x01], [0xF5, 0x01], 500),
+        )
+
+        for unit_type, parameter, attribute, valid, invalid, expected in cases:
+            with self.subTest(parameter=parameter):
+                fan = Fan("192.0.2.1")
+                fan.unit_type = unit_type
+                prefix = [0xFF, parameter >> 8] if parameter > 0xFF else []
+                low_byte = parameter & 0xFF
+
+                def row(value):
+                    if len(value) == 1:
+                        return [*prefix, low_byte, *value]
+                    return [*prefix, 0xFE, len(value), low_byte, *value]
+
+                self.assertTrue(
+                    fan.parse_response(packet_with_payload(row(valid)))
+                )
+                self.assertEqual(getattr(fan, attribute), expected)
+
+                self.assertTrue(
+                    fan.parse_response(packet_with_payload(row(invalid)))
+                )
+                self.assertEqual(getattr(fan, attribute), expected)
+                self.assertEqual(
+                    fan.unknown_params,
+                    {parameter: bytes(invalid).hex()},
+                )
+                self.assertEqual(fan._last_response_param_ids, set())
 
     def test_alarm_list_rejects_an_unpaired_trailing_byte(self):
         fan = Fan("192.0.2.1")

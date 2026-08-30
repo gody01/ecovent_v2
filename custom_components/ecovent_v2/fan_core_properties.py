@@ -317,6 +317,7 @@ class FanCorePropertiesMixin:
     @humidity_treshold.setter
     def humidity_treshold(self, input):
         val = int(input, 16)
+        self._validate_parameter_range("humidity_treshold", val)
         self._humidity_treshold = str(val)
 
     @property
@@ -326,6 +327,7 @@ class FanCorePropertiesMixin:
     @temperature_treshold.setter
     def temperature_treshold(self, input):
         val = int(input, 16)
+        self._validate_parameter_range("temperature_treshold", val)
         self._temperature_treshold = str(val)
 
     @property
@@ -339,6 +341,7 @@ class FanCorePropertiesMixin:
             byteorder="little",
             signed=False,
         )
+        self._validate_parameter_range("battery_voltage", val)
         self._battery_voltage = str(val) + " mV"
 
     @property
@@ -348,6 +351,7 @@ class FanCorePropertiesMixin:
     @humidity.setter
     def humidity(self, input):
         val = int(input, 16)
+        self._validate_parameter_range("humidity", val)
         self._humidity = str(val)
 
     @property
@@ -373,7 +377,9 @@ class FanCorePropertiesMixin:
 
     @air_quality.setter
     def air_quality(self, input):
-        self._air_quality = self._decode_uint(input)
+        value = self._decode_uint(input)
+        self._validate_parameter_range("air_quality", value)
+        self._air_quality = value
 
     @property
     def air_quality_treshold(self):
@@ -381,7 +387,9 @@ class FanCorePropertiesMixin:
 
     @air_quality_treshold.setter
     def air_quality_treshold(self, input):
-        self._air_quality_treshold = self._decode_uint(input)
+        value = self._decode_uint(input)
+        self._validate_parameter_range("air_quality_treshold", value)
+        self._air_quality_treshold = value
 
     @property
     def analogV(self):
@@ -390,6 +398,7 @@ class FanCorePropertiesMixin:
     @analogV.setter
     def analogV(self, input):
         val = int(input, 16)
+        self._validate_parameter_range("analogV", val)
         self._analogV = str(val)
 
     @property

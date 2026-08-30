@@ -12,9 +12,13 @@ class FanSpeedPropertiesMixin:
     def _preset_speed_percent(self, input):
         val = int(input, 16)
         if self.device_profile.speed_percent_scale == "percent":
+            if self.profile_key == "breezy":
+                self._validate_range(val, 10, 100, "preset_speed")
             return val
-        if val >= 0 and val <= 255:
-            return int(val / 255 * 100)
+        if self.profile_key == "vento":
+            self._validate_range(val, 10, 255, "preset_speed")
+        if 0 <= val <= 255:
+            return round(val / 255 * 100)
         return None
 
     @property
@@ -147,6 +151,8 @@ class FanSpeedPropertiesMixin:
     def man_speed(self, input):
         val = int(input, 16)
         if self.device_profile.speed_percent_scale == "percent":
+            if self.profile_key == "breezy":
+                self._validate_range(val, 10, 100, "man_speed")
             self._man_speed = val
             return
         if val >= 0 and val <= 255:
@@ -159,6 +165,7 @@ class FanSpeedPropertiesMixin:
     @max_speed_setpoint.setter
     def max_speed_setpoint(self, input):
         val = int(input, 16)
+        self._validate_parameter_range("max_speed_setpoint", val)
         self._max_speed_setpoint = val
 
     @property
@@ -168,6 +175,7 @@ class FanSpeedPropertiesMixin:
     @silent_speed_setpoint.setter
     def silent_speed_setpoint(self, input):
         val = int(input, 16)
+        self._validate_parameter_range("silent_speed_setpoint", val)
         self._silent_speed_setpoint = val
 
     @property
@@ -177,6 +185,7 @@ class FanSpeedPropertiesMixin:
     @interval_ventilation_speed_setpoint.setter
     def interval_ventilation_speed_setpoint(self, input):
         val = int(input, 16)
+        self._validate_parameter_range("interval_ventilation_speed_setpoint", val)
         self._interval_ventilation_speed_setpoint = val
 
     @property
@@ -190,6 +199,7 @@ class FanSpeedPropertiesMixin:
             byteorder="little",
             signed=False,
         )
+        self._validate_parameter_range("fan1_speed", val)
         self._fan1_speed = str(val)
 
     @property
@@ -203,6 +213,7 @@ class FanSpeedPropertiesMixin:
             byteorder="little",
             signed=False,
         )
+        self._validate_parameter_range("fan2_speed", val)
         self._fan2_speed = str(val)
 
     @property
@@ -216,6 +227,8 @@ class FanSpeedPropertiesMixin:
             byteorder="little",
             signed=False,
         )
+        if not (self.profile_key == "breezy" and val == 0):
+            self._validate_parameter_range("filter_timer_setpoint", val)
         self._filter_timer_setpoint = str(val) + " d"
 
     @property
@@ -260,6 +273,7 @@ class FanSpeedPropertiesMixin:
     @boost_time.setter
     def boost_time(self, input):
         val = int(input, 16)
+        self._validate_parameter_range("boost_time", val)
         self._boost_time = str(val) + " m"
 
     @property

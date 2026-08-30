@@ -7,6 +7,25 @@ from ecovent_test_helpers import Fan, packet_with_payload
 
 
 class ProfileParseTest(unittest.TestCase):
+    def test_documented_parameter_ranges_follow_active_bgcp_profile(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0500"
+        self.assertEqual(fan.parameter_range("analogV_treshold"), (5, 100))
+        self.assertEqual(fan.parameter_range("filter_timer_setpoint"), (70, 365))
+        self.assertEqual(fan.parameter_range("supply_speed_low"), (4, 100))
+
+        fan.unit_type = "0600"
+        self.assertEqual(fan.parameter_range("fan1_speed"), (0, 6000))
+        self.assertIsNone(fan.parameter_range("analogV_treshold"))
+
+        fan.unit_type = "1100"
+        self.assertEqual(fan.parameter_range("co2_treshold"), (400, 2000))
+        self.assertEqual(fan.parameter_range("voc_treshold"), (50, 250))
+        self.assertEqual(fan.parameter_range("supply_speed_low"), (10, 100))
+
+        fan.unit_type = "0d00"
+        self.assertEqual(fan.parameter_range("air_quality_treshold"), (50, 500))
+
     def test_parse_response_names_econoprime_df270_unit_type(self):
         fan = Fan("192.0.2.1")
         self.assertTrue(

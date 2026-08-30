@@ -318,7 +318,7 @@ NUMBER_SPECS = (
         "analogV_treshold",
         "mdi:flash-triangle-outline",
         False,
-        native_min_value=0.0,
+        native_min_value=5.0,
         native_max_value=100.0,
         native_step=1,
         unit_of_measurement=PERCENTAGE,

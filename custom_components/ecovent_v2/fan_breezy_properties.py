@@ -16,7 +16,9 @@ class FanBreezyPropertiesMixin:
 
     @co2_treshold.setter
     def co2_treshold(self, input):
-        self._co2_treshold = self._decode_uint(input)
+        value = self._decode_uint(input)
+        self._validate_parameter_range("co2_treshold", value)
+        self._co2_treshold = value
 
     @property
     def co2(self):
@@ -24,7 +26,9 @@ class FanBreezyPropertiesMixin:
 
     @co2.setter
     def co2(self, input):
-        self._co2 = self._decode_uint(input)
+        value = self._decode_uint(input)
+        self._validate_parameter_range("co2", value)
+        self._co2 = value
 
     @property
     def outdoor_temperature(self):
@@ -114,7 +118,9 @@ class FanBreezyPropertiesMixin:
 
     @recovery_efficiency.setter
     def recovery_efficiency(self, input):
-        self._recovery_efficiency = int(input, 16)
+        value = int(input, 16)
+        self._validate_parameter_range("recovery_efficiency", value)
+        self._recovery_efficiency = value
 
     @property
     def schedule_speed(self):
@@ -151,7 +157,9 @@ class FanBreezyPropertiesMixin:
 
     @voc_treshold.setter
     def voc_treshold(self, input):
-        self._voc_treshold = self._decode_uint(input)
+        value = self._decode_uint(input)
+        self._validate_parameter_range("voc_treshold", value)
+        self._voc_treshold = value
 
     @property
     def voc(self):
@@ -159,7 +167,9 @@ class FanBreezyPropertiesMixin:
 
     @voc.setter
     def voc(self, input):
-        self._voc = self._decode_uint(input)
+        value = self._decode_uint(input)
+        self._validate_parameter_range("voc", value)
+        self._voc = value
 
     @property
     def screen_brightness(self):
@@ -167,7 +177,9 @@ class FanBreezyPropertiesMixin:
 
     @screen_brightness.setter
     def screen_brightness(self, input):
-        self._screen_brightness = int(input, 16)
+        value = int(input, 16)
+        self._validate_parameter_range("screen_brightness", value)
+        self._screen_brightness = value
 
     @property
     def screen_backlight_mode(self):

@@ -370,6 +370,12 @@ class FanProtocolMixin:
             if decoded_write is None:
                 return False
             expected_write_values, final_write_page = decoded_write
+            if set(
+                expected_write_values
+            ) & self.unsupported_optional_poll_parameter_ids():
+                return False
+            if not self._parameter_values_are_decodable(expected_write_values):
+                return False
 
         extra_write_parameters = ""
         expected_extra_write_values = None
@@ -392,6 +398,14 @@ class FanProtocolMixin:
                         extra_write_parameters, False
                     )
                     return False
+                if not self._parameter_values_are_decodable(
+                    expected_extra_write_values
+                ):
+                    self._notify_extra_write_parameters_result(
+                        extra_write_parameters, False
+                    )
+                    extra_write_parameters = ""
+                    expected_extra_write_values = None
             encoded_params += extra_write_parameters
 
         if self._write_may_be_audible(command, encoded_params):
@@ -939,6 +953,8 @@ class FanProtocolMixin:
 
     def write_weekly_schedule_record(self, record):
         """Write one weekly schedule period via 0x0077."""
+        if not self.supports_parameter("weekly_schedule_setup"):
+            return False
         if not isinstance(record, WeeklyScheduleRecord):
             raise TypeError("record must be a WeeklyScheduleRecord")
         return self.send_command(

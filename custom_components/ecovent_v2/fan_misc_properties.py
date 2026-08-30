@@ -20,6 +20,7 @@ class FanMiscPropertiesMixin:
     @analogV_treshold.setter
     def analogV_treshold(self, input):
         val = int(input, 16)
+        self._validate_parameter_range("analogV_treshold", val)
         self._analogV_treshold = str(val)
 
     @property

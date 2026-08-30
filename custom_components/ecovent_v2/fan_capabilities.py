@@ -15,6 +15,62 @@ _CAPABILITY_PROBE_PARAMETERS = {
     "voc": ("voc",),
 }
 
+_PARAMETER_RANGES = {
+    "vento": {
+        "analogV": (0, 100),
+        "analogV_treshold": (5, 100),
+        "battery_voltage": (0, 5000),
+        "boost_time": (0, 60),
+        "fan1_speed": (0, 5000),
+        "fan2_speed": (0, 5000),
+        "filter_timer_setpoint": (70, 365),
+        "humidity": (0, 100),
+        "humidity_treshold": (40, 80),
+        "supply_speed_low": (4, 100),
+        "exhaust_speed_low": (4, 100),
+        "supply_speed_medium": (4, 100),
+        "exhaust_speed_medium": (4, 100),
+        "supply_speed_high": (4, 100),
+        "exhaust_speed_high": (4, 100),
+    },
+    "extract_fan": {
+        "fan1_speed": (0, 6000),
+        "humidity": (0, 100),
+        "interval_ventilation_speed_setpoint": (30, 100),
+        "max_speed_setpoint": (30, 100),
+        "silent_speed_setpoint": (30, 100),
+    },
+    "breezy": {
+        "battery_voltage": (0, 5000),
+        "co2": (0, 2000),
+        "co2_treshold": (400, 2000),
+        "fan1_speed": (0, 5000),
+        "fan2_speed": (0, 5000),
+        "filter_timer_setpoint": (70, 365),
+        "humidity": (0, 100),
+        "humidity_treshold": (40, 80),
+        "recovery_efficiency": (0, 100),
+        "screen_brightness": (1, 100),
+        "supply_speed_low": (10, 100),
+        "exhaust_speed_low": (10, 100),
+        "supply_speed_medium": (10, 100),
+        "exhaust_speed_medium": (10, 100),
+        "supply_speed_high": (10, 100),
+        "exhaust_speed_high": (10, 100),
+        "voc": (0, 500),
+        "voc_treshold": (50, 250),
+    },
+    "arc": {
+        "air_quality": (0, 500),
+        "air_quality_treshold": (50, 500),
+        "battery_voltage": (0, 5000),
+        "boost_time": (0, 60),
+        "fan1_speed": (0, 5000),
+        "humidity": (0, 100),
+        "humidity_treshold": (40, 80),
+    },
+}
+
 
 class FanCapabilitiesMixin:
     @property
@@ -202,6 +258,25 @@ class FanCapabilitiesMixin:
     def _decode_uint(self, input, byteorder="little"):
         """Decode unsigned protocol integers from hex payload bytes."""
         return int.from_bytes(bytes.fromhex(input), byteorder=byteorder, signed=False)
+
+    def _validate_range(self, value, minimum, maximum, parameter):
+        """Reject scalar values outside the documented protocol range."""
+        if not minimum <= value <= maximum:
+            raise ValueError(
+                f"Invalid {parameter}: {value} is outside {minimum}..{maximum}"
+            )
+        return value
+
+    def parameter_range(self, parameter):
+        """Return the active profile's documented scalar range."""
+        return _PARAMETER_RANGES.get(self.profile_key, {}).get(parameter)
+
+    def _validate_parameter_range(self, parameter, value):
+        """Validate a scalar against its active profile when documented."""
+        value_range = self.parameter_range(parameter)
+        if value_range is not None:
+            self._validate_range(value, *value_range, parameter)
+        return value
 
     def _decode_exact_bytes(self, input, expected_size, parameter):
         """Decode a fixed-width protocol value without padding or truncation."""

@@ -256,6 +256,22 @@ class FanProtocolParseMixin:
         self._last_response_param_ids = set()
         return set()
 
+    def _parameter_values_are_decodable(self, parameter_values):
+        """Validate outbound values through the same setters used for replies."""
+        before = self.__dict__.copy()
+        before["_unknown_params"] = self._unknown_params.copy()
+        try:
+            for param_id, value in parameter_values.items():
+                if param_id in self._write_only_params:
+                    continue
+                response = param_id.to_bytes(2, byteorder="big") + value
+                if not self._store_param(response, record_unknown=False):
+                    return False
+            return True
+        finally:
+            self.__dict__.clear()
+            self.__dict__.update(before)
+
     def _store_param(self, response, *, record_unknown=True):
         param_id = int(response[:2].hex(), 16)
         value = response[2:].hex()

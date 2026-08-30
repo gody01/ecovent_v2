@@ -5,6 +5,7 @@ import unittest
 
 from ecovent_test_helpers import Fan, packet_for_write_command, packet_with_payload
 from fan_protocol import BULK_READ_REPROBE_READS, MAX_BULK_READ_PARAMS
+from schedule_helpers import WeeklyScheduleRecord
 
 
 class PacketBuilderTest(unittest.TestCase):
@@ -1558,6 +1559,39 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertEqual(fan._last_raw_response_param_ids, {0x0024})
         self.assertEqual(fan._last_response_param_ids, set())
 
+    def test_read_rejects_present_scalar_outside_documented_range(self):
+        fan = Fan("192.0.2.1")
+        fan.humidity = "37"
+        fan.send = lambda _data: True
+        fan.receive = lambda: packet_with_payload([0x25, 0x65])
+
+        self.assertFalse(fan.get_param("humidity"))
+        self.assertEqual(fan.humidity, "55")
+        self.assertEqual(fan.unknown_params, {})
+        self.assertEqual(fan._last_raw_response_param_ids, {0x0025})
+        self.assertEqual(fan._last_response_param_ids, set())
+
+    def test_write_rejects_scalar_outside_documented_range_before_transport(self):
+        fan = Fan("192.0.2.1")
+        calls = []
+        fan.send = lambda data: calls.append(data) or True
+
+        self.assertFalse(fan.set_param("humidity_treshold", "ff"))
+        self.assertEqual(calls, [])
+
+    def test_invalid_opportunistic_value_does_not_block_primary_write(self):
+        fan = Fan("192.0.2.1")
+        calls = []
+        results = []
+        fan.extra_write_parameters_callback = lambda: {"rtc_time": "ff3b17"}
+        fan.extra_write_parameters_result_callback = results.append
+        fan.send = lambda data: calls.append(data) or True
+        fan.receive = lambda: packet_for_write_command(calls[-1])
+
+        self.assertTrue(fan.set_param("state", "on"))
+        self.assertEqual(calls, ["030101"])
+        self.assertEqual(results, [False])
+
     def test_poll_marks_undecodable_requested_value_missing(self):
         fan = Fan("192.0.2.1")
         fan.battery_voltage = "3412"
@@ -1630,13 +1664,28 @@ class PacketBuilderTest(unittest.TestCase):
         fan.receive = lambda: packet_for_write_command(calls[-1])
         unsupported_id = fan.get_params_index("supply_speed_low")
         manual_speed_id = fan.get_params_index("man_speed")
-        fan._unsupported_optional_poll_params = {unsupported_id, manual_speed_id}
+        schedule_id = fan.get_params_index("weekly_schedule_setup")
+        fan._unsupported_optional_poll_params = {
+            unsupported_id,
+            manual_speed_id,
+            schedule_id,
+        }
 
         self.assertFalse(fan.supports_parameter("supply_speed_low"))
         self.assertFalse(fan.set_param("supply_speed_low", "32"))
         self.assertFalse(fan.set_man_speed_percent(73))
         self.assertFalse(
             fan.set_parameters({"state": "on", "supply_speed_low": "32"})
+        )
+        self.assertFalse(
+            fan.send_command(
+                fan.func["write_return"], "0044", "49", retries=1
+            )
+        )
+        self.assertFalse(
+            fan.write_weekly_schedule_record(
+                WeeklyScheduleRecord(1, 1, "low", 6, 0)
+            )
         )
         self.assertEqual(calls, [])
 

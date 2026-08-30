@@ -819,6 +819,8 @@ class FanProtocolMixin:
         return available
 
     def set_param(self, param, value):
+        if not self.supports_parameter(param):
+            return False
         valpar = self.get_params_values(param, value)
         # print ( "EcoventV2: " + " " + param + "/" + value , file = sys.stderr )
         if valpar[0] is not None:
@@ -857,6 +859,8 @@ class FanProtocolMixin:
 
     def set_parameters(self, values, include_extra_write_parameters=True):
         """Write several profile-mapped parameters in one encoded command."""
+        if not values or not all(self.supports_parameter(param) for param in values):
+            return False
         try:
             request = self._encode_parameter_values(values)
         except ValueError:

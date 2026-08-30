@@ -1623,6 +1623,26 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertTrue(fan.set_parameters({"state": "on"}))
         self.assertEqual(len(calls), 1)
 
+    def test_semantic_writes_reject_learned_unsupported_rows_atomically(self):
+        fan = Fan("192.0.2.1")
+        calls = []
+        fan.send = lambda data: calls.append(data) or True
+        fan.receive = lambda: packet_for_write_command(calls[-1])
+        unsupported_id = fan.get_params_index("supply_speed_low")
+        manual_speed_id = fan.get_params_index("man_speed")
+        fan._unsupported_optional_poll_params = {unsupported_id, manual_speed_id}
+
+        self.assertFalse(fan.supports_parameter("supply_speed_low"))
+        self.assertFalse(fan.set_param("supply_speed_low", "32"))
+        self.assertFalse(fan.set_man_speed_percent(73))
+        self.assertFalse(
+            fan.set_parameters({"state": "on", "supply_speed_low": "32"})
+        )
+        self.assertEqual(calls, [])
+
+        self.assertTrue(fan.set_param("state", "on"))
+        self.assertEqual(len(calls), 1)
+
     def test_unmapped_opportunistic_batch_fails_and_reports_result(self):
         fan = Fan("192.0.2.1")
         calls = []

@@ -67,7 +67,7 @@ class Issue16RegressionTest(unittest.TestCase):
         calls = [
             node for node in ast.walk(write_schedule) if isinstance(node, ast.Call)
         ]
-        load_call_lineno = next(
+        load_call_lineno = min(
             node.lineno
             for node in calls
             if isinstance(node.func, ast.Attribute)
@@ -77,14 +77,14 @@ class Issue16RegressionTest(unittest.TestCase):
                 for arg in node.args
             )
         )
-        diff_call_lineno = next(
+        prepare_call_lineno = min(
             node.lineno
             for node in calls
             if isinstance(node.func, ast.Name)
-            and node.func.id == "changed_schedule_records"
+            and node.func.id == "prepare_day_writes"
         )
 
-        self.assertLess(load_call_lineno, diff_call_lineno)
+        self.assertLess(load_call_lineno, prepare_call_lineno)
         self.assertTrue(
             any(
                 isinstance(node, ast.Attribute)
@@ -202,6 +202,169 @@ class Issue16RegressionTest(unittest.TestCase):
             )
         )
         self.assertEqual(events, ["diff", "listeners"])
+
+    def test_schedule_payload_validation_precedes_state_write(self):
+        method = _class_method(
+            ast.parse(COORDINATOR_PATH.read_text()),
+            "EcoVentCoordinator",
+            "async_write_schedule",
+        )
+        events = []
+        unsupported_record = types.SimpleNamespace(period=1, speed="speed_5")
+
+        def changed_records(*_args):
+            events.append("validate")
+            return [unsupported_record]
+
+        namespace = {
+            "SCHEDULE_DAY_TO_INDEX": {"Monday": 1},
+            "changed_schedule_records": changed_records,
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+                str(COORDINATOR_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+
+        class Hass:
+            async def async_add_executor_job(self, callback, *args):
+                return callback(*args)
+
+        class Fan:
+            name = "Vento"
+            weekly_schedule_state = "off"
+            device_profile = types.SimpleNamespace(
+                schedule_speed_modes=("standby", "low", "medium", "high")
+            )
+
+            def supports_parameter(self, _name):
+                return True
+
+            def set_param(self, *_args):
+                events.append("write-state")
+                return True
+
+        coordinator = types.SimpleNamespace(
+            hass=Hass(),
+            _fan=Fan(),
+            _schedule_day=1,
+            _weekly_schedule={1: {period: object() for period in range(1, 5)}},
+            _load_schedule_days=lambda days: set(days),
+            schedule_day_records=lambda day: coordinator._weekly_schedule[day],
+            async_update_listeners=lambda: events.append("listeners"),
+        )
+
+        with self.assertRaisesRegex(ValueError, "not supported"):
+            asyncio.run(
+                namespace["async_write_schedule"](
+                    coordinator,
+                    weekly_schedule_enabled=True,
+                    days=[
+                        {
+                            "day": "Monday",
+                            "periods": [{"period": 1, "speed": "Speed 5"}],
+                        }
+                    ],
+                )
+            )
+
+        self.assertEqual(events, ["validate"])
+
+    def test_schedule_state_change_rebuilds_writes_from_fresh_readback(self):
+        method = _class_method(
+            ast.parse(COORDINATOR_PATH.read_text()),
+            "EcoVentCoordinator",
+            "async_write_schedule",
+        )
+        diffs = []
+        writes = []
+        prepared_records = []
+
+        def changed_records(_day, current, _payload):
+            diffs.append(current[1])
+            record = types.SimpleNamespace(period=1, speed="low", base=current[1])
+            prepared_records.append(record)
+            return [record]
+
+        namespace = {
+            "SCHEDULE_DAY_TO_INDEX": {"Monday": 1},
+            "changed_schedule_records": changed_records,
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+                str(COORDINATOR_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+
+        class Hass:
+            async def async_add_executor_job(self, callback, *args):
+                return callback(*args)
+
+        class Fan:
+            name = "Vento"
+            weekly_schedule_state = "off"
+            device_profile = types.SimpleNamespace(schedule_speed_modes=("low",))
+
+            def supports_parameter(self, _name):
+                return True
+
+            def set_param(self, *_args):
+                writes.append("state")
+                return True
+
+            def write_weekly_schedule_record(self, record):
+                writes.append(record.base)
+                return True
+
+        load_count = 0
+
+        def load_schedule_days(days):
+            nonlocal load_count
+            load_count += 1
+            if load_count == 2:
+                coordinator._weekly_schedule[1] = {
+                    period: f"fresh-{period}" for period in range(1, 5)
+                }
+            return set(days)
+
+        async def refresh():
+            coordinator._fan.weekly_schedule_state = "on"
+            coordinator.last_update_success = True
+
+        async def reconcile(_day):
+            confirmed = dict(coordinator._weekly_schedule[1])
+            confirmed[1] = prepared_records[-1]
+            return confirmed
+
+        coordinator = types.SimpleNamespace(
+            hass=Hass(),
+            _fan=Fan(),
+            _schedule_day=1,
+            _weekly_schedule={1: {period: f"old-{period}" for period in range(1, 5)}},
+            _load_schedule_days=load_schedule_days,
+            schedule_day_records=lambda day: dict(coordinator._weekly_schedule[day]),
+            last_update_success=False,
+            async_refresh=refresh,
+            _async_reconcile_schedule_day=reconcile,
+            async_update_listeners=lambda: None,
+        )
+
+        asyncio.run(
+            namespace["async_write_schedule"](
+                coordinator,
+                weekly_schedule_enabled=True,
+                days=[{"day": "Monday", "periods": [{"period": 1}]}],
+            )
+        )
+
+        self.assertEqual(diffs, ["old-1", "fresh-1"])
+        self.assertEqual(writes, ["state", "fresh-1"])
 
     def test_schedule_state_write_reports_transport_failure(self):
         source = COORDINATOR_PATH.read_text()
@@ -332,7 +495,7 @@ class Issue16RegressionTest(unittest.TestCase):
             "EcoVentCoordinator",
             "async_write_schedule",
         )
-        requested = types.SimpleNamespace(period=1, value="requested")
+        requested = types.SimpleNamespace(period=1, speed="low", value="requested")
         actual = {
             period: types.SimpleNamespace(period=period, value="actual")
             for period in range(1, 5)
@@ -357,6 +520,7 @@ class Issue16RegressionTest(unittest.TestCase):
         class Fan:
             weekly_schedule_state = "off"
             name = "Test fan"
+            device_profile = types.SimpleNamespace(schedule_speed_modes=("low",))
 
             def supports_parameter(self, _name):
                 return False
@@ -401,8 +565,8 @@ class Issue16RegressionTest(unittest.TestCase):
             "async_write_schedule",
         )
         records = [
-            types.SimpleNamespace(period=1, value="new-1"),
-            types.SimpleNamespace(period=2, value="new-2"),
+            types.SimpleNamespace(period=1, speed="low", value="new-1"),
+            types.SimpleNamespace(period=2, speed="low", value="new-2"),
         ]
         namespace = {
             "SCHEDULE_DAY_TO_INDEX": {"Monday": 1},
@@ -429,6 +593,7 @@ class Issue16RegressionTest(unittest.TestCase):
         class Fan:
             weekly_schedule_state = "off"
             name = "Test fan"
+            device_profile = types.SimpleNamespace(schedule_speed_modes=("low",))
 
             def supports_parameter(self, _name):
                 return False

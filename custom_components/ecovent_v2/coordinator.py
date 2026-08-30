@@ -599,6 +599,41 @@ class EcoVentCoordinator(DataUpdateCoordinator):
             self._schedule_day = SCHEDULE_DAY_TO_INDEX[selected_day]
 
         day_payloads = []
+        prepared_day_writes = []
+        requested_days: set[int] = set()
+
+        def prepare_day_writes():
+            working_records_by_day = {}
+            prepared = []
+            for day_label, day, day_payload in day_payloads:
+                current_records = working_records_by_day.get(day)
+                if current_records is None:
+                    current_records = self.schedule_day_records(day)
+                records_to_write = changed_schedule_records(
+                    day,
+                    current_records,
+                    day_payload.get("periods", []),
+                )
+                invalid_speeds = []
+                if records_to_write:
+                    allowed_speeds = set(self._fan.device_profile.schedule_speed_modes)
+                    invalid_speeds = sorted(
+                        record.speed
+                        for record in records_to_write
+                        if record.speed not in allowed_speeds
+                    )
+                if invalid_speeds:
+                    raise ValueError(
+                        "Schedule speeds are not supported by "
+                        f"{self._fan.name}: {invalid_speeds}"
+                    )
+                expected_records = dict(current_records)
+                for record in records_to_write:
+                    expected_records[record.period] = record
+                working_records_by_day[day] = expected_records
+                prepared.append((day_label, day, records_to_write, expected_records))
+            return prepared
+
         if days:
             for day_payload in days:
                 day_label = str(day_payload["day"])
@@ -618,6 +653,9 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                         f"days {failed_days} for {self._fan.name}"
                     )
 
+            prepared_day_writes = prepare_day_writes()
+
+        schedule_state_changed = False
         if weekly_schedule_enabled is not None:
             target = "on" if weekly_schedule_enabled else "off"
             if self._fan.weekly_schedule_state != target:
@@ -642,17 +680,28 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                         "Device did not confirm weekly schedule state "
                         f"{target!r} for {self._fan.name}"
                     )
+                schedule_state_changed = True
 
-        if day_payloads:
-            for day_label, day, day_payload in day_payloads:
-                current_records = self.schedule_day_records(day)
-                records_to_write = changed_schedule_records(
-                    day,
-                    current_records,
-                    day_payload.get("periods", []),
+        if schedule_state_changed and day_payloads:
+            refreshed_days = await self.hass.async_add_executor_job(
+                self._load_schedule_days,
+                requested_days,
+            )
+            if refreshed_days != requested_days:
+                failed_days = sorted(requested_days - refreshed_days)
+                raise RuntimeError(
+                    "Failed to refresh weekly schedule after changing its state "
+                    f"for days {failed_days} on {self._fan.name}"
                 )
-                expected_records = dict(current_records)
+            prepared_day_writes = prepare_day_writes()
 
+        if prepared_day_writes:
+            for (
+                day_label,
+                day,
+                records_to_write,
+                expected_records,
+            ) in prepared_day_writes:
                 for record in records_to_write:
                     written = await self.hass.async_add_executor_job(
                         self._fan.write_weekly_schedule_record,
@@ -665,7 +714,6 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                             "Failed to write schedule record "
                             f"{day_label} period {record.period}"
                         )
-                    expected_records[record.period] = record
 
                 if records_to_write:
                     confirmed_records = await self._async_reconcile_schedule_day(day)

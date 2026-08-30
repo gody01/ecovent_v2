@@ -283,19 +283,17 @@ class FanSpeedPropertiesMixin:
                 byteorder="little",
                 signed=False,
             )
-            if total_seconds > 24 * 60 * 60:
+            if total_seconds >= 24 * 60 * 60:
                 raise ValueError(f"Invalid RTC seconds since midnight: {total_seconds}")
             hours, remainder = divmod(total_seconds, 3600)
             minutes, seconds = divmod(remainder, 60)
             self._rtc_time = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
             return
 
-        val = self._decode_exact_bytes(input, 3, "rtc_time")
-        if val[0] > 59 or val[1] > 59 or val[2] > 23:
-            raise ValueError(
-                f"Invalid RTC time: {val[2]:02d}:{val[1]:02d}:{val[0]:02d}"
-            )
-        self._rtc_time = f"{val[2]:02d}:{val[1]:02d}:{val[0]:02d}"
+        hours, minutes, seconds = self._decode_time_seconds_minutes_hours(
+            input, "rtc_time"
+        )
+        self._rtc_time = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
     @property
     def silent_mode_start_time(self):
@@ -308,8 +306,8 @@ class FanSpeedPropertiesMixin:
                 input, "silent_mode_start_time"
             )
         else:
-            seconds, minutes, hours = self._decode_exact_bytes(
-                input, 3, "silent_mode_start_time"
+            hours, minutes, seconds = self._decode_time_seconds_minutes_hours(
+                input, "silent_mode_start_time"
             )
         self._silent_mode_start_time = f"{hours}h {minutes}m {seconds}s "
 
@@ -324,8 +322,8 @@ class FanSpeedPropertiesMixin:
                 input, "silent_mode_end_time"
             )
         else:
-            seconds, minutes, hours = self._decode_exact_bytes(
-                input, 3, "silent_mode_end_time"
+            hours, minutes, seconds = self._decode_time_seconds_minutes_hours(
+                input, "silent_mode_end_time"
             )
         self._silent_mode_end_time = f"{hours}h {minutes}m {seconds}s "
 

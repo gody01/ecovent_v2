@@ -628,6 +628,21 @@ async def _async_close_coordinator(
         )
 
 
+def _delete_hardware_profile_mismatch_issue(
+    hass: HomeAssistant, entry_id: str
+) -> None:
+    """Remove a Repair owned by a config entry during rollback or unload."""
+    try:
+        async_delete_hardware_profile_mismatch_issue(hass, entry_id)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.warning(
+            "Unable to remove EcoVent V2 hardware profile Repair for %s: %s",
+            entry_id,
+            err,
+            exc_info=True,
+        )
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up EcoVent_v2 from a config entry."""
 
@@ -648,7 +663,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = EcoVentCoordinator(
         hass, entry, update_seconds=entry.runtime_data[UPDATE_INTERVAL]
     )
-
     try:
         await coordinator.async_config_entry_first_refresh()
 
@@ -657,11 +671,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await async_register_frontend(hass)
         _async_migrate_entity_registry(hass, coordinator)
         await _async_migrate_statistics_metadata_on_start(hass, entry, coordinator)
-        await hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)
         _async_register_optional_poll_entity_sync(hass, entry, coordinator)
+        await hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)
         return True
     except Exception:
         hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
+        _delete_hardware_profile_mismatch_issue(hass, entry.entry_id)
         await _async_close_coordinator(hass, coordinator)
         raise
 
@@ -671,15 +686,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, _PLATFORMS)
     if unload_ok:
-        try:
-            async_delete_hardware_profile_mismatch_issue(hass, entry.entry_id)
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.warning(
-                "Unable to remove EcoVent V2 hardware profile Repair for %s: %s",
-                entry.entry_id,
-                err,
-                exc_info=True,
-            )
+        _delete_hardware_profile_mismatch_issue(hass, entry.entry_id)
         coordinator = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
         await _async_close_coordinator(hass, coordinator)
     return unload_ok

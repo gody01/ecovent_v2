@@ -126,10 +126,82 @@ class Issue16RegressionTest(unittest.TestCase):
             _fan=Fan(),
             _weekly_schedule={1: cached_day},
         )
-        namespace["_load_schedule_days"](coordinator, [1, 2])
+        loaded_days = namespace["_load_schedule_days"](coordinator, [1, 2])
 
         self.assertIs(coordinator._weekly_schedule[1], cached_day)
         self.assertIs(coordinator._weekly_schedule[2], fresh_day)
+        self.assertEqual(loaded_days, {2})
+
+    def test_schedule_write_aborts_when_prewrite_readback_is_stale(self):
+        method = _class_method(
+            ast.parse(COORDINATOR_PATH.read_text()),
+            "EcoVentCoordinator",
+            "async_write_schedule",
+        )
+        events = []
+
+        def changed_records(*_args):
+            events.append("diff")
+            return []
+
+        namespace = {
+            "SCHEDULE_DAY_TO_INDEX": {"Monday": 1},
+            "changed_schedule_records": changed_records,
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+                str(COORDINATOR_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+
+        class Hass:
+            async def async_add_executor_job(self, callback, *args):
+                return callback(*args)
+
+        class Fan:
+            weekly_schedule_state = "off"
+            name = "Test fan"
+
+            def supports_parameter(self, _name):
+                return True
+
+            def set_param(self, *_args):
+                events.append("write")
+                return True
+
+        coordinator = types.SimpleNamespace(
+            hass=Hass(),
+            _fan=Fan(),
+            _schedule_day=1,
+            _weekly_schedule={1: {period: "stale" for period in range(1, 5)}},
+            _load_schedule_days=lambda _days: set(),
+            schedule_day_records=lambda _day: self.fail("stale cache was diffed"),
+            async_update_listeners=lambda: events.append("listeners"),
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "Failed to refresh"):
+            asyncio.run(
+                namespace["async_write_schedule"](
+                    coordinator,
+                    weekly_schedule_enabled=True,
+                    days=[{"day": "Monday", "periods": []}],
+                )
+            )
+
+        self.assertEqual(events, [])
+
+        coordinator._load_schedule_days = lambda _days: {1}
+        coordinator.schedule_day_records = lambda _day: {}
+        asyncio.run(
+            namespace["async_write_schedule"](
+                coordinator,
+                days=[{"day": "Monday", "periods": []}],
+            )
+        )
+        self.assertEqual(events, ["diff", "listeners"])
 
     def test_schedule_state_write_reports_transport_failure(self):
         source = COORDINATOR_PATH.read_text()

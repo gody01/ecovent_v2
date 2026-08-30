@@ -233,6 +233,15 @@ class FanCapabilitiesMixin:
             )
         return f"{value[1]:02d}:{value[0]:02d}"
 
+    def _decode_time_seconds_minutes_hours(self, input, parameter):
+        """Decode a three-byte wall-clock value into h/m/s components."""
+        seconds, minutes, hours = self._decode_exact_bytes(input, 3, parameter)
+        if seconds > 59 or minutes > 59 or hours > 23:
+            raise ValueError(
+                f"Invalid {parameter}: {hours:02d}:{minutes:02d}:{seconds:02d}"
+            )
+        return hours, minutes, seconds
+
     def _decode_duration_seconds(self, input, parameter):
         """Decode a three-byte little-endian duration into h/m/s components."""
         value = int.from_bytes(

@@ -395,6 +395,21 @@ def test_identity_gate_rejects_non_a21_before_any_write():
     assert [call[0] for call in client.calls] == ["connect", "read_input_registers"]
 
 
+def test_identity_gate_rejects_a_non_integer_modbus_word_before_any_write():
+    client = FakeModbusClient()
+    client.input_registers[37] = 1.5
+    fan = device(client)
+
+    with pytest.raises(A21ModbusError, match="invalid input_register response"):
+        fan.init_device()
+
+    assert fan.identity_probe_failed is True
+    assert fan.raw_registers == {}
+    assert fan.decoded_registers == {}
+    assert fan.set_param("state", "on") is False
+    assert client.coils[0] is False
+
+
 def test_identity_reprobe_error_clears_state_and_blocks_writes():
     client = FakeModbusClient()
     fan = device(client)
@@ -468,6 +483,33 @@ def test_poll_missing_identity_does_not_publish_other_fresh_values():
     assert fan.update() is True
     assert fan.state == "on"
     assert fan.speed == "speed_5"
+
+
+def test_malformed_identity_replaces_prior_unavailable_classification():
+    client = FakeModbusClient()
+    fan = device(client)
+    identity_slot = (Table.INPUT_REGISTER, 37)
+
+    assert fan.update() is True
+    client.fail_slots.add(("read_input_registers", 37))
+    assert fan.update() is False
+    assert identity_slot in fan.unavailable_addresses
+
+    client.fail_slots.clear()
+    client.input_registers[37] = 1.5
+    with pytest.raises(a21_modbus.A21IdentityError, match="is None"):
+        fan.update()
+
+    assert identity_slot not in fan.unavailable_addresses
+    assert fan.identity_probe_failed is True
+    assert fan.last_poll_complete is False
+    assert fan.raw_registers == {}
+    assert fan.decoded_registers == {}
+    assert fan.set_param("state", "on") is False
+
+    client.input_registers[37] = 1
+    assert fan.update() is True
+    assert fan.identity_probe_failed is False
 
 
 def test_identity_rejection_blocks_writes_until_a_valid_poll():
@@ -570,6 +612,31 @@ def test_raw_api_uses_all_published_modbus_function_shapes():
         "write_registers",
     } <= names
     assert all(call[-1] == 7 for call in client.calls if call[0] != "connect")
+
+
+def test_raw_io_rejects_values_that_integer_coercion_would_change():
+    client = FakeModbusClient()
+    fan = device(client)
+
+    client.input_registers[37] = True
+    with pytest.raises(A21ModbusError, match="invalid input_register response"):
+        fan.read_raw(Table.INPUT_REGISTER, 37)
+
+    client.coils[0] = 1.5
+    with pytest.raises(A21ModbusError, match="invalid coil response"):
+        fan.read_raw(Table.COIL, 0)
+
+    for invalid_bit in (-1, 2):
+        client.coils[0] = invalid_bit
+        with pytest.raises(A21ModbusError, match="invalid coil response"):
+            fan.read_raw(Table.COIL, 0)
+
+    with pytest.raises(ValueError, match="coil values must be boolean"):
+        fan.write_raw(Table.COIL, 0, (1.0,))
+    with pytest.raises(ValueError, match="register values must be 0..65535"):
+        fan.write_raw(Table.HOLDING_REGISTER, 2, (1.5,))
+    with pytest.raises(ValueError, match="register values must be 0..65535"):
+        fan.write_raw(Table.HOLDING_REGISTER, 2, (True,))
 
 
 def test_write_permissions_ranges_and_enum_are_enforced():
@@ -762,6 +829,34 @@ def test_malformed_optional_value_keeps_core_update_but_marks_poll_incomplete():
     fan._decode_cache = lambda: frozenset()
     assert fan.read_all_registers() is True
     assert fan.last_poll_complete is True
+
+
+def test_malformed_optional_raw_word_is_isolated_without_republishing_stale_state():
+    client = FakeModbusClient()
+    fan = device(client)
+    humidity_slot = (Table.INPUT_REGISTER, 10)
+
+    assert fan.update() is True
+    assert fan.humidity == 55
+    client.fail_slots.add(("read_input_registers", 10))
+
+    assert fan.update() is True
+    assert humidity_slot in fan.unavailable_addresses
+    assert fan.humidity is None
+
+    client.fail_slots.clear()
+    client.input_registers[10] = 1.5
+
+    assert fan.update() is True
+    assert fan.last_poll_complete is False
+    assert humidity_slot not in fan.raw_registers
+    assert "IR_CurRH_Int" not in fan.decoded_registers
+    assert fan.humidity is None
+    assert humidity_slot not in fan.unavailable_addresses
+
+    client.input_registers[10] = 60
+    assert fan.update() is True
+    assert fan.humidity == 60
 
 
 def test_quick_polls_publish_cache_transitions_serially():
@@ -985,7 +1080,9 @@ def test_preset_poll_decodes_values_and_evicts_them_after_transport_failure():
             if address == 5 and count == 13:
                 self.calls.append(("read_holding_registers", address, count, device_id))
                 return Response(error=True)
-            return super().read_holding_registers(address, count=count, device_id=device_id)
+            return super().read_holding_registers(
+                address, count=count, device_id=device_id
+            )
 
     fan._client = FailedPresetClient()
     assert not fan.update_preset_speed_settings()

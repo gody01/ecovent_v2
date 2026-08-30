@@ -254,8 +254,9 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         """Read and cache the full weekly schedule from the device."""
         self._load_schedule_days(range(1, 8))
 
-    def _load_schedule_days(self, days) -> None:
-        """Read and cache selected weekly schedule days from the device."""
+    def _load_schedule_days(self, days) -> set[int]:
+        """Read selected schedule days and return those confirmed as fresh."""
+        loaded_days: set[int] = set()
         for day in sorted(set(days)):
             try:
                 records = self._fan.read_weekly_schedule_day(day)
@@ -289,6 +290,9 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                 )
                 continue
             self._weekly_schedule[day] = records
+            loaded_days.add(day)
+
+        return loaded_days
 
     def _supports_device_clock_sync(self) -> bool:
         """Return whether this device exposes writable RTC date and time rows."""
@@ -594,6 +598,26 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         if selected_day is not None:
             self._schedule_day = SCHEDULE_DAY_TO_INDEX[selected_day]
 
+        day_payloads = []
+        if days:
+            for day_payload in days:
+                day_label = str(day_payload["day"])
+                day = SCHEDULE_DAY_TO_INDEX[day_label]
+                day_payloads.append((day_label, day, day_payload))
+
+            requested_days = {day for _, day, _ in day_payloads}
+            if self._fan.supports_parameter("weekly_schedule_setup"):
+                refreshed_days = await self.hass.async_add_executor_job(
+                    self._load_schedule_days,
+                    requested_days,
+                )
+                if refreshed_days != requested_days:
+                    failed_days = sorted(requested_days - refreshed_days)
+                    raise RuntimeError(
+                        "Failed to refresh weekly schedule before writing "
+                        f"days {failed_days} for {self._fan.name}"
+                    )
+
         if weekly_schedule_enabled is not None:
             target = "on" if weekly_schedule_enabled else "off"
             if self._fan.weekly_schedule_state != target:
@@ -619,19 +643,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                         f"{target!r} for {self._fan.name}"
                     )
 
-        if days:
-            day_payloads = []
-            for day_payload in days:
-                day_label = str(day_payload["day"])
-                day = SCHEDULE_DAY_TO_INDEX[day_label]
-                day_payloads.append((day_label, day, day_payload))
-
-            if self._fan.supports_parameter("weekly_schedule_setup"):
-                await self.hass.async_add_executor_job(
-                    self._load_schedule_days,
-                    [day for _, day, _ in day_payloads],
-                )
-
+        if day_payloads:
             for day_label, day, day_payload in day_payloads:
                 current_records = self.schedule_day_records(day)
                 records_to_write = changed_schedule_records(

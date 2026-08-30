@@ -203,6 +203,10 @@ class A21IllegalAddressError(A21ModbusError):
     """A controller rejected a range because at least one address is absent."""
 
 
+class A21InvalidResponseError(A21ModbusError):
+    """A controller returned a value outside the Modbus wire representation."""
+
+
 def _safe_identity(value: str) -> str:
     """Return an identifier containing only stable registry-safe characters."""
     return re.sub(r"[^a-zA-Z0-9_.-]+", "-", value).strip("-")
@@ -261,6 +265,7 @@ class A21ModbusDevice(Fan):
         self._raw: dict[tuple[Table, int], int] = {}
         self._decoded: dict[str, Any] = {}
         self._unavailable: set[tuple[Table, int]] = set()
+        self._invalid_response_slots: set[tuple[Table, int]] = set()
         self.last_poll_complete = False
         self.identity_probe_failed = False
         self._writes_blocked_by_identity = False
@@ -475,19 +480,42 @@ class A21ModbusDevice(Fan):
                 self._invoke(method, address, count=count, device_id=self.unit_id),
                 f"read {table.value} {address}:{address + count - 1}",
             )
-            values = (
-                tuple(int(value) for value in response.bits[:count])
+            source = (
+                getattr(response, "bits", None)
                 if table in {Table.COIL, Table.DISCRETE_INPUT}
-                else tuple(int(value) for value in response.registers[:count])
+                else getattr(response, "registers", None)
             )
-            if len(values) != count:
+            raw_values = tuple(source[:count]) if source is not None else ()
+            if len(raw_values) != count:
                 raise A21ModbusError(
                     f"A21 Modbus short {table.value} response: "
-                    f"expected {count}, got {len(values)}"
+                    f"expected {count}, got {len(raw_values)}"
                 )
+            if table in {Table.COIL, Table.DISCRETE_INPUT}:
+                if any(
+                    not isinstance(value, (bool, int))
+                    or value not in {False, True, 0, 1}
+                    for value in raw_values
+                ):
+                    raise A21InvalidResponseError(
+                        f"A21 Modbus invalid {table.value} response: {raw_values!r}"
+                    )
+                values = tuple(int(value) for value in raw_values)
+            else:
+                if any(
+                    not isinstance(value, int)
+                    or isinstance(value, bool)
+                    or not 0 <= value <= 0xFFFF
+                    for value in raw_values
+                ):
+                    raise A21InvalidResponseError(
+                        f"A21 Modbus invalid {table.value} response: {raw_values!r}"
+                    )
+                values = raw_values
             for offset, value in enumerate(values):
                 self._raw[(table, address + offset)] = value
                 self._unavailable.discard((table, address + offset))
+                self._invalid_response_slots.discard((table, address + offset))
             return values
 
     def write_raw(
@@ -514,7 +542,11 @@ class A21ModbusDevice(Fan):
                 )
             self._ensure_connected()
             if table is Table.COIL:
-                if any(value not in {False, True, 0, 1} for value in values):
+                if any(
+                    not isinstance(value, (bool, int))
+                    or value not in {False, True, 0, 1}
+                    for value in values
+                ):
                     raise ValueError("Modbus coil values must be boolean")
                 bool_values = tuple(bool(value) for value in values)
                 if len(bool_values) == 1:
@@ -533,9 +565,14 @@ class A21ModbusDevice(Fan):
                     )
                 cached = tuple(int(value) for value in bool_values)
             else:
-                words = tuple(int(value) for value in values)
-                if any(value < 0 or value > 0xFFFF for value in words):
+                if any(
+                    not isinstance(value, int)
+                    or isinstance(value, bool)
+                    or not 0 <= value <= 0xFFFF
+                    for value in values
+                ):
                     raise ValueError("Modbus register values must be 0..65535")
+                words = tuple(values)
                 if len(words) == 1:
                     response = self._invoke(
                         self._client.write_register,
@@ -556,6 +593,7 @@ class A21ModbusDevice(Fan):
                 slot = (table, address + offset)
                 self._raw[slot] = value
                 self._unavailable.discard(slot)
+                self._invalid_response_slots.discard(slot)
             return True
 
     def read_register(self, key: str) -> Any:
@@ -627,7 +665,7 @@ class A21ModbusDevice(Fan):
             try:
                 self.read_raw(table, address, count)
                 return True
-            except A21IllegalAddressError:
+            except (A21IllegalAddressError, A21InvalidResponseError) as err:
                 if split_budget[0] <= 0:
                     raise A21ModbusError(
                         f"A21 {table.value} returned too many illegal-address responses"
@@ -635,12 +673,17 @@ class A21ModbusDevice(Fan):
                 split_budget[0] -= 1
                 if count == 1:
                     slot = (table, address)
-                    self._unavailable.add(slot)
+                    if isinstance(err, A21IllegalAddressError):
+                        self._unavailable.add(slot)
+                        self._invalid_response_slots.discard(slot)
+                        reason = "unavailable"
+                    else:
+                        self._invalid_response_slots.add(slot)
+                        self._unavailable.discard(slot)
+                        reason = "invalid"
                     spec = get_by_address(table, address)
                     self._evict_cached_range(spec.table, spec.address, spec.word_count)
-                    _LOGGER.debug(
-                        "A21 address unavailable: %s/%d", table.value, address
-                    )
+                    _LOGGER.debug("A21 address %s: %s/%d", reason, table.value, address)
                     return False
                 left = count // 2
                 left_complete = self._read_resilient(
@@ -720,6 +763,7 @@ class A21ModbusDevice(Fan):
             )
             if not include_sensitive:
                 self._evict_sensitive_cache()
+            self._invalid_response_slots.clear()
             complete = True
             for table, address, count in ranges:
                 complete = self._read_resilient(table, address, count) and complete
@@ -730,7 +774,9 @@ class A21ModbusDevice(Fan):
             self._verify_cached_identity()
             invalid_slots = self._decode_cache()
             self.last_poll_complete = complete and not invalid_slots
-            failed_slots = self._unavailable | invalid_slots
+            failed_slots = (
+                self._unavailable | self._invalid_response_slots | invalid_slots
+            )
             return not bool(_REQUIRED_POLL_SLOTS & failed_slots)
 
     def _verify_cached_identity(self) -> None:
@@ -805,13 +851,16 @@ class A21ModbusDevice(Fan):
                 (Table.HOLDING_REGISTER, 0, 76),
             )
             self._evict_sensitive_cache()
+            self._invalid_response_slots.clear()
             complete = True
             for table, address, count in ranges:
                 complete = self._read_resilient(table, address, count) and complete
             self._verify_cached_identity()
             invalid_slots = self._decode_cache()
             self.last_poll_complete = complete and not invalid_slots
-            failed_slots = self._unavailable | invalid_slots
+            failed_slots = (
+                self._unavailable | self._invalid_response_slots | invalid_slots
+            )
             return not bool(_REQUIRED_POLL_SLOTS & failed_slots)
 
     def update_preset_speed_settings(self) -> bool:

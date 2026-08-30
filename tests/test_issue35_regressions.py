@@ -379,7 +379,7 @@ class Issue35RegressionTest(unittest.TestCase):
             register.index("if not coordinator.last_update_success"),
             register.index("_async_update_unsupported_optional_poll_entities"),
         )
-        self.assertGreater(
+        self.assertLess(
             setup.index("_async_register_optional_poll_entity_sync"),
             setup.index("async_forward_entry_setups"),
         )
@@ -499,15 +499,20 @@ class Issue35RegressionTest(unittest.TestCase):
         init_source = INIT_PATH.read_text()
         coordinator_source = (COMPONENT_PATH / "coordinator.py").read_text()
         init_tree = _tree(INIT_PATH)
+        delete_issue = ast.get_source_segment(
+            init_source,
+            _module_function(init_tree, "_delete_hardware_profile_mismatch_issue"),
+        )
         unload = ast.get_source_segment(
             init_source,
             _module_function(init_tree, "async_unload_entry"),
         )
 
-        self.assertIn("async_delete_hardware_profile_mismatch_issue", unload)
-        self.assertIn("except Exception as err", unload)
+        self.assertIn("async_delete_hardware_profile_mismatch_issue", delete_issue)
+        self.assertIn("except Exception as err", delete_issue)
+        self.assertIn("_delete_hardware_profile_mismatch_issue", unload)
         self.assertLess(
-            unload.index("except Exception as err"),
+            unload.index("_delete_hardware_profile_mismatch_issue"),
             unload.index("coordinator = hass.data"),
         )
         self.assertIn("hardware_profile_mismatch_issue_id", coordinator_source)
@@ -617,7 +622,11 @@ class Issue35RegressionTest(unittest.TestCase):
     def test_setup_failure_closes_and_removes_coordinator(self):
         init_tree = _tree(INIT_PATH)
         close_coordinator = _module_function(init_tree, "_async_close_coordinator")
+        delete_issue = _module_function(
+            init_tree, "_delete_hardware_profile_mismatch_issue"
+        )
         setup_entry = _module_function(init_tree, "async_setup_entry")
+        deleted = []
         namespace = {
             "HomeAssistant": object,
             "ConfigEntry": object,
@@ -631,13 +640,19 @@ class Issue35RegressionTest(unittest.TestCase):
             "CONF_TRANSPORT": "transport",
             "TRANSPORT_BGCP_UDP": "bgcp_udp",
             "DOMAIN": "ecovent_v2",
-            "_LOGGER": types.SimpleNamespace(warning=lambda *_args, **_kwargs: None),
+            "async_delete_hardware_profile_mismatch_issue": (
+                lambda _hass, entry_id: deleted.append(entry_id)
+            ),
+            "_LOGGER": types.SimpleNamespace(
+                warning=lambda *_args, **_kwargs: None,
+                error=lambda *_args, **_kwargs: None,
+            ),
         }
         exec(
             compile(
                 ast.fix_missing_locations(
                     ast.Module(
-                        body=[close_coordinator, setup_entry],
+                        body=[close_coordinator, delete_issue, setup_entry],
                         type_ignores=[],
                     )
                 ),
@@ -662,10 +677,13 @@ class Issue35RegressionTest(unittest.TestCase):
 
         namespace["EcoVentCoordinator"] = Coordinator
         namespace["async_register_frontend"] = fail_frontend
-        hass = types.SimpleNamespace(
-            data={},
-            async_add_executor_job=lambda callback: asyncio.to_thread(callback),
-        )
+        class Hass:
+            data = {}
+
+            async def async_add_executor_job(self, callback):
+                return callback()
+
+        hass = Hass()
         entry = types.SimpleNamespace(
             entry_id="entry-1",
             data={"update_interval": 30},
@@ -676,7 +694,104 @@ class Issue35RegressionTest(unittest.TestCase):
             asyncio.run(namespace["async_setup_entry"](hass, entry))
 
         self.assertEqual(closed, ["close"])
+        self.assertEqual(deleted, ["entry-1"])
         self.assertNotIn("entry-1", hass.data.get("ecovent_v2", {}))
+
+    def test_setup_failure_before_platform_forward_closes_and_removes_coordinator(self):
+        init_tree = _tree(INIT_PATH)
+        methods = [
+            _module_function(init_tree, name)
+            for name in (
+                "_async_close_coordinator",
+                "_delete_hardware_profile_mismatch_issue",
+                "async_setup_entry",
+            )
+        ]
+        events = []
+        namespace = {
+            "HomeAssistant": object,
+            "ConfigEntry": object,
+            "EcoVentCoordinator": object,
+            "CONF_IP_ADDRESS": "ip_address",
+            "CONF_PORT": "port",
+            "CONF_PASSWORD": "password",
+            "CONF_NAME": "name",
+            "UPDATE_INTERVAL": "update_interval",
+            "CONF_AUTO_CLOCK_SYNC": "auto_clock_sync",
+            "CONF_TRANSPORT": "transport",
+            "TRANSPORT_BGCP_UDP": "bgcp_udp",
+            "DOMAIN": "ecovent_v2",
+            "_PLATFORMS": ["sensor", "fan"],
+            "async_delete_hardware_profile_mismatch_issue": (
+                lambda _hass, _entry_id: events.append("delete")
+            ),
+            "_LOGGER": types.SimpleNamespace(
+                warning=lambda *_args, **_kwargs: None,
+                error=lambda *_args, **_kwargs: None,
+            ),
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=methods, type_ignores=[])),
+                str(INIT_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+
+        class Coordinator:
+            def __init__(self, _hass, _entry, update_seconds):
+                self.update_seconds = update_seconds
+                self._fan = types.SimpleNamespace(
+                    close=lambda: events.append("close")
+                )
+
+            async def async_config_entry_first_refresh(self):
+                return None
+
+        class ConfigEntries:
+            async def async_forward_entry_setups(self, _entry, platforms):
+                events.append(("forward", tuple(platforms)))
+
+        class Hass:
+            def __init__(self):
+                self.data = {}
+                self.config_entries = ConfigEntries()
+
+            async def async_add_executor_job(self, callback):
+                return callback()
+
+        async def register_frontend(_hass):
+            return None
+
+        async def migrate_statistics(*_args):
+            return None
+
+        namespace.update(
+            {
+                "EcoVentCoordinator": Coordinator,
+                "async_register_frontend": register_frontend,
+                "_async_migrate_entity_registry": lambda *_args: None,
+                "_async_migrate_statistics_metadata_on_start": migrate_statistics,
+                "_async_register_optional_poll_entity_sync": (
+                    lambda *_args: (_ for _ in ()).throw(
+                        RuntimeError("registry sync failed")
+                    )
+                ),
+            }
+        )
+        entry = types.SimpleNamespace(
+            entry_id="entry-1",
+            data={"update_interval": 30},
+            runtime_data=None,
+        )
+
+        hass = Hass()
+        with self.assertRaisesRegex(RuntimeError, "registry sync failed"):
+            asyncio.run(namespace["async_setup_entry"](hass, entry))
+
+        self.assertEqual(events, ["delete", "close"])
+        self.assertNotIn("entry-1", hass.data["ecovent_v2"])
 
     def test_switch_none_state_remains_unknown(self):
         switch_source = SWITCH_PATH.read_text()

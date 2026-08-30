@@ -595,8 +595,16 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         days: list[dict[str, object]] | None = None,
     ) -> None:
         """Apply one schedule payload from the custom dialog."""
-        if selected_day is not None:
-            self._schedule_day = SCHEDULE_DAY_TO_INDEX[selected_day]
+        selected_day_index = (
+            SCHEDULE_DAY_TO_INDEX[selected_day] if selected_day is not None else None
+        )
+
+        if (
+            weekly_schedule_enabled is not None or days
+        ) and not self._fan.supports_parameter("weekly_schedule_setup"):
+            raise RuntimeError(
+                f"Weekly schedules are not supported by {self._fan.name}"
+            )
 
         day_payloads = []
         prepared_day_writes = []
@@ -734,6 +742,8 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                             f"{day_label} on {self._fan.name}"
                         )
 
+        if selected_day_index is not None:
+            self._schedule_day = selected_day_index
         self.async_update_listeners()
 
     async def async_sync_device_clock(self) -> None:

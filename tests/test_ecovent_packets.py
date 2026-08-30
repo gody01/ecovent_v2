@@ -101,6 +101,25 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertIsNotNone(record)
         self.assertEqual((record.day, record.period), (1, 1))
 
+    def test_schedule_read_learns_only_explicit_unsupported_response(self):
+        fan = Fan("192.0.2.1")
+        fan.send = lambda _data: True
+        fan.receive = lambda: packet_with_payload([0xFD, 0x77])
+
+        self.assertIsNone(fan.read_weekly_schedule_record(1, 1))
+        self.assertFalse(fan.supports_parameter("weekly_schedule_setup"))
+        self.assertIn(0x0077, fan.unsupported_optional_poll_parameter_ids())
+
+        retryable = Fan("192.0.2.1")
+        retryable.send = lambda _data: True
+        retryable.receive = lambda: False
+
+        self.assertIsNone(retryable.read_weekly_schedule_record(1, 1))
+        self.assertTrue(retryable.supports_parameter("weekly_schedule_setup"))
+        self.assertNotIn(
+            0x0077, retryable.unsupported_optional_poll_parameter_ids()
+        )
+
     def test_update_does_not_poll_weekly_schedule_setup(self):
         fan = Fan("192.0.2.1")
         self.assertTrue(

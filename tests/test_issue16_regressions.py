@@ -217,7 +217,7 @@ class Issue16RegressionTest(unittest.TestCase):
             return [unsupported_record]
 
         namespace = {
-            "SCHEDULE_DAY_TO_INDEX": {"Monday": 1},
+            "SCHEDULE_DAY_TO_INDEX": {"Monday": 1, "Tuesday": 2},
             "changed_schedule_records": changed_records,
         }
         exec(
@@ -261,6 +261,7 @@ class Issue16RegressionTest(unittest.TestCase):
             asyncio.run(
                 namespace["async_write_schedule"](
                     coordinator,
+                    selected_day="Tuesday",
                     weekly_schedule_enabled=True,
                     days=[
                         {
@@ -272,6 +273,70 @@ class Issue16RegressionTest(unittest.TestCase):
             )
 
         self.assertEqual(events, ["validate"])
+        self.assertEqual(coordinator._schedule_day, 1)
+
+        asyncio.run(
+            namespace["async_write_schedule"](
+                coordinator,
+                selected_day="Tuesday",
+            )
+        )
+        self.assertEqual(coordinator._schedule_day, 2)
+        self.assertEqual(events, ["validate", "listeners"])
+
+    def test_schedule_write_stops_after_device_rejects_schedule_rows(self):
+        method = _class_method(
+            ast.parse(COORDINATOR_PATH.read_text()),
+            "EcoVentCoordinator",
+            "async_write_schedule",
+        )
+        events = []
+        namespace = {
+            "SCHEDULE_DAY_TO_INDEX": {"Monday": 1, "Tuesday": 2},
+            "changed_schedule_records": lambda *_args: events.append("diff"),
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+                str(COORDINATOR_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+
+        class Fan:
+            name = "Test fan"
+            weekly_schedule_state = "off"
+
+            def supports_parameter(self, _name):
+                return False
+
+            def set_param(self, *_args):
+                events.append("write-state")
+                return True
+
+            def write_weekly_schedule_record(self, _record):
+                events.append("write-record")
+                return True
+
+        coordinator = types.SimpleNamespace(
+            _fan=Fan(),
+            _schedule_day=1,
+            async_update_listeners=lambda: events.append("listeners"),
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "not supported"):
+            asyncio.run(
+                namespace["async_write_schedule"](
+                    coordinator,
+                    selected_day="Tuesday",
+                    weekly_schedule_enabled=True,
+                    days=[{"day": "Monday", "periods": []}],
+                )
+            )
+
+        self.assertEqual(events, [])
+        self.assertEqual(coordinator._schedule_day, 1)
 
     def test_schedule_state_change_rebuilds_writes_from_fresh_readback(self):
         method = _class_method(
@@ -407,6 +472,9 @@ class Issue16RegressionTest(unittest.TestCase):
             weekly_schedule_state = "off"
             name = "Test fan"
 
+            def supports_parameter(self, _name):
+                return True
+
             def set_param(self, name, value):
                 events.append(("write", name, value))
                 return True
@@ -463,6 +531,9 @@ class Issue16RegressionTest(unittest.TestCase):
         class Fan:
             weekly_schedule_state = "off"
             name = "Test fan"
+
+            def supports_parameter(self, _name):
+                return True
 
             def set_param(self, _name, _value):
                 events.append("write")
@@ -523,7 +594,7 @@ class Issue16RegressionTest(unittest.TestCase):
             device_profile = types.SimpleNamespace(schedule_speed_modes=("low",))
 
             def supports_parameter(self, _name):
-                return False
+                return True
 
             def write_weekly_schedule_record(self, _record):
                 return True
@@ -537,6 +608,7 @@ class Issue16RegressionTest(unittest.TestCase):
             _fan=Fan(),
             _schedule_day=1,
             _weekly_schedule={1: {}},
+            _load_schedule_days=lambda days: set(days),
             schedule_day_records=lambda _day: {},
             _async_reconcile_schedule_day=None,
             async_update_listeners=lambda: events.append("listeners"),
@@ -596,7 +668,7 @@ class Issue16RegressionTest(unittest.TestCase):
             device_profile = types.SimpleNamespace(schedule_speed_modes=("low",))
 
             def supports_parameter(self, _name):
-                return False
+                return True
 
             def write_weekly_schedule_record(self, record):
                 events.append(("write", record.period))
@@ -617,6 +689,7 @@ class Issue16RegressionTest(unittest.TestCase):
                     for period in range(1, 5)
                 }
             },
+            _load_schedule_days=lambda days: set(days),
             schedule_day_records=lambda day: dict(actual),
             _async_reconcile_schedule_day=None,
             async_update_listeners=lambda: events.append("listeners"),

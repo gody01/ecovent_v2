@@ -909,7 +909,13 @@ class FanProtocolMixin:
         self._weekly_schedule_setup = None
         self._weekly_schedule_setup_record = None
         request_value = bytes([day, period]).hex()
-        if not self.send_command(self.func["read"], "0077", request_value):
+        read_complete = self.send_command(
+            self.func["read"], "0077", request_value
+        )
+        if 0x0077 in set(self._last_unsupported_param_ids or ()):
+            self._unsupported_optional_poll_param_ids().add(0x0077)
+            return None
+        if not read_complete:
             return None
         record = self._weekly_schedule_setup_record
         if record is None or record.day != day or record.period != period:

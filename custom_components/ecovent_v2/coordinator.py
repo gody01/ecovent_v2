@@ -246,6 +246,9 @@ class EcoVentCoordinator(DataUpdateCoordinator):
             )
             return False
 
+        if not self._fan.supports_parameter("weekly_schedule_setup"):
+            return self.updateCounter % 10 == 0
+
         return not self._weekly_schedule or (
             state == "on" and self.updateCounter % 10 == 0
         )

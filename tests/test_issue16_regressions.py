@@ -82,12 +82,14 @@ class Issue16RegressionTest(unittest.TestCase):
         coordinator = types.SimpleNamespace(
             _fan=fan,
             _weekly_schedule={},
-            updateCounter=1,
+            updateCounter=10,
         )
 
         self.assertFalse(fan.supports_parameter("weekly_schedule_setup"))
         self.assertTrue(fan.profile_supports_parameter("weekly_schedule_setup"))
         self.assertTrue(namespace["_should_refresh_schedule_week"](coordinator))
+        coordinator.updateCounter = 1
+        self.assertFalse(namespace["_should_refresh_schedule_week"](coordinator))
 
     def test_bgcp_fan_declares_transport_used_by_schedule_preflight(self):
         self.assertEqual(Fan("192.0.2.1").transport, "bgcp_udp")

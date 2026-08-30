@@ -284,6 +284,88 @@ class Issue16RegressionTest(unittest.TestCase):
         self.assertEqual(coordinator._schedule_day, 2)
         self.assertEqual(events, ["validate", "listeners"])
 
+    def test_bgcp_final_period_is_validated_before_any_schedule_write(self):
+        method = _class_method(
+            ast.parse(COORDINATOR_PATH.read_text()),
+            "EcoVentCoordinator",
+            "async_write_schedule",
+        )
+        events = []
+        current = {
+            period: types.SimpleNamespace(
+                period=period,
+                speed="low",
+                end_hour=0 if period == 4 else period * 4,
+                end_minute=0,
+            )
+            for period in range(1, 5)
+        }
+        changed = [
+            types.SimpleNamespace(
+                period=1, speed="low", end_hour=5, end_minute=0
+            ),
+            types.SimpleNamespace(
+                period=4, speed="low", end_hour=1, end_minute=0
+            ),
+        ]
+        namespace = {
+            "SCHEDULE_DAY_TO_INDEX": {"Monday": 1},
+            "changed_schedule_records": lambda *_args: changed,
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+                str(COORDINATOR_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+
+        class Hass:
+            async def async_add_executor_job(self, callback, *args):
+                return callback(*args)
+
+        class Fan:
+            name = "Vento"
+            transport = "bgcp_udp"
+            weekly_schedule_state = "off"
+            device_profile = types.SimpleNamespace(schedule_speed_modes=("low",))
+
+            def supports_parameter(self, _name):
+                return True
+
+            def write_weekly_schedule_record(self, _record):
+                events.append("write")
+                return True
+
+        coordinator = types.SimpleNamespace(
+            hass=Hass(),
+            _fan=Fan(),
+            _schedule_day=1,
+            _weekly_schedule={1: current},
+            _load_schedule_days=lambda days: set(days),
+            schedule_day_records=lambda _day: current,
+            async_update_listeners=lambda: events.append("listeners"),
+        )
+
+        with self.assertRaisesRegex(ValueError, "must end at midnight"):
+            asyncio.run(
+                namespace["async_write_schedule"](
+                    coordinator,
+                    days=[
+                        {
+                            "day": "Monday",
+                            "periods": [
+                                {"period": 1, "end": "05:00"},
+                                {"period": 4, "end": "01:00"},
+                            ],
+                        }
+                    ],
+                )
+            )
+
+        self.assertEqual(events, [])
+
     def test_schedule_write_stops_after_device_rejects_schedule_rows(self):
         method = _class_method(
             ast.parse(COORDINATOR_PATH.read_text()),

@@ -379,6 +379,51 @@ def test_invalid_opportunistic_write_does_not_block_primary_command():
     assert receipts == [False]
 
 
+def test_write_raw_evicts_overlapping_decoded_and_semantic_cache():
+    client = FakeModbusClient()
+    fan = device(client)
+
+    assert fan.read_register("HR_SPEED_MODE") == 1
+    assert fan.speed == "speed_1"
+
+    assert fan.write_raw(Table.HOLDING_REGISTER, 2, (5,)) is True
+    assert fan.raw_registers[(Table.HOLDING_REGISTER, 2)] == 5
+    assert "HR_SPEED_MODE" not in fan.decoded_registers
+    assert fan.speed is None
+
+
+@pytest.mark.parametrize("poll_method", ("update", "quick_update"))
+def test_transport_failure_clears_unconfirmed_poll_cache(poll_method):
+    class FlakyTransport(FakeModbusClient):
+        fail_transport = False
+
+        def read_coils(self, address, *, count, device_id):
+            if self.fail_transport:
+                raise ConnectionError("A21 transport unavailable")
+            return super().read_coils(address, count=count, device_id=device_id)
+
+    client = FlakyTransport()
+    fan = device(client)
+    assert fan.update() is True
+    assert fan.state == "off"
+    assert fan.speed == "speed_1"
+
+    client.fail_transport = True
+    with pytest.raises(A21ModbusError, match="transport unavailable"):
+        getattr(fan, poll_method)()
+
+    assert fan.last_poll_complete is False
+    assert fan.raw_registers == {}
+    assert fan.decoded_registers == {}
+    assert fan.state is None
+    assert fan.speed is None
+
+    client.fail_transport = False
+    assert fan.update() is True
+    assert fan.state == "off"
+    assert fan.speed == "speed_1"
+
+
 def test_identity_gate_rejects_non_a21_before_any_write():
     client = FakeModbusClient(identity=2)
     fan = device(client)
@@ -482,6 +527,30 @@ def test_poll_missing_identity_does_not_publish_other_fresh_values():
     client.fail_slots.clear()
     assert fan.update() is True
     assert fan.state == "on"
+    assert fan.speed == "speed_5"
+
+
+def test_required_poll_failure_cannot_republish_residual_decoded_state():
+    client = FakeModbusClient()
+    fan = device(client)
+
+    assert fan.update() is True
+    client.fail_slots.add(("read_coils", 0))
+    client.holding_registers[2] = 5
+
+    assert fan.update() is False
+    assert fan.raw_registers == {}
+    assert fan.decoded_registers == {}
+    assert fan.state is None
+    assert fan.speed is None
+
+    assert fan.write_register("HR_SetTEMP", 24) is True
+    assert fan.state is None
+    assert fan.speed is None
+
+    client.fail_slots.clear()
+    assert fan.update() is True
+    assert fan.state == "off"
     assert fan.speed == "speed_5"
 
 

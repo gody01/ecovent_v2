@@ -104,12 +104,22 @@ class PacketBuilderTest(unittest.TestCase):
 
     def test_schedule_read_learns_only_explicit_unsupported_response(self):
         fan = Fan("192.0.2.1")
-        fan.send = lambda _data: True
+        calls = []
+        fan.send = lambda data: calls.append(data) or True
         fan.receive = lambda: packet_with_payload([0xFD, 0x77])
 
         self.assertIsNone(fan.read_weekly_schedule_record(1, 1))
         self.assertFalse(fan.supports_parameter("weekly_schedule_setup"))
         self.assertIn(0x0077, fan.unsupported_optional_poll_parameter_ids())
+
+        fan.receive = lambda: packet_with_payload(
+            [0xFE, 0x06, 0x77, 0x01, 0x01, 0x01, 0x00, 0x00, 0x06]
+        )
+        record = fan.read_weekly_schedule_record(1, 1)
+        self.assertIsNotNone(record)
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(fan.supports_parameter("weekly_schedule_setup"))
+        self.assertNotIn(0x0077, fan.unsupported_optional_poll_parameter_ids())
 
         retryable = Fan("192.0.2.1")
         retryable.send = lambda _data: True
@@ -1601,6 +1611,31 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertFalse(fan.set_param("filter_timer_setpoint", "4700"))
         self.assertEqual(calls, [])
 
+    def test_write_rejects_unknown_enum_value_before_transport(self):
+        fan = Fan("192.0.2.1")
+        calls = []
+        fan.send = lambda data: calls.append(data) or True
+
+        self.assertFalse(fan.set_param("state", "03"))
+        self.assertFalse(fan.set_param("speed", "99"))
+        self.assertFalse(fan.set_param("airflow", "04"))
+        self.assertFalse(fan.set_param("timer_mode", "ff"))
+        self.assertFalse(fan.set_parameters({"state": "03"}))
+        self.assertEqual(calls, [])
+
+    def test_successful_targeted_read_restores_learned_unsupported_parameter(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        fan._unsupported_optional_poll_params = {0x0025}
+        fan.send = lambda _data: True
+        fan.receive = lambda: packet_with_payload([0x25, 0x37])
+
+        self.assertFalse(fan.supports_parameter("humidity"))
+        self.assertTrue(fan._read_params("0025"))
+        self.assertEqual(fan.humidity, "55")
+        self.assertEqual(fan.unsupported_optional_poll_parameter_ids(), frozenset())
+        self.assertTrue(fan.supports_parameter("humidity"))
+
     def test_freshbox_filter_timer_write_accepts_disabled_value(self):
         fan = Fan("192.0.2.1")
         fan.unit_type = "0200"
@@ -1627,6 +1662,19 @@ class PacketBuilderTest(unittest.TestCase):
         calls = []
         results = []
         fan.extra_write_parameters_callback = lambda: {"rtc_time": "ff3b17"}
+        fan.extra_write_parameters_result_callback = results.append
+        fan.send = lambda data: calls.append(data) or True
+        fan.receive = lambda: packet_for_write_command(calls[-1])
+
+        self.assertTrue(fan.set_param("state", "on"))
+        self.assertEqual(calls, ["030101"])
+        self.assertEqual(results, [False])
+
+    def test_duplicate_opportunistic_row_is_not_sent_twice(self):
+        fan = Fan("192.0.2.1")
+        calls = []
+        results = []
+        fan.extra_write_parameters_callback = lambda: {"state": "on"}
         fan.extra_write_parameters_result_callback = results.append
         fan.send = lambda data: calls.append(data) or True
         fan.receive = lambda: packet_for_write_command(calls[-1])

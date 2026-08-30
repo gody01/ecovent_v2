@@ -11,6 +11,7 @@ from .const import DOMAIN
 from .protocol_diagnostics import _report_version
 from .protocol_diagnostics import (
     hardware_profile_mismatch_issue_url,
+    reportable_hardware_profile_mismatch_param_ids,
     unsupported_optional_poll_parameter_details,
 )
 
@@ -23,6 +24,7 @@ async def async_get_config_entry_diagnostics(
     coordinator = hass.data[DOMAIN][entry.entry_id]
     fan = coordinator._fan
     unsupported_optional = unsupported_optional_poll_parameter_details(fan)
+    reportable_mismatch_params = reportable_hardware_profile_mismatch_param_ids(fan)
 
     diagnostics: dict[str, Any] = {
         "config_entry": {
@@ -47,8 +49,8 @@ async def async_get_config_entry_diagnostics(
             "unsupported_optional_poll_params": list(unsupported_optional),
         },
     }
-    if unsupported_optional:
+    if reportable_mismatch_params:
         diagnostics["hardware_profile_mismatch_issue_url"] = (
-            hardware_profile_mismatch_issue_url(fan)
+            hardware_profile_mismatch_issue_url(fan, reportable_mismatch_params)
         )
     return diagnostics

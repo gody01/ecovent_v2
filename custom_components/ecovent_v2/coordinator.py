@@ -638,6 +638,12 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                 expected_records = dict(current_records)
                 for record in records_to_write:
                     expected_records[record.period] = record
+                if getattr(self._fan, "transport", None) == "bgcp_udp":
+                    final_period = expected_records[4]
+                    if (final_period.end_hour, final_period.end_minute) != (0, 0):
+                        raise ValueError(
+                            "BGCP schedule period 4 must end at midnight"
+                        )
                 working_records_by_day[day] = expected_records
                 prepared.append((day_label, day, records_to_write, expected_records))
             return prepared

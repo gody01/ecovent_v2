@@ -247,6 +247,7 @@ class FanProtocolMixin:
                 for i in param[1]:
                     if param[1][i] == value:
                         return [index, i]
+                raise ValueError(f"Invalid {idx} value: {value!r}")
             return [index, None]
         else:
             return [None, None]
@@ -398,7 +399,15 @@ class FanProtocolMixin:
                         extra_write_parameters, False
                     )
                     return False
-                if not self._parameter_values_are_decodable(
+                if expected_write_values is not None and set(
+                    expected_extra_write_values
+                ) & set(expected_write_values):
+                    self._notify_extra_write_parameters_result(
+                        extra_write_parameters, False
+                    )
+                    extra_write_parameters = ""
+                    expected_extra_write_values = None
+                elif not self._parameter_values_are_decodable(
                     expected_extra_write_values
                 ):
                     self._notify_extra_write_parameters_result(
@@ -595,6 +604,7 @@ class FanProtocolMixin:
 
     def _mark_param_available_for_retry(self, param_id):
         self._optional_param_backoff().pop(param_id, None)
+        self._unsupported_optional_poll_param_ids().discard(param_id)
 
     def _delay_optional_param_retry(self, param_id):
         self._optional_param_backoff()[param_id] = OPTIONAL_PARAM_RETRY_BACKOFF_READS
@@ -835,7 +845,10 @@ class FanProtocolMixin:
     def set_param(self, param, value):
         if not self.supports_parameter(param):
             return False
-        valpar = self.get_params_values(param, value)
+        try:
+            valpar = self.get_params_values(param, value)
+        except ValueError:
+            return False
         # print ( "EcoventV2: " + " " + param + "/" + value , file = sys.stderr )
         if valpar[0] is not None:
             if valpar[1] is not None:
@@ -916,7 +929,7 @@ class FanProtocolMixin:
 
     def read_weekly_schedule_record(self, day, period):
         """Read one weekly schedule period via the special 0x0077 request."""
-        if not self.supports_parameter("weekly_schedule_setup"):
+        if not self.profile_supports_parameter("weekly_schedule_setup"):
             return None
 
         if day < 1 or day > 7 or period < 1 or period > 4:
@@ -940,6 +953,7 @@ class FanProtocolMixin:
             self._weekly_schedule_setup = None
             self._weekly_schedule_setup_record = None
             return None
+        self._mark_param_available_for_retry(0x0077)
         return record
 
     def read_weekly_schedule_day(self, day):

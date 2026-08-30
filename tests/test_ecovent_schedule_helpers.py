@@ -96,6 +96,15 @@ class WeeklyScheduleWritePlanTest(unittest.TestCase):
                 [{"period": 5, "speed": "Low"}],
             )
 
+    def test_bgcp_final_period_encoder_requires_midnight(self):
+        with self.assertRaisesRegex(ValueError, "must end at midnight"):
+            WeeklyScheduleRecord(1, 4, "low", 1, 0).to_hex_payload()
+
+        self.assertEqual(
+            WeeklyScheduleRecord(1, 4, "low", 0, 0).to_hex_payload(),
+            "010401000000",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -594,6 +594,9 @@ class A21ModbusDevice(Fan):
                 self._raw[slot] = value
                 self._unavailable.discard(slot)
                 self._invalid_response_slots.discard(slot)
+            self._evict_decoded_range(table, address, len(cached))
+            self._clear_semantic_state()
+            self._apply_semantics()
             return True
 
     def read_register(self, key: str) -> Any:
@@ -732,6 +735,10 @@ class A21ModbusDevice(Fan):
         """Forget values whose next read was not confirmed by the controller."""
         for offset in range(count):
             self._raw.pop((table, address + offset), None)
+        self._evict_decoded_range(table, address, count)
+
+    def _evict_decoded_range(self, table: Table, address: int, count: int) -> None:
+        """Forget decoded values overlapping a changed raw register range."""
         for spec in REGISTERS:
             if (
                 spec.table is table
@@ -739,6 +746,12 @@ class A21ModbusDevice(Fan):
                 and address < spec.address + spec.word_count
             ):
                 self._decoded.pop(spec.key, None)
+
+    def _clear_cached_state(self) -> None:
+        """Forget all unconfirmed raw, decoded, and semantic device state."""
+        self._raw.clear()
+        self._decoded.clear()
+        self._clear_semantic_state()
 
     def _evict_sensitive_cache(self) -> None:
         for spec in REGISTERS:
@@ -765,12 +778,18 @@ class A21ModbusDevice(Fan):
                 self._evict_sensitive_cache()
             self._invalid_response_slots.clear()
             complete = True
-            for table, address, count in ranges:
-                complete = self._read_resilient(table, address, count) and complete
-            if include_sensitive:
-                complete = (
-                    self._read_resilient(Table.HOLDING_REGISTER, 124, 2) and complete
-                )
+            try:
+                for table, address, count in ranges:
+                    complete = self._read_resilient(table, address, count) and complete
+                if include_sensitive:
+                    complete = (
+                        self._read_resilient(Table.HOLDING_REGISTER, 124, 2)
+                        and complete
+                    )
+            except A21ModbusError:
+                self.last_poll_complete = False
+                self._clear_cached_state()
+                raise
             self._verify_cached_identity()
             invalid_slots = self._decode_cache()
             self.last_poll_complete = complete and not invalid_slots
@@ -783,7 +802,7 @@ class A21ModbusDevice(Fan):
                 # required values and freshly decoded optional values.  The
                 # coordinator rejects this update, so keep the entire semantic
                 # surface unknown until a complete core poll succeeds.
-                self._clear_semantic_state()
+                self._clear_cached_state()
             return not required_failed
 
     def _verify_cached_identity(self) -> None:
@@ -795,18 +814,14 @@ class A21ModbusDevice(Fan):
             self.identity_probe_failed = True
             self.last_poll_complete = False
             self._writes_blocked_by_identity = True
-            self._raw.clear()
-            self._decoded.clear()
-            self._clear_semantic_state()
+            self._clear_cached_state()
             return
         identity = self._raw.get(identity_slot)
         if identity != A21_IDENTITY_VALUE:
             self.identity_probe_failed = True
             self._writes_blocked_by_identity = True
             self.last_poll_complete = False
-            self._raw.clear()
-            self._decoded.clear()
-            self._clear_semantic_state()
+            self._clear_cached_state()
             raise A21IdentityError(
                 f"Controller identity register 37 is {identity!r}; expected A21 value 1"
             )
@@ -822,9 +837,7 @@ class A21ModbusDevice(Fan):
             self.identity_probe_failed = True
             self._writes_blocked_by_identity = True
             self.last_poll_complete = False
-            self._raw.clear()
-            self._decoded.clear()
-            self._clear_semantic_state()
+            self._clear_cached_state()
             raise
         if identity != A21_IDENTITY_VALUE:
             self.identity_probe_failed = True
@@ -860,8 +873,13 @@ class A21ModbusDevice(Fan):
             self._evict_sensitive_cache()
             self._invalid_response_slots.clear()
             complete = True
-            for table, address, count in ranges:
-                complete = self._read_resilient(table, address, count) and complete
+            try:
+                for table, address, count in ranges:
+                    complete = self._read_resilient(table, address, count) and complete
+            except A21ModbusError:
+                self.last_poll_complete = False
+                self._clear_cached_state()
+                raise
             self._verify_cached_identity()
             invalid_slots = self._decode_cache()
             self.last_poll_complete = complete and not invalid_slots
@@ -870,7 +888,7 @@ class A21ModbusDevice(Fan):
             )
             required_failed = bool(_REQUIRED_POLL_SLOTS & failed_slots)
             if required_failed:
-                self._clear_semantic_state()
+                self._clear_cached_state()
             return not required_failed
 
     def update_preset_speed_settings(self) -> bool:

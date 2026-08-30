@@ -24,6 +24,7 @@ SWITCH_PATH = COMPONENT_PATH / "switch.py"
 SELECT_PATH = COMPONENT_PATH / "select.py"
 BINARY_SENSOR_PATH = COMPONENT_PATH / "binary_sensor.py"
 SENSOR_SPECS_PATH = COMPONENT_PATH / "sensor_specs.py"
+DIAGNOSTICS_PATH = COMPONENT_PATH / "diagnostics.py"
 STRINGS_PATH = COMPONENT_PATH / "strings.json"
 TRANSLATIONS_PATH = COMPONENT_PATH / "translations"
 FRONTEND_TEST_PACKAGE = "ecovent_v2_frontend_test"
@@ -143,6 +144,68 @@ class _FakeFrontendHass:
 
 
 class Issue35RegressionTest(unittest.TestCase):
+    def test_diagnostics_link_uses_reportable_not_raw_unsupported_rows(self):
+        method = _module_function(
+            _tree(DIAGNOSTICS_PATH), "async_get_config_entry_diagnostics"
+        )
+        reportable = frozenset()
+        url_calls = []
+        namespace = {
+            "Any": object,
+            "HomeAssistant": object,
+            "ConfigEntry": object,
+            "DOMAIN": "ecovent_v2",
+            "_report_version": lambda: "test",
+            "unsupported_optional_poll_parameter_details": lambda _fan: (
+                {"id": "0x003A", "name": "supply_speed_low"},
+            ),
+            "reportable_hardware_profile_mismatch_param_ids": (
+                lambda _fan: reportable
+            ),
+            "hardware_profile_mismatch_issue_url": lambda _fan, rows: (
+                url_calls.append(rows) or "https://example.invalid/report"
+            ),
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+                str(DIAGNOSTICS_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+        get_diagnostics = namespace["async_get_config_entry_diagnostics"]
+
+        fan = types.SimpleNamespace(
+            name="Test fan",
+            profile_key="vento",
+            unit_type="Vento",
+            _unit_type_id=0x0500,
+            firmware="0.5 2021-10-04",
+            id="known-device",
+            transport="bgcp_udp",
+            last_missing_required_params=frozenset(),
+            last_missing_optional_params=frozenset(),
+            last_unsupported_params=frozenset({0x003A}),
+            _bulk_read_supported=True,
+        )
+        hass = types.SimpleNamespace(
+            data={"ecovent_v2": {"entry": types.SimpleNamespace(_fan=fan)}}
+        )
+        entry = types.SimpleNamespace(entry_id="entry", title="Test")
+
+        diagnostics = asyncio.run(get_diagnostics(hass, entry))
+        self.assertNotIn("hardware_profile_mismatch_issue_url", diagnostics)
+        self.assertEqual(url_calls, [])
+
+        reportable = frozenset({0x003A})
+        diagnostics = asyncio.run(get_diagnostics(hass, entry))
+        self.assertEqual(
+            diagnostics["hardware_profile_mismatch_issue_url"],
+            "https://example.invalid/report",
+        )
+        self.assertEqual(url_calls, [frozenset({0x003A})])
+
     def test_frontend_digest_file_io_runs_in_executor(self):
         tree = _tree(FRONTEND_PATH)
         register = _module_function(tree, "async_register_frontend")

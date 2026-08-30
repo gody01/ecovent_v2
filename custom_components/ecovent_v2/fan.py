@@ -259,6 +259,8 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
     def _confirmed_percentage_target(self, percentage: int) -> int:
         """Return the percentage the selected device path can represent."""
         target = int(percentage)
+        if target <= 0:
+            return 0
         if self._fan.uses_operating_mode_presets:
             return max(30, min(100, target))
         if (

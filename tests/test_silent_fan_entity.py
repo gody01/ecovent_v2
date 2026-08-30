@@ -142,9 +142,39 @@ class SilentFanEntityTest(unittest.TestCase):
         fan.unit_type = "0600"
 
         self.assertTrue(fan.uses_operating_mode_presets)
+        self.assertEqual(entity._confirmed_percentage_target(0), 0)
         self.assertEqual(entity._confirmed_percentage_target(5), 30)
         self.assertEqual(entity._confirmed_percentage_target(30), 30)
         self.assertEqual(entity._confirmed_percentage_target(80), 80)
+
+    def test_operating_mode_zero_percentage_confirms_power_off(self):
+        async def run_test():
+            entity, fan, _calls = _silent_entity(speed="high", man_speed=30)
+            fan.unit_type = "0600"
+            writes = []
+
+            class Hass:
+                async def async_add_executor_job(self, callback, *args):
+                    return callback(*args)
+
+            async def confirmed_refresh():
+                return None
+
+            def apply_percentage(percentage, turn_on):
+                writes.append((percentage, turn_on))
+                fan._state = "off"
+
+            entity.hass = Hass()
+            entity.coordinator.async_refresh_confirmed = confirmed_refresh
+            entity.set_percentage = apply_percentage
+
+            await entity.async_set_percentage(0)
+
+            self.assertEqual(writes, [(0, True)])
+            self.assertEqual(fan.state, "off")
+            self.assertEqual(entity.percentage, 0)
+
+        asyncio.run(run_test())
 
     def test_turn_on_rejects_successful_refresh_that_does_not_confirm_power(self):
         async def run_test():

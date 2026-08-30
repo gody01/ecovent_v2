@@ -16,15 +16,24 @@ class ProfileParseTest(unittest.TestCase):
 
         fan.unit_type = "0600"
         self.assertEqual(fan.parameter_range("fan1_speed"), (0, 6000))
+        self.assertEqual(fan.parameter_range("humidity_treshold"), (40, 80))
+        self.assertEqual(fan.parameter_range("temperature_treshold"), (18, 36))
         self.assertIsNone(fan.parameter_range("analogV_treshold"))
 
         fan.unit_type = "1100"
         self.assertEqual(fan.parameter_range("co2_treshold"), (400, 2000))
         self.assertEqual(fan.parameter_range("voc_treshold"), (50, 250))
         self.assertEqual(fan.parameter_range("supply_speed_low"), (10, 100))
+        self.assertEqual(fan.parameter_range("man_speed"), (10, 100))
 
         fan.unit_type = "0d00"
         self.assertEqual(fan.parameter_range("air_quality_treshold"), (50, 500))
+        self.assertEqual(fan.parameter_range("temperature_treshold"), (18, 36))
+
+        fan.unit_type = "0200"
+        self.assertEqual(fan.parameter_range("filter_timer_setpoint"), (70, 365))
+        self.assertEqual(fan.parameter_step("filter_timer_setpoint"), 5)
+        self.assertEqual(fan.parameter_range("supply_speed_low"), (0, 100))
 
     def test_parse_response_names_econoprime_df270_unit_type(self):
         fan = Fan("192.0.2.1")
@@ -176,7 +185,8 @@ class ProfileParseTest(unittest.TestCase):
         self.assertEqual(fan.co2, 1500)
         self.assertEqual(
             fan.air_quality_status,
-            "humidity:over_setpoint, co2:normal, reserved_1:normal, reserved_2:normal, voc:over_setpoint",
+            "humidity:over_setpoint, co2:normal, reserved_1:normal, "
+            "reserved_2:normal, voc:over_setpoint",
         )
         self.assertEqual(fan.recovery_efficiency, 86)
         self.assertEqual(fan.voc_sensor_state, "on")

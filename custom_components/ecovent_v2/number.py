@@ -486,6 +486,12 @@ class VentoNumber(StableObjectIdMixin, CoordinatorEntity, NumberEntity):
             if device_range is not None:
                 native_min_value, native_max_value = device_range
 
+        parameter_step = getattr(self._fan, "parameter_step", None)
+        if callable(parameter_step):
+            device_step = parameter_step(method)
+            if device_step is not None:
+                native_step = device_step
+
         if native_min_value is not None:
             self._attr_native_min_value = native_min_value
         if native_max_value is not None:

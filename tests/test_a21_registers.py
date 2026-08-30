@@ -8,7 +8,7 @@ sys.path.insert(
     0, str(Path(__file__).resolve().parents[1] / "custom_components" / "ecovent_v2")
 )
 
-from a21_registers import (
+from a21_registers import (  # noqa: E402
     A21_IDENTITY_REGISTER,
     A21_IDENTITY_VALUE,
     Access,

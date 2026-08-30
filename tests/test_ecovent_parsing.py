@@ -17,8 +17,8 @@ class ParseRobustnessTest(unittest.TestCase):
 
     def test_profile_rows_decode_after_unit_type_regardless_of_wire_order(self):
         payloads = (
-            bytes.fromhex("fe02b906001455"),
-            bytes.fromhex("1455fe02b90600"),
+            bytes.fromhex("fe02b906001437"),
+            bytes.fromhex("1437fe02b90600"),
         )
 
         for payload in payloads:
@@ -28,7 +28,7 @@ class ParseRobustnessTest(unittest.TestCase):
 
                 self.assertTrue(fan.parse_response(packet_with_payload(payload)))
                 self.assertEqual(fan.profile_key, "extract_fan")
-                self.assertEqual(fan.humidity_treshold, "85")
+                self.assertEqual(fan.humidity_treshold, "55")
                 self.assertIsNone(fan.relay_sensor_state)
                 self.assertEqual(fan._last_response_param_ids, {0x0014, 0x00B9})
 
@@ -318,6 +318,60 @@ class ParseRobustnessTest(unittest.TestCase):
         )
         self.assertEqual(fan.filter_timer_countdown, "72d 8h 17m ")
 
+    def test_filter_countdown_rejects_days_beyond_profile_limit(self):
+        cases = (
+            ("0500", [0, 0, 181], [0, 0, 182], "181d 0h 0m "),
+            ("1100", [0, 0, 0x6D, 0x01], [0, 0, 0x6E, 0x01], "365d 0h 0m "),
+            ("0200", [0, 0, 0x6D, 0x01], [0, 0, 0x6E, 0x01], "365d 0h 0m "),
+        )
+
+        for unit_type, valid, invalid, expected in cases:
+            with self.subTest(unit_type=unit_type):
+                fan = Fan("192.0.2.1")
+                fan.unit_type = unit_type
+                self.assertTrue(
+                    fan.parse_response(
+                        packet_with_payload([0xFE, len(valid), 0x64, *valid])
+                    )
+                )
+                self.assertEqual(fan.filter_timer_countdown, expected)
+
+                self.assertTrue(
+                    fan.parse_response(
+                        packet_with_payload([0xFE, len(invalid), 0x64, *invalid])
+                    )
+                )
+                self.assertEqual(fan.filter_timer_countdown, expected)
+                self.assertEqual(fan.unknown_params, {0x0064: bytes(invalid).hex()})
+                self.assertEqual(fan._last_response_param_ids, set())
+
+    def test_filter_countdown_rejects_wrong_width_after_profile_discovery(self):
+        cases = (
+            ("0500", [0, 0, 181], [0, 0, 181, 0], "181d 0h 0m "),
+            ("1100", [0, 0, 181, 0], [0, 0, 181], "181d 0h 0m "),
+            ("0200", [0, 0, 181, 0], [0, 0, 181], "181d 0h 0m "),
+        )
+
+        for unit_type, valid, invalid, expected in cases:
+            with self.subTest(unit_type=unit_type):
+                fan = Fan("192.0.2.1")
+                fan.unit_type = unit_type
+                self.assertTrue(
+                    fan.parse_response(
+                        packet_with_payload([0xFE, len(valid), 0x64, *valid])
+                    )
+                )
+                self.assertEqual(fan.filter_timer_countdown, expected)
+
+                self.assertTrue(
+                    fan.parse_response(
+                        packet_with_payload([0xFE, len(invalid), 0x64, *invalid])
+                    )
+                )
+                self.assertEqual(fan.filter_timer_countdown, expected)
+                self.assertEqual(fan.unknown_params, {0x0064: bytes(invalid).hex()})
+                self.assertEqual(fan._last_response_param_ids, set())
+
     def test_filter_timer_rows_reject_unbounded_padding(self):
         malformed_rows = (
             (0x63, [0x00, 0x6D, 0x01], "365 d"),
@@ -466,6 +520,10 @@ class ParseRobustnessTest(unittest.TestCase):
                 [0x71, 0x17],
                 "6000",
             ),
+            ("0600", 0x0014, "humidity_treshold", [80], [81], "80"),
+            ("0600", 0x0016, "temperature_treshold", [36], [37], "36"),
+            ("0600", 0x0023, "boost_time", [3], [1], "15 m"),
+            ("0600", 0x0024, "turn_on_delay_timer", [2], [3], "5 m"),
             ("1100", 0x0019, "humidity_treshold", [80], [81], "80"),
             (
                 "1100",
@@ -516,6 +574,19 @@ class ParseRobustnessTest(unittest.TestCase):
                 500,
             ),
             ("0d00", 0x0320, "air_quality", [0xF4, 0x01], [0xF5, 0x01], 500),
+            ("0d00", 0x0325, "temperature_treshold", [36], [37], "36"),
+            ("0200", 0x003A, "supply_speed_low", [100], [101], 100),
+            ("0200", 0x0040, "supply_speed_4", [100], [101], 100),
+            (
+                "0200",
+                0x0063,
+                "filter_timer_setpoint",
+                [70, 0],
+                [71, 0],
+                "70 d",
+            ),
+            ("0200", 0x0063, "filter_timer_setpoint", [0, 0], [5, 0], "0 d"),
+            ("0200", 0x0066, "boost_time", [60], [61], "60 m"),
         )
 
         for unit_type, parameter, attribute, valid, invalid, expected in cases:
@@ -965,7 +1036,7 @@ class ParseRobustnessTest(unittest.TestCase):
         self.assertEqual(fan._last_response_param_ids, {0x0001})
         self.assertEqual(fan._last_unsupported_param_ids, {0x0065})
 
-    def test_parse_response_records_present_and_unsupported_parameter_ids_separately(self):
+    def test_parse_response_tracks_present_and_unsupported_ids_separately(self):
         fan = Fan("192.0.2.1")
 
         self.assertTrue(

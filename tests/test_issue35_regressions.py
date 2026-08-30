@@ -286,12 +286,17 @@ class Issue35RegressionTest(unittest.TestCase):
         preset_guard = ast.get_source_segment(
             source, _class_method(tree, "VentoExpertFan", "_is_preset_mode_unchanged")
         )
-        self.assertIn("target_percentage = self._silent_preset_percentage(preset_mode)", preset_guard)
+        self.assertIn(
+            "target_percentage = self._silent_preset_percentage(preset_mode)",
+            preset_guard,
+        )
         self.assertIn(
             "self._fan.man_speed == max(0, min(100, target_percentage))",
             preset_guard,
         )
-        self.assertNotIn("self.coordinator.silent_preset_mode == preset_mode", preset_guard)
+        self.assertNotIn(
+            "self.coordinator.silent_preset_mode == preset_mode", preset_guard
+        )
         self.assertIn("set_silent_preset_mode(preset_mode)", set_preset)
         self.assertLess(
             set_preset.index("set_silent_preset_mode(preset_mode)"),
@@ -380,8 +385,8 @@ class Issue35RegressionTest(unittest.TestCase):
             register.index("_async_update_unsupported_optional_poll_entities"),
         )
         self.assertLess(
-            setup.index("_async_register_optional_poll_entity_sync"),
             setup.index("async_forward_entry_setups"),
+            setup.index("_async_register_optional_poll_entity_sync"),
         )
 
     def test_optional_entity_sync_waits_for_success_and_reloads_identity(self):
@@ -697,7 +702,7 @@ class Issue35RegressionTest(unittest.TestCase):
         self.assertEqual(deleted, ["entry-1"])
         self.assertNotIn("entry-1", hass.data.get("ecovent_v2", {}))
 
-    def test_setup_failure_before_platform_forward_closes_and_removes_coordinator(self):
+    def test_initial_optional_entity_sync_runs_after_platform_forward(self):
         init_tree = _tree(INIT_PATH)
         methods = [
             _module_function(init_tree, name)
@@ -753,6 +758,10 @@ class Issue35RegressionTest(unittest.TestCase):
             async def async_forward_entry_setups(self, _entry, platforms):
                 events.append(("forward", tuple(platforms)))
 
+            async def async_unload_platforms(self, _entry, platforms):
+                events.append(("unload", tuple(platforms)))
+                return True
+
         class Hass:
             def __init__(self):
                 self.data = {}
@@ -790,7 +799,15 @@ class Issue35RegressionTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "registry sync failed"):
             asyncio.run(namespace["async_setup_entry"](hass, entry))
 
-        self.assertEqual(events, ["delete", "close"])
+        self.assertEqual(
+            events,
+            [
+                ("forward", ("sensor", "fan")),
+                ("unload", ("sensor", "fan")),
+                "delete",
+                "close",
+            ],
+        )
         self.assertNotIn("entry-1", hass.data["ecovent_v2"])
 
     def test_switch_none_state_remains_unknown(self):
@@ -897,7 +914,9 @@ class Issue35RegressionTest(unittest.TestCase):
         self.assertIn("silent_preset_mode", fan_source)
         self.assertIn("_set_silent_manual_percentage", fan_source)
         self.assertIn("_set_parameters_if_changed", fan_source)
-        self.assertIn("entering_manual_mode = self._fan.speed != \"manual\"", fan_source)
+        self.assertIn(
+            'entering_manual_mode = self._fan.speed != "manual"', fan_source
+        )
         self.assertIn("include_extra_write_parameters=entering_manual_mode", fan_source)
         self.assertIn("audible_write_command_count", fan_source)
         self.assertIn("steady-state silent manual speed update", fan_source)

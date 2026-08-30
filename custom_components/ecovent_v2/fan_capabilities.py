@@ -34,11 +34,14 @@ _PARAMETER_RANGES = {
         "exhaust_speed_high": (4, 100),
     },
     "extract_fan": {
+        "boost_time": (0, 60),
         "fan1_speed": (0, 6000),
         "humidity": (0, 100),
+        "humidity_treshold": (40, 80),
         "interval_ventilation_speed_setpoint": (30, 100),
         "max_speed_setpoint": (30, 100),
         "silent_speed_setpoint": (30, 100),
+        "temperature_treshold": (18, 36),
     },
     "breezy": {
         "battery_voltage": (0, 5000),
@@ -49,6 +52,7 @@ _PARAMETER_RANGES = {
         "filter_timer_setpoint": (70, 365),
         "humidity": (0, 100),
         "humidity_treshold": (40, 80),
+        "man_speed": (10, 100),
         "recovery_efficiency": (0, 100),
         "screen_brightness": (1, 100),
         "supply_speed_low": (10, 100),
@@ -60,6 +64,20 @@ _PARAMETER_RANGES = {
         "voc": (0, 500),
         "voc_treshold": (50, 250),
     },
+    "freshbox": {
+        "boost_time": (0, 60),
+        "supply_speed_low": (0, 100),
+        "exhaust_speed_low": (0, 100),
+        "supply_speed_medium": (0, 100),
+        "exhaust_speed_medium": (0, 100),
+        "supply_speed_high": (0, 100),
+        "exhaust_speed_high": (0, 100),
+        "supply_speed_4": (0, 100),
+        "exhaust_speed_4": (0, 100),
+        "supply_speed_5": (0, 100),
+        "exhaust_speed_5": (0, 100),
+        "filter_timer_setpoint": (70, 365),
+    },
     "arc": {
         "air_quality": (0, 500),
         "air_quality_treshold": (50, 500),
@@ -68,9 +86,15 @@ _PARAMETER_RANGES = {
         "fan1_speed": (0, 5000),
         "humidity": (0, 100),
         "humidity_treshold": (40, 80),
+        "temperature_treshold": (18, 36),
     },
 }
 
+_PARAMETER_STEPS = {
+    "freshbox": {
+        "filter_timer_setpoint": 5,
+    },
+}
 
 class FanCapabilitiesMixin:
     @property
@@ -218,7 +242,9 @@ class FanCapabilitiesMixin:
     def available_schedule_speed_options(self):
         """Return schedule speed options that make sense for the active device."""
         speed_modes = self.device_profile.schedule_speed_modes or tuple(
-            preset for preset in self.fan_preset_modes if preset not in {"off", "manual"}
+            preset
+            for preset in self.fan_preset_modes
+            if preset not in {"off", "manual"}
         )
         options = [
             SCHEDULE_SPEED_TO_OPTION[mode]
@@ -230,7 +256,9 @@ class FanCapabilitiesMixin:
     def available_schedule_speed_option_meta(self):
         """Return schedule speed options with icons for the custom editor."""
         speed_modes = self.device_profile.schedule_speed_modes or tuple(
-            preset for preset in self.fan_preset_modes if preset not in {"off", "manual"}
+            preset
+            for preset in self.fan_preset_modes
+            if preset not in {"off", "manual"}
         )
         items = []
         for mode in speed_modes:
@@ -270,6 +298,10 @@ class FanCapabilitiesMixin:
     def parameter_range(self, parameter):
         """Return the active profile's documented scalar range."""
         return _PARAMETER_RANGES.get(self.profile_key, {}).get(parameter)
+
+    def parameter_step(self, parameter):
+        """Return the active profile's documented scalar increment."""
+        return _PARAMETER_STEPS.get(self.profile_key, {}).get(parameter)
 
     def _validate_parameter_range(self, parameter, value):
         """Validate a scalar against its active profile when documented."""

@@ -8,12 +8,18 @@ except ImportError:
     from schedule_helpers import SCHEDULE_SPEED_TO_VALUE, WeeklyScheduleRecord
 
 
+_EXTRACT_BOOST_MINUTES_BY_CODE = {0: 0, 2: 5, 3: 15, 4: 30, 6: 60}
+_EXTRACT_TURN_ON_MINUTES_BY_CODE = {0: 0, 1: 2, 2: 5}
+
+
 class FanSpeedPropertiesMixin:
     def _preset_speed_percent(self, input):
         val = int(input, 16)
         if self.device_profile.speed_percent_scale == "percent":
             if self.profile_key == "breezy":
                 self._validate_range(val, 10, 100, "preset_speed")
+            elif self.profile_key == "freshbox":
+                self._validate_range(val, 0, 100, "preset_speed")
             return val
         if self.profile_key == "vento":
             self._validate_range(val, 10, 255, "preset_speed")
@@ -227,8 +233,12 @@ class FanSpeedPropertiesMixin:
             byteorder="little",
             signed=False,
         )
-        if not (self.profile_key == "breezy" and val == 0):
+        if not (self.profile_key in {"breezy", "freshbox"} and val == 0):
             self._validate_parameter_range("filter_timer_setpoint", val)
+        if self.profile_key == "freshbox" and val and val % 5:
+            raise ValueError(
+                "Invalid filter_timer_setpoint: value must use a 5-day step"
+            )
         self._filter_timer_setpoint = str(val) + " d"
 
     @property
@@ -240,6 +250,20 @@ class FanSpeedPropertiesMixin:
         raw = bytes.fromhex(input)
         if len(raw) == 5 and raw[0] == 0:
             raw = raw[1:]
+        expected_size = {
+            "vento": 3,
+            "breezy": 4,
+            "freshbox": 4,
+        }.get(self.profile_key)
+        if (
+            getattr(self, "_unit_type_id", None) is not None
+            and expected_size is not None
+            and len(raw) != expected_size
+        ):
+            raise ValueError(
+                f"filter_timer_countdown for {self.profile_key} must contain "
+                f"exactly {expected_size} bytes, got {len(raw)}"
+            )
         if len(raw) == 4:
             val = raw
             if val[-4] > 59 or val[-3] > 23:
@@ -248,6 +272,10 @@ class FanSpeedPropertiesMixin:
                     f"{val[-3]:02d}:{val[-4]:02d}"
                 )
             days = val[-1] * 256 + val[-2]
+            if days > 365:
+                raise ValueError(
+                    f"Invalid filter countdown days: {days} exceeds 365"
+                )
             self._filter_timer_countdown = (
                 str(days) + "d " + str(val[-3]) + "h " + str(val[-4]) + "m "
             )
@@ -262,6 +290,10 @@ class FanSpeedPropertiesMixin:
             raise ValueError(
                 f"Invalid filter countdown time: {val[1]:02d}:{val[0]:02d}"
             )
+        if self.profile_key == "vento" and val[2] > 181:
+            raise ValueError(
+                f"Invalid filter countdown days: {val[2]} exceeds 181"
+            )
         self._filter_timer_countdown = (
             str(val[2]) + "d " + str(val[1]) + "h " + str(val[0]) + "m "
         )
@@ -273,6 +305,11 @@ class FanSpeedPropertiesMixin:
     @boost_time.setter
     def boost_time(self, input):
         val = int(input, 16)
+        if self.profile_key == "extract_fan":
+            try:
+                val = _EXTRACT_BOOST_MINUTES_BY_CODE[val]
+            except KeyError as err:
+                raise ValueError(f"Invalid extract fan boost time code: {val}") from err
         self._validate_parameter_range("boost_time", val)
         self._boost_time = str(val) + " m"
 
@@ -283,7 +320,14 @@ class FanSpeedPropertiesMixin:
     @turn_on_delay_timer.setter
     def turn_on_delay_timer(self, input):
         val = int(input, 16)
-        self._turn_on_delay_timer = str(val)
+        if self.profile_key == "extract_fan":
+            try:
+                val = _EXTRACT_TURN_ON_MINUTES_BY_CODE[val]
+            except KeyError as err:
+                raise ValueError(
+                    f"Invalid extract fan turn-on delay code: {val}"
+                ) from err
+        self._turn_on_delay_timer = str(val) + " m"
 
     @property
     def rtc_time(self):

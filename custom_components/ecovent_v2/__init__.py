@@ -663,6 +663,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = EcoVentCoordinator(
         hass, entry, update_seconds=entry.runtime_data[UPDATE_INTERVAL]
     )
+    platform_setup_started = False
     try:
         await coordinator.async_config_entry_first_refresh()
 
@@ -671,10 +672,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await async_register_frontend(hass)
         _async_migrate_entity_registry(hass, coordinator)
         await _async_migrate_statistics_metadata_on_start(hass, entry, coordinator)
-        _async_register_optional_poll_entity_sync(hass, entry, coordinator)
+        platform_setup_started = True
         await hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)
+        _async_register_optional_poll_entity_sync(hass, entry, coordinator)
         return True
     except Exception:
+        if platform_setup_started:
+            try:
+                await hass.config_entries.async_unload_platforms(entry, _PLATFORMS)
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning(
+                    "Unable to unload EcoVent V2 platforms after setup failure: %s",
+                    err,
+                    exc_info=True,
+                )
         hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
         _delete_hardware_profile_mismatch_issue(hass, entry.entry_id)
         await _async_close_coordinator(hass, coordinator)

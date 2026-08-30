@@ -375,9 +375,9 @@ class A21ModbusDevice(Fan):
         spec = get_register(key)
         if spec.minimum is None or spec.maximum is None:
             return None
-        # HA NumberEntity cannot express the published disjoint range
-        # ``0 or 70..365``. Keep 0 available through the typed API and expose
-        # only the continuous timer setpoint interval in the UI.
+        # HA Number cannot express the published disjoint range ``0 or
+        # 70..365``. Expose only the continuous setpoint interval; the typed
+        # protocol API still accepts 0 to disable the timer.
         if key == "HR_SetFILTER_TIMER":
             return (70, 365)
         return (spec.minimum, spec.maximum)

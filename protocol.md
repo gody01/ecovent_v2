@@ -422,8 +422,8 @@ source document for this profile.
 | 0x001F | `silent_mode_start_time` | PDF | R/W/RW | Silent Mode start time in seconds | 3 |
 | 0x0020 | `silent_mode_end_time` | PDF | R/W/RW | Silent Mode end time in seconds | 3 |
 | 0x0021 | `rtc_time` | PDF | R/W/RW | Current time of the fan internal clock in seconds | 3 |
-| 0x0023 | `boost_time` | PDF | R/W/RW/INC/DEC | Turn-off delay timer/BOOST setpoint | 1 |
-| 0x0024 | `turn_on_delay_timer` | PDF | R/W/RW/INC/DEC | Turn-on delay timer setpoint | 1 |
+| 0x0023 | `boost_time` | PDF | R/W/RW/INC/DEC | Turn-off delay timer/BOOST setpoint | 1; wire codes `0`, `2`, `3`, `4`, `6` mean 0, 5, 15, 30, 60 minutes |
+| 0x0024 | `turn_on_delay_timer` | PDF | R/W/RW/INC/DEC | Turn-on delay timer setpoint | 1; wire codes `0`, `1`, `2` mean 0, 2, 5 minutes |
 | 0x0025 | `factory_reset` | PDF | W | Resetting parameters to factory settings | 1 |
 | 0x002E | `humidity` | ynsgnr/blauberg-assistant | R | Current humidity sensor value | 1 |
 | 0x0031 | `temperature` | ynsgnr/blauberg-assistant | R | Current temperature sensor value | 1 |
@@ -567,7 +567,7 @@ Implemented Arc Smart / O2 Supreme parameters:
 | 0x0320 | `air_quality` | R | Current air quality level | sensor |
 | 0x0323 | `temperature_status` | R | Temperature sensor status | diagnostic binary sensor |
 | 0x0324 | `temperature_sensor_state` | R/W/RW | Temperature sensor-based control | switch |
-| 0x0325 | `temperature_treshold` | R/W/RW/INC/DEC | Temperature threshold setting | number |
+| 0x0325 | `temperature_treshold` | R/W/RW/INC/DEC | Temperature threshold setting, 18–36 °C | number |
 | 0x032F | `temperature_airflow` | R/W/RW | Airflow when the temperature sensor is triggered | select |
 
 The Arc/O2 PDFs also document Wi-Fi setup mode, SSID/password/encryption, DHCP,

@@ -282,7 +282,9 @@ class PacketBuilderTest(unittest.TestCase):
         messages = "\n".join(logs.output)
         self.assertIn("EcoVent setup poll incomplete", messages)
         self.assertIn("requested parameters: 0x0001, 0x0002, 0x0025", messages)
-        self.assertIn("required availability parameters: 0x0001, 0x0002, 0x0025", messages)
+        self.assertIn(
+            "required availability parameters: 0x0001, 0x0002, 0x0025", messages
+        )
         self.assertIn("received parameters: 0x0001", messages)
         self.assertIn("missing required parameters: 0x0002, 0x0025", messages)
         self.assertIn("no-response individual retries: 0x0002, 0x0025", messages)
@@ -1007,9 +1009,18 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertIn("EcoVent quick poll incomplete", messages)
         self.assertIn("profile=vento", messages)
         self.assertIn("required availability parameters: none", messages)
-        self.assertIn("optional unavailable parameters: 0x0006, 0x002D, 0x0304, 0x0305", messages)
-        self.assertIn("missing from bulk response: 0x0006, 0x002D, 0x0304, 0x0305", messages)
-        self.assertIn("individual retries attempted: 0x0006, 0x002D, 0x0304, 0x0305", messages)
+        self.assertIn(
+            "optional unavailable parameters: 0x0006, 0x002D, 0x0304, 0x0305",
+            messages,
+        )
+        self.assertIn(
+            "missing from bulk response: 0x0006, 0x002D, 0x0304, 0x0305",
+            messages,
+        )
+        self.assertIn(
+            "individual retries attempted: 0x0006, 0x002D, 0x0304, 0x0305",
+            messages,
+        )
         self.assertIn("result: available", messages)
         retried = {int(param, 16) for param, retries in calls if retries == 1}
         self.assertLessEqual(missing_optional, retried)
@@ -1578,6 +1589,38 @@ class PacketBuilderTest(unittest.TestCase):
 
         self.assertFalse(fan.set_param("humidity_treshold", "ff"))
         self.assertEqual(calls, [])
+
+        fan.unit_type = "0600"
+        self.assertFalse(fan.set_param("humidity_treshold", "51"))
+        self.assertFalse(fan.set_param("temperature_treshold", "25"))
+        self.assertFalse(fan.set_param("boost_time", "01"))
+        self.assertEqual(calls, [])
+
+        fan.unit_type = "0200"
+        self.assertFalse(fan.set_param("filter_timer_setpoint", "e703"))
+        self.assertFalse(fan.set_param("filter_timer_setpoint", "4700"))
+        self.assertEqual(calls, [])
+
+    def test_freshbox_filter_timer_write_accepts_disabled_value(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0200"
+        calls = []
+        fan.send = lambda data: calls.append(data) or True
+        fan.receive = lambda: packet_for_write_command(calls[-1])
+
+        self.assertTrue(fan.set_param("filter_timer_setpoint", "0000"))
+        self.assertEqual(calls, ["03fe02630000"])
+
+    def test_extract_fan_boost_write_uses_documented_code(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0600"
+        calls = []
+        fan.send = lambda data: calls.append(data) or True
+        fan.receive = lambda: packet_for_write_command(calls[-1])
+
+        self.assertTrue(fan.set_param("boost_time", "03"))
+        self.assertEqual(calls, ["032303"])
+        self.assertEqual(fan.boost_time, "15 m")
 
     def test_invalid_opportunistic_value_does_not_block_primary_write(self):
         fan = Fan("192.0.2.1")

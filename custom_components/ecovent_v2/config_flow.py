@@ -62,8 +62,16 @@ def _bgcp_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     defaults = defaults or {}
     schema = {
         vol.Required(CONF_IP_ADDRESS, default=defaults.get(CONF_IP_ADDRESS, "")): str,
-        vol.Optional(CONF_PORT, default=defaults.get(CONF_PORT, 4000)): int,
-        vol.Required(CONF_PASSWORD, default=defaults.get(CONF_PASSWORD, "1111")): str,
+        vol.Optional(CONF_PORT, default=defaults.get(CONF_PORT, 4000)): vol.All(
+            int, vol.Range(min=1, max=65535)
+        ),
+        vol.Required(
+            CONF_PASSWORD, default=defaults.get(CONF_PASSWORD, "1111")
+        ): vol.All(
+            str,
+            vol.Length(max=8),
+            vol.Match(r"^[0-9A-Za-z]{0,8}\Z"),
+        ),
         **_common_schema(defaults),
         # Legacy initial form default=False; reconfigure uses the saved value.
         vol.Optional(

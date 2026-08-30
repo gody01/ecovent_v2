@@ -126,6 +126,26 @@ def _silent_entity(*, speed="manual", man_speed=63):
 
 
 class SilentFanEntityTest(unittest.TestCase):
+    def test_combined_preset_and_percentage_is_rejected_before_writing(self):
+        async def run_test():
+            entity, _fan, calls = _silent_entity(speed="high", man_speed=30)
+
+            with self.assertRaisesRegex(ValueError, "cannot be set together"):
+                await entity.async_turn_on(preset_mode="high", percentage=50)
+
+            self.assertEqual(calls, [])
+
+        asyncio.run(run_test())
+
+    def test_operating_mode_percentage_confirmation_uses_device_clamp(self):
+        entity, fan, _calls = _silent_entity(speed="high", man_speed=30)
+        fan.unit_type = "0600"
+
+        self.assertTrue(fan.uses_operating_mode_presets)
+        self.assertEqual(entity._confirmed_percentage_target(5), 30)
+        self.assertEqual(entity._confirmed_percentage_target(30), 30)
+        self.assertEqual(entity._confirmed_percentage_target(80), 80)
+
     def test_turn_on_rejects_successful_refresh_that_does_not_confirm_power(self):
         async def run_test():
             entity, fan, calls = _silent_entity(speed="high", man_speed=30)

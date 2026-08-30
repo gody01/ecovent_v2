@@ -259,6 +259,8 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
     def _confirmed_percentage_target(self, percentage: int) -> int:
         """Return the percentage the selected device path can represent."""
         target = int(percentage)
+        if self._fan.uses_operating_mode_presets:
+            return max(30, min(100, target))
         if (
             0 < target < 2
             and not self._silent_mode_controls_manual_speed
@@ -466,6 +468,9 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
                     self._fan.name,
                 )
                 return
+
+        if preset_mode is not None and percentage is not None:
+            raise ValueError("preset_mode and percentage cannot be set together")
 
         try:
             if preset_mode is not None:

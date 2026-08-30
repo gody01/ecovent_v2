@@ -348,7 +348,11 @@ def _async_migrate_entity_registry(
         )
         if schedule_switch_entity_id is not None:
             schedule_switch_entry = registry.async_get(schedule_switch_entity_id)
-            if schedule_switch_entry.hidden_by is not None:
+            if (
+                schedule_switch_entry is not None
+                and schedule_switch_entry.hidden_by
+                == er.RegistryEntryHider.INTEGRATION
+            ):
                 registry.async_update_entity(
                     schedule_switch_entity_id,
                     hidden_by=None,
@@ -358,24 +362,24 @@ def _async_migrate_entity_registry(
                     schedule_switch_entity_id,
                 )
 
-        schedule_helper_entity_ids = (
-            f"select.{device_slug}_schedule_day",
-            *[
-                f"select.{device_slug}_schedule_period_{period}_speed"
-                for period in range(1, 5)
-            ],
-            *[
-                f"time.{device_slug}_schedule_period_{period}_end"
-                for period in range(1, 4)
-            ],
+    schedule_helper_entity_ids = (
+        f"select.{device_slug}_schedule_day",
+        *[
+            f"select.{device_slug}_schedule_period_{period}_speed"
+            for period in range(1, 5)
+        ],
+        *[
+            f"time.{device_slug}_schedule_period_{period}_end"
+            for period in range(1, 4)
+        ],
+    )
+    for entity_id in schedule_helper_entity_ids:
+        if registry.async_get(entity_id) is None:
+            continue
+        registry.async_remove(entity_id)
+        _LOGGER.info(
+            "Removed EcoVent V2 legacy schedule helper entity %s", entity_id
         )
-        for entity_id in schedule_helper_entity_ids:
-            if registry.async_get(entity_id) is None:
-                continue
-            registry.async_remove(entity_id)
-            _LOGGER.info(
-                "Removed EcoVent V2 legacy schedule helper entity %s", entity_id
-            )
 
     _async_update_unsupported_optional_poll_entities(registry, fan)
 
@@ -451,6 +455,12 @@ def _async_update_unsupported_optional_poll_entities(registry, fan) -> None:
             )
             for spec in SELECT_SPECS
         ),
+        (
+            Platform.SENSOR,
+            fan.id + "_schedule",
+            "weekly_schedule_setup",
+            fan.supports_parameter("weekly_schedule_setup"),
+        ),
     )
     for platform, unique_id, method, supported in entity_specs:
         entity_id = registry.async_get_entity_id(platform, DOMAIN, unique_id)
@@ -481,6 +491,59 @@ def _async_update_unsupported_optional_poll_entities(registry, fan) -> None:
                 entity_id,
                 method,
             )
+
+
+def _async_register_optional_poll_entity_sync(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    coordinator: EcoVentCoordinator,
+) -> None:
+    """Keep generated entity visibility aligned with learned capabilities."""
+    registry = er.async_get(hass)
+    loaded_identity = (
+        coordinator._fan.profile_key,
+        getattr(coordinator._fan, "_unit_type_id", None),
+        coordinator._fan.firmware,
+    )
+    last_capability_state = None
+    reload_requested = False
+
+    def _async_sync_entity_registry() -> None:
+        nonlocal last_capability_state, reload_requested
+        if not coordinator.last_update_success:
+            return
+
+        current_firmware = coordinator._fan.firmware
+        current_identity = (
+            coordinator._fan.profile_key,
+            getattr(coordinator._fan, "_unit_type_id", None),
+            current_firmware if current_firmware is not None else loaded_identity[2],
+        )
+        if current_identity != loaded_identity:
+            if not reload_requested:
+                _LOGGER.info(
+                    "Reloading EcoVent V2 config entry %s after device identity "
+                    "changed from %s to %s",
+                    entry.entry_id,
+                    loaded_identity,
+                    current_identity,
+                )
+                hass.config_entries.async_schedule_reload(entry.entry_id)
+                reload_requested = True
+            return
+
+        capability_state = (
+            *current_identity,
+            coordinator._fan.unsupported_optional_poll_parameter_ids(),
+        )
+        if capability_state == last_capability_state:
+            return
+
+        _async_update_unsupported_optional_poll_entities(registry, coordinator._fan)
+        last_capability_state = capability_state
+
+    entry.async_on_unload(coordinator.async_add_listener(_async_sync_entity_registry))
+    _async_sync_entity_registry()
 
 
 async def _async_migrate_statistics_metadata(
@@ -534,7 +597,7 @@ async def _async_migrate_statistics_metadata(
 
 
 async def _async_migrate_statistics_metadata_on_start(
-    hass: HomeAssistant, coordinator: EcoVentCoordinator
+    hass: HomeAssistant, entry: ConfigEntry, coordinator: EcoVentCoordinator
 ) -> None:
     """Run statistics migration now and again after recorder startup."""
     await _async_migrate_statistics_metadata(hass, coordinator)
@@ -542,7 +605,42 @@ async def _async_migrate_statistics_metadata_on_start(
     async def _async_run_at_start(_event) -> None:
         await _async_migrate_statistics_metadata(hass, coordinator)
 
-    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _async_run_at_start)
+    entry.async_on_unload(
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _async_run_at_start)
+    )
+
+
+async def _async_close_coordinator(
+    hass: HomeAssistant, coordinator: EcoVentCoordinator | None
+) -> None:
+    """Close a coordinator transport without blocking setup or unload cleanup."""
+    close = getattr(getattr(coordinator, "_fan", None), "close", None)
+    if close is None:
+        return
+
+    try:
+        await hass.async_add_executor_job(close)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.warning(
+            "Unable to close EcoVent V2 transport during cleanup: %s",
+            err,
+            exc_info=True,
+        )
+
+
+def _delete_hardware_profile_mismatch_issue(
+    hass: HomeAssistant, entry_id: str
+) -> None:
+    """Remove a Repair owned by a config entry during rollback or unload."""
+    try:
+        async_delete_hardware_profile_mismatch_issue(hass, entry_id)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.warning(
+            "Unable to remove EcoVent V2 hardware profile Repair for %s: %s",
+            entry_id,
+            err,
+            exc_info=True,
+        )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -565,16 +663,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = EcoVentCoordinator(
         hass, entry, update_seconds=entry.runtime_data[UPDATE_INTERVAL]
     )
+    platform_setup_started = False
+    try:
+        await coordinator.async_config_entry_first_refresh()
 
-    await coordinator.async_config_entry_first_refresh()
-
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = coordinator
-    await async_register_frontend(hass)
-    _async_migrate_entity_registry(hass, coordinator)
-    await _async_migrate_statistics_metadata_on_start(hass, coordinator)
-    await hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)
-    return True
+        hass.data.setdefault(DOMAIN, {})
+        hass.data[DOMAIN][entry.entry_id] = coordinator
+        await async_register_frontend(hass)
+        _async_migrate_entity_registry(hass, coordinator)
+        await _async_migrate_statistics_metadata_on_start(hass, entry, coordinator)
+        platform_setup_started = True
+        await hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)
+        _async_register_optional_poll_entity_sync(hass, entry, coordinator)
+        return True
+    except Exception:
+        if platform_setup_started:
+            try:
+                await hass.config_entries.async_unload_platforms(entry, _PLATFORMS)
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning(
+                    "Unable to unload EcoVent V2 platforms after setup failure: %s",
+                    err,
+                    exc_info=True,
+                )
+        hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
+        _delete_hardware_profile_mismatch_issue(hass, entry.entry_id)
+        await _async_close_coordinator(hass, coordinator)
+        raise
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -582,11 +697,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, _PLATFORMS)
     if unload_ok:
-        async_delete_hardware_profile_mismatch_issue(hass, entry.entry_id)
+        _delete_hardware_profile_mismatch_issue(hass, entry.entry_id)
         coordinator = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
-        close = getattr(getattr(coordinator, "_fan", None), "close", None)
-        if close is not None:
-            await hass.async_add_executor_job(close)
+        await _async_close_coordinator(hass, coordinator)
     return unload_ok
 
 

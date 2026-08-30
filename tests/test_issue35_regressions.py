@@ -286,12 +286,17 @@ class Issue35RegressionTest(unittest.TestCase):
         preset_guard = ast.get_source_segment(
             source, _class_method(tree, "VentoExpertFan", "_is_preset_mode_unchanged")
         )
-        self.assertIn("target_percentage = self._silent_preset_percentage(preset_mode)", preset_guard)
+        self.assertIn(
+            "target_percentage = self._silent_preset_percentage(preset_mode)",
+            preset_guard,
+        )
         self.assertIn(
             "self._fan.man_speed == max(0, min(100, target_percentage))",
             preset_guard,
         )
-        self.assertNotIn("self.coordinator.silent_preset_mode == preset_mode", preset_guard)
+        self.assertNotIn(
+            "self.coordinator.silent_preset_mode == preset_mode", preset_guard
+        )
         self.assertIn("set_silent_preset_mode(preset_mode)", set_preset)
         self.assertLess(
             set_preset.index("set_silent_preset_mode(preset_mode)"),
@@ -331,6 +336,7 @@ class Issue35RegressionTest(unittest.TestCase):
         )
         self.assertIn('fan.id + "_weekly_schedule_state"', init_source)
         self.assertIn("hidden_by=None", init_source)
+        self.assertIn("hidden_by == er.RegistryEntryHider.INTEGRATION", init_source)
         self.assertNotIn('f"switch.{device_slug}_weekly_schedule"', init_source)
 
     def test_unsupported_optional_entities_are_hidden_not_removed(self):
@@ -343,23 +349,466 @@ class Issue35RegressionTest(unittest.TestCase):
 
         self.assertIn("hidden_by=er.RegistryEntryHider.INTEGRATION", helper)
         self.assertIn("hidden_by=None", helper)
+        self.assertIn('fan.id + "_schedule"', helper)
         self.assertNotIn("async_remove", helper)
+
+    def test_unsupported_optional_entities_remain_live_and_resync(self):
+        init_source = INIT_PATH.read_text()
+        init_tree = _tree(INIT_PATH)
+        setup = ast.get_source_segment(
+            init_source,
+            _module_function(init_tree, "async_setup_entry"),
+        )
+        register = ast.get_source_segment(
+            init_source,
+            _module_function(init_tree, "_async_register_optional_poll_entity_sync"),
+        )
+
+        for path in (
+            SENSOR_PATH,
+            BINARY_SENSOR_PATH,
+            SWITCH_PATH,
+            NUMBER_PATH,
+            SELECT_PATH,
+        ):
+            self.assertIn("profile_has_entity_requirements", path.read_text())
+
+        self.assertIn("coordinator.async_add_listener", register)
+        self.assertIn("entry.async_on_unload", register)
+        self.assertIn("_async_sync_entity_registry()", register)
+        self.assertIn("if not coordinator.last_update_success", register)
+        self.assertIn("async_schedule_reload(entry.entry_id)", register)
+        self.assertIn("current_identity != loaded_identity", register)
+        self.assertIn("reload_requested", register)
+        self.assertLess(
+            register.index("if not coordinator.last_update_success"),
+            register.index("_async_update_unsupported_optional_poll_entities"),
+        )
+        self.assertLess(
+            setup.index("async_forward_entry_setups"),
+            setup.index("_async_register_optional_poll_entity_sync"),
+        )
+
+    def test_optional_entity_sync_waits_for_success_and_reloads_identity(self):
+        function = _module_function(
+            _tree(INIT_PATH), "_async_register_optional_poll_entity_sync"
+        )
+        namespace = {
+            "HomeAssistant": object,
+            "ConfigEntry": object,
+            "EcoVentCoordinator": object,
+        }
+        registry = object()
+        namespace["er"] = types.SimpleNamespace(async_get=lambda _hass: registry)
+        namespace["_LOGGER"] = types.SimpleNamespace(info=lambda *_args: None)
+        sync_calls = []
+        namespace["_async_update_unsupported_optional_poll_entities"] = (
+            lambda actual_registry, fan: sync_calls.append(
+                (actual_registry, fan.unsupported_optional_poll_parameter_ids())
+            )
+        )
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=[function], type_ignores=[])),
+                str(INIT_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+        register = namespace["_async_register_optional_poll_entity_sync"]
+
+        class Fan:
+            profile_key = "vento"
+            _unit_type_id = 0x0500
+            firmware = "0.5 2021-10-04"
+            unsupported = frozenset()
+
+            def unsupported_optional_poll_parameter_ids(self):
+                return self.unsupported
+
+        class Coordinator:
+            def __init__(self):
+                self._fan = Fan()
+                self.last_update_success = True
+                self.listener = None
+
+            def async_add_listener(self, listener):
+                self.listener = listener
+                return lambda: None
+
+        class Entry:
+            entry_id = "entry-1"
+
+            def async_on_unload(self, _unload):
+                return None
+
+        reloads = []
+        hass = types.SimpleNamespace(
+            config_entries=types.SimpleNamespace(
+                async_schedule_reload=lambda entry_id: reloads.append(entry_id)
+            )
+        )
+        coordinator = Coordinator()
+        register(hass, Entry(), coordinator)
+
+        self.assertEqual(sync_calls, [(registry, frozenset())])
+        coordinator._fan.unsupported = frozenset({0x003A})
+        coordinator.listener()
+        self.assertEqual(sync_calls[-1], (registry, frozenset({0x003A})))
+
+        coordinator.last_update_success = False
+        coordinator._fan.firmware = "0.6 2021-05-17"
+        coordinator.listener()
+        self.assertEqual(reloads, [])
+
+        coordinator.last_update_success = True
+        coordinator._fan.firmware = None
+        coordinator.listener()
+        self.assertEqual(reloads, [])
+
+        coordinator._fan.firmware = "0.6 2021-05-17"
+        coordinator.listener()
+        coordinator.listener()
+        self.assertEqual(reloads, ["entry-1"])
+
+    def test_legacy_schedule_helpers_are_removed_even_when_schedule_is_unsupported(
+        self,
+    ):
+        migrate = _module_function(_tree(INIT_PATH), "_async_migrate_entity_registry")
+        schedule_support_branch = next(
+            node
+            for node in ast.walk(migrate)
+            if isinstance(node, ast.If)
+            and any(
+                isinstance(child, ast.Constant)
+                and child.value == "weekly_schedule_setup"
+                for child in ast.walk(node.test)
+            )
+        )
+
+        self.assertFalse(
+            any(
+                isinstance(child, ast.Name) and child.id == "schedule_helper_entity_ids"
+                for statement in schedule_support_branch.body
+                for child in ast.walk(statement)
+            )
+        )
+        self.assertTrue(
+            any(
+                isinstance(node, ast.Name) and node.id == "schedule_helper_entity_ids"
+                for node in ast.walk(migrate)
+            )
+        )
 
     def test_hardware_profile_repairs_issue_is_unloaded_cleanly(self):
         init_source = INIT_PATH.read_text()
         coordinator_source = (COMPONENT_PATH / "coordinator.py").read_text()
         init_tree = _tree(INIT_PATH)
+        delete_issue = ast.get_source_segment(
+            init_source,
+            _module_function(init_tree, "_delete_hardware_profile_mismatch_issue"),
+        )
         unload = ast.get_source_segment(
             init_source,
             _module_function(init_tree, "async_unload_entry"),
         )
 
-        self.assertIn("async_delete_hardware_profile_mismatch_issue", unload)
+        self.assertIn("async_delete_hardware_profile_mismatch_issue", delete_issue)
+        self.assertIn("except Exception as err", delete_issue)
+        self.assertIn("_delete_hardware_profile_mismatch_issue", unload)
+        self.assertLess(
+            unload.index("_delete_hardware_profile_mismatch_issue"),
+            unload.index("coordinator = hass.data"),
+        )
         self.assertIn("hardware_profile_mismatch_issue_id", coordinator_source)
         self.assertIn(
             '"unsupported_optional_params": unsupported_params', coordinator_source
         )
         self.assertNotIn('"unsupported_optional_params": list(', coordinator_source)
+        repair_method = ast.get_source_segment(
+            coordinator_source,
+            _class_method(
+                _tree(COMPONENT_PATH / "coordinator.py"),
+                "EcoVentCoordinator",
+                "_update_hardware_profile_mismatch_repair_issue",
+            ),
+        )
+        self.assertIn("except Exception as err", repair_method)
+        self.assertGreater(
+            repair_method.rindex(
+                "self._reported_hardware_profile_mismatch_state = mismatch_state"
+            ),
+            repair_method.index("ir.async_create_issue"),
+        )
+
+    def test_hardware_profile_repair_failure_does_not_poison_dedupe(self):
+        coordinator_path = COMPONENT_PATH / "coordinator.py"
+        method = _class_method(
+            _tree(coordinator_path),
+            "EcoVentCoordinator",
+            "_update_hardware_profile_mismatch_repair_issue",
+        )
+        namespace = {
+            "hardware_profile_mismatch_state": lambda _fan: (
+                "vento",
+                0x0500,
+                "0.5 2021-10-04",
+                frozenset({0x0083}),
+            ),
+            "unsupported_optional_poll_parameter_summary": (
+                lambda _fan, _unsupported: "0x0083 (unknown)"
+            ),
+            "hardware_profile_mismatch_issue_url": (
+                lambda _fan, _unsupported: "https://example.invalid/issue"
+            ),
+            "async_delete_hardware_profile_mismatch_issue": lambda *_args: None,
+            "DOMAIN": "ecovent_v2",
+            "_LOGGER": types.SimpleNamespace(
+                debug=lambda *_args, **_kwargs: None,
+                warning=lambda *_args, **_kwargs: None,
+            ),
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+                str(coordinator_path),
+                "exec",
+            ),
+            namespace,
+        )
+        update_repair = namespace["_update_hardware_profile_mismatch_repair_issue"]
+
+        attempts = []
+        issue_registry = types.ModuleType("homeassistant.helpers.issue_registry")
+        issue_registry.IssueSeverity = types.SimpleNamespace(WARNING="warning")
+
+        def async_create_issue(*_args, **_kwargs):
+            attempts.append("create")
+            if len(attempts) == 1:
+                raise RuntimeError("transient registry failure")
+
+        issue_registry.async_create_issue = async_create_issue
+        homeassistant = types.ModuleType("homeassistant")
+        homeassistant.__path__ = []
+        helpers = types.ModuleType("homeassistant.helpers")
+        helpers.__path__ = []
+        helpers.issue_registry = issue_registry
+        fan = types.SimpleNamespace(
+            name="Test fan",
+            unit_type="Vento",
+            profile_key="vento",
+            _unit_type_id=0x0500,
+        )
+        coordinator = types.SimpleNamespace(
+            _fan=fan,
+            _reported_hardware_profile_mismatch_state=None,
+            hass=object(),
+            config_entry=types.SimpleNamespace(entry_id="entry-1"),
+            _hardware_profile_mismatch_issue_id=lambda: "repair-1",
+        )
+        modules = {
+            "homeassistant": homeassistant,
+            "homeassistant.helpers": helpers,
+            "homeassistant.helpers.issue_registry": issue_registry,
+        }
+        with patch.dict(sys.modules, modules):
+            update_repair(coordinator)
+            self.assertIsNone(
+                coordinator._reported_hardware_profile_mismatch_state
+            )
+            update_repair(coordinator)
+
+        self.assertEqual(attempts, ["create", "create"])
+        self.assertEqual(
+            coordinator._reported_hardware_profile_mismatch_state,
+            ("vento", 0x0500, "0.5 2021-10-04", frozenset({0x0083})),
+        )
+
+    def test_setup_failure_closes_and_removes_coordinator(self):
+        init_tree = _tree(INIT_PATH)
+        close_coordinator = _module_function(init_tree, "_async_close_coordinator")
+        delete_issue = _module_function(
+            init_tree, "_delete_hardware_profile_mismatch_issue"
+        )
+        setup_entry = _module_function(init_tree, "async_setup_entry")
+        deleted = []
+        namespace = {
+            "HomeAssistant": object,
+            "ConfigEntry": object,
+            "EcoVentCoordinator": object,
+            "CONF_IP_ADDRESS": "ip_address",
+            "CONF_PORT": "port",
+            "CONF_PASSWORD": "password",
+            "CONF_NAME": "name",
+            "UPDATE_INTERVAL": "update_interval",
+            "CONF_AUTO_CLOCK_SYNC": "auto_clock_sync",
+            "CONF_TRANSPORT": "transport",
+            "TRANSPORT_BGCP_UDP": "bgcp_udp",
+            "DOMAIN": "ecovent_v2",
+            "async_delete_hardware_profile_mismatch_issue": (
+                lambda _hass, entry_id: deleted.append(entry_id)
+            ),
+            "_LOGGER": types.SimpleNamespace(
+                warning=lambda *_args, **_kwargs: None,
+                error=lambda *_args, **_kwargs: None,
+            ),
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(
+                    ast.Module(
+                        body=[close_coordinator, delete_issue, setup_entry],
+                        type_ignores=[],
+                    )
+                ),
+                str(INIT_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+
+        closed = []
+
+        class Coordinator:
+            def __init__(self, _hass, _entry, update_seconds):
+                self.update_seconds = update_seconds
+                self._fan = types.SimpleNamespace(close=lambda: closed.append("close"))
+
+            async def async_config_entry_first_refresh(self):
+                return None
+
+        async def fail_frontend(_hass):
+            raise RuntimeError("frontend setup failed")
+
+        namespace["EcoVentCoordinator"] = Coordinator
+        namespace["async_register_frontend"] = fail_frontend
+        class Hass:
+            data = {}
+
+            async def async_add_executor_job(self, callback):
+                return callback()
+
+        hass = Hass()
+        entry = types.SimpleNamespace(
+            entry_id="entry-1",
+            data={"update_interval": 30},
+            runtime_data=None,
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "frontend setup failed"):
+            asyncio.run(namespace["async_setup_entry"](hass, entry))
+
+        self.assertEqual(closed, ["close"])
+        self.assertEqual(deleted, ["entry-1"])
+        self.assertNotIn("entry-1", hass.data.get("ecovent_v2", {}))
+
+    def test_initial_optional_entity_sync_runs_after_platform_forward(self):
+        init_tree = _tree(INIT_PATH)
+        methods = [
+            _module_function(init_tree, name)
+            for name in (
+                "_async_close_coordinator",
+                "_delete_hardware_profile_mismatch_issue",
+                "async_setup_entry",
+            )
+        ]
+        events = []
+        namespace = {
+            "HomeAssistant": object,
+            "ConfigEntry": object,
+            "EcoVentCoordinator": object,
+            "CONF_IP_ADDRESS": "ip_address",
+            "CONF_PORT": "port",
+            "CONF_PASSWORD": "password",
+            "CONF_NAME": "name",
+            "UPDATE_INTERVAL": "update_interval",
+            "CONF_AUTO_CLOCK_SYNC": "auto_clock_sync",
+            "CONF_TRANSPORT": "transport",
+            "TRANSPORT_BGCP_UDP": "bgcp_udp",
+            "DOMAIN": "ecovent_v2",
+            "_PLATFORMS": ["sensor", "fan"],
+            "async_delete_hardware_profile_mismatch_issue": (
+                lambda _hass, _entry_id: events.append("delete")
+            ),
+            "_LOGGER": types.SimpleNamespace(
+                warning=lambda *_args, **_kwargs: None,
+                error=lambda *_args, **_kwargs: None,
+            ),
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=methods, type_ignores=[])),
+                str(INIT_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+
+        class Coordinator:
+            def __init__(self, _hass, _entry, update_seconds):
+                self.update_seconds = update_seconds
+                self._fan = types.SimpleNamespace(
+                    close=lambda: events.append("close")
+                )
+
+            async def async_config_entry_first_refresh(self):
+                return None
+
+        class ConfigEntries:
+            async def async_forward_entry_setups(self, _entry, platforms):
+                events.append(("forward", tuple(platforms)))
+
+            async def async_unload_platforms(self, _entry, platforms):
+                events.append(("unload", tuple(platforms)))
+                return True
+
+        class Hass:
+            def __init__(self):
+                self.data = {}
+                self.config_entries = ConfigEntries()
+
+            async def async_add_executor_job(self, callback):
+                return callback()
+
+        async def register_frontend(_hass):
+            return None
+
+        async def migrate_statistics(*_args):
+            return None
+
+        namespace.update(
+            {
+                "EcoVentCoordinator": Coordinator,
+                "async_register_frontend": register_frontend,
+                "_async_migrate_entity_registry": lambda *_args: None,
+                "_async_migrate_statistics_metadata_on_start": migrate_statistics,
+                "_async_register_optional_poll_entity_sync": (
+                    lambda *_args: (_ for _ in ()).throw(
+                        RuntimeError("registry sync failed")
+                    )
+                ),
+            }
+        )
+        entry = types.SimpleNamespace(
+            entry_id="entry-1",
+            data={"update_interval": 30},
+            runtime_data=None,
+        )
+
+        hass = Hass()
+        with self.assertRaisesRegex(RuntimeError, "registry sync failed"):
+            asyncio.run(namespace["async_setup_entry"](hass, entry))
+
+        self.assertEqual(
+            events,
+            [
+                ("forward", ("sensor", "fan")),
+                ("unload", ("sensor", "fan")),
+                "delete",
+                "close",
+            ],
+        )
+        self.assertNotIn("entry-1", hass.data["ecovent_v2"])
 
     def test_switch_none_state_remains_unknown(self):
         switch_source = SWITCH_PATH.read_text()
@@ -465,7 +914,9 @@ class Issue35RegressionTest(unittest.TestCase):
         self.assertIn("silent_preset_mode", fan_source)
         self.assertIn("_set_silent_manual_percentage", fan_source)
         self.assertIn("_set_parameters_if_changed", fan_source)
-        self.assertIn("entering_manual_mode = self._fan.speed != \"manual\"", fan_source)
+        self.assertIn(
+            'entering_manual_mode = self._fan.speed != "manual"', fan_source
+        )
         self.assertIn("include_extra_write_parameters=entering_manual_mode", fan_source)
         self.assertIn("audible_write_command_count", fan_source)
         self.assertIn("steady-state silent manual speed update", fan_source)
@@ -491,6 +942,74 @@ class Issue35RegressionTest(unittest.TestCase):
                 for call in ast.walk(set_airflow_mode)
             )
         )
+
+    def test_entity_writes_fail_closed_on_transport_failure(self):
+        cases = (
+            (SWITCH_PATH, "VentoSwitch", ("async_turn_on", "async_turn_off")),
+            (NUMBER_PATH, "VentoNumber", ("async_set_native_value",)),
+            (SELECT_PATH, "VentoSelect", ("async_select_option",)),
+        )
+
+        for path, class_name, method_names in cases:
+            tree = _tree(path)
+            source = path.read_text()
+            for method_name in method_names:
+                with self.subTest(path=path.name, method=method_name):
+                    method = _class_method(tree, class_name, method_name)
+                    method_source = ast.get_source_segment(source, method)
+                    self.assertIn("success = await", method_source)
+                    self.assertIn("if not success", method_source)
+                    self.assertIn("raise RuntimeError", method_source)
+
+        switch_source = SWITCH_PATH.read_text()
+        for method_name in ("async_turn_on", "async_turn_off"):
+            method_source = ast.get_source_segment(
+                switch_source,
+                _class_method(_tree(SWITCH_PATH), "VentoSwitch", method_name),
+            )
+            self.assertIn(
+                "await self.coordinator.async_refresh_confirmed()", method_source
+            )
+            self.assertNotIn("self.async_write_ha_state()", method_source)
+
+        number_source = NUMBER_PATH.read_text()
+        number_method = _class_method(
+            _tree(NUMBER_PATH), "VentoNumber", "async_set_native_value"
+        )
+        number_method_source = ast.get_source_segment(number_source, number_method)
+        self.assertNotIn("self._attr_native_value = value", number_method_source)
+        self.assertNotIn("self.async_write_ha_state()", number_method_source)
+
+    def test_entity_write_paths_refresh_in_finally_after_partial_failure(self):
+        cases = (
+            (FAN_PATH, "VentoExpertFan", "async_turn_on"),
+            (FAN_PATH, "VentoExpertFan", "async_turn_off"),
+            (FAN_PATH, "VentoExpertFan", "async_set_preset_mode"),
+            (FAN_PATH, "VentoExpertFan", "async_set_percentage"),
+            (FAN_PATH, "VentoExpertFan", "async_set_direction"),
+            (FAN_PATH, "VentoExpertFan", "async_oscillate"),
+            (FAN_PATH, "VentoExpertFan", "async_reset_filter_timer"),
+            (FAN_PATH, "VentoExpertFan", "async_reset_alarms"),
+            (SWITCH_PATH, "VentoSwitch", "async_turn_on"),
+            (SWITCH_PATH, "VentoSwitch", "async_turn_off"),
+            (NUMBER_PATH, "VentoNumber", "async_set_native_value"),
+            (SELECT_PATH, "VentoSelect", "async_select_option"),
+        )
+        for path, class_name, method_name in cases:
+            with self.subTest(path=path.name, method=method_name):
+                method = _class_method(_tree(path), class_name, method_name)
+                self.assertTrue(
+                    any(
+                        isinstance(node, ast.Try)
+                        and any(
+                            isinstance(child, ast.Attribute)
+                            and child.attr == "async_refresh_confirmed"
+                            for statement in node.finalbody
+                            for child in ast.walk(statement)
+                        )
+                        for node in ast.walk(method)
+                    )
+                )
 
     def test_auto_boost_trigger_switch_names_are_explicit(self):
         switch_source = SWITCH_PATH.read_text()
@@ -551,6 +1070,31 @@ class Issue35RegressionTest(unittest.TestCase):
         self.assertIn('"Trigger mode on air quality"', select_source)
         self.assertIn('"Timer mode"', select_source)
 
+    def test_alarm_list_sensor_has_bgcp_and_a21_variants(self):
+        tree = _tree(SENSOR_SPECS_PATH)
+        variants = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if not isinstance(node.func, ast.Name) or node.func.id != "SensorSpec":
+                continue
+            if not node.args or not isinstance(node.args[0], ast.Constant):
+                continue
+            if node.args[0].value != "_alarm_list":
+                continue
+            keywords = {keyword.arg: keyword.value for keyword in node.keywords}
+            capabilities = ast.literal_eval(keywords["required_capabilities"])
+            params = ast.literal_eval(keywords.get("required_params", ast.Tuple()))
+            variants.append((params, capabilities))
+
+        self.assertEqual(
+            set(variants),
+            {
+                ((), ("air_quality",)),
+                (("alarm_status",), ("a21_modbus",)),
+            },
+        )
+
     def test_preset_translations_group_boost_modes(self):
         translation_paths = [STRINGS_PATH, *TRANSLATIONS_PATH.glob("*.json")]
 
@@ -587,6 +1131,163 @@ class Issue35RegressionTest(unittest.TestCase):
                     self.assertTrue(expected_fields <= labels.keys())
                     for key in expected_fields:
                         self.assertNotEqual(labels[key], key)
+
+    def test_statistics_start_listener_is_owned_by_config_entry(self):
+        function = _module_function(
+            _tree(INIT_PATH), "_async_migrate_statistics_metadata_on_start"
+        )
+        events = []
+
+        async def migrate(_hass, _coordinator):
+            events.append("migrate")
+
+        namespace = {
+            "HomeAssistant": object,
+            "ConfigEntry": object,
+            "EcoVentCoordinator": object,
+            "EVENT_HOMEASSISTANT_STARTED": "started",
+            "_async_migrate_statistics_metadata": migrate,
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(
+                    ast.Module(body=[function], type_ignores=[])
+                ),
+                str(INIT_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+
+        def cancel():
+            events.append("cancel")
+
+        class Bus:
+            def async_listen_once(self, event, callback):
+                events.append(("listen", event, callback))
+                return cancel
+
+        class Entry:
+            def async_on_unload(self, callback):
+                events.append(("unload", callback))
+
+        asyncio.run(
+            namespace["_async_migrate_statistics_metadata_on_start"](
+                types.SimpleNamespace(bus=Bus()), Entry(), object()
+            )
+        )
+        self.assertEqual(events[0], "migrate")
+        self.assertEqual(events[1][0:2], ("listen", "started"))
+        self.assertEqual(events[2], ("unload", cancel))
+
+    def test_coordinator_rejects_false_initialization_even_when_id_was_assigned(self):
+        coordinator_path = COMPONENT_PATH / "coordinator.py"
+        source = coordinator_path.read_text()
+        method = _class_method(
+            ast.parse(source), "EcoVentCoordinator", "_async_update_data"
+        )
+        method_source = ast.get_source_segment(source, method)
+
+        self.assertIn("initialized = await", method_source)
+        self.assertIn("not initialized", method_source)
+        self.assertLess(
+            method_source.index("not initialized"),
+            method_source.index("self.fan_initialized = True"),
+        )
+
+    def test_reset_services_send_explicit_action_bytes(self):
+        source = FAN_PATH.read_text()
+        tree = ast.parse(source)
+        for method_name, parameter in (
+            ("async_reset_filter_timer", "filter_timer_reset"),
+            ("async_reset_alarms", "reset_alarms"),
+        ):
+            with self.subTest(method=method_name):
+                method = _class_method(tree, "VentoExpertFan", method_name)
+                method_source = ast.get_source_segment(source, method)
+                self.assertIn(f'"{parameter}", "01"', method_source)
+
+    def test_fan_entity_service_callables_accept_home_assistant_service_call(self):
+        """Callable entity services receive the entity and ServiceCall object."""
+        tree = _tree(FAN_PATH)
+        methods = [
+            _class_method(tree, "VentoExpertFan", method_name)
+            for method_name in (
+                "async_reset_filter_timer",
+                "async_reset_alarms",
+                "async_sync_device_clock",
+            )
+        ]
+        namespace = {}
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=methods, type_ignores=[])),
+                str(FAN_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+
+        events = []
+
+        class Hass:
+            async def async_add_executor_job(self, callback, *args):
+                events.append(("executor", args))
+                return callback(*args)
+
+        class Coordinator:
+            async def async_refresh_confirmed(self):
+                events.append("refresh")
+
+            async def async_sync_device_clock(self):
+                events.append("sync")
+
+        entity = types.SimpleNamespace(
+            hass=Hass(),
+            coordinator=Coordinator(),
+            _set_param=lambda *args: events.append(("set", args)),
+        )
+        service_call = object()
+        asyncio.run(namespace["async_reset_filter_timer"](entity, service_call))
+        asyncio.run(namespace["async_reset_alarms"](entity, service_call))
+        asyncio.run(namespace["async_sync_device_clock"](entity, service_call))
+
+        self.assertIn(("set", ("filter_timer_reset", "01")), events)
+        self.assertIn(("set", ("reset_alarms", "01")), events)
+        self.assertIn("sync", events)
+
+    def test_confirmed_refresh_rejects_swallowed_update_failure(self):
+        method = _class_method(
+            _tree(COMPONENT_PATH / "coordinator.py"),
+            "EcoVentCoordinator",
+            "async_refresh_confirmed",
+        )
+        namespace = {}
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+                str(COMPONENT_PATH / "coordinator.py"),
+                "exec",
+            ),
+            namespace,
+        )
+        events = []
+
+        async def refresh():
+            events.append("refresh")
+
+        coordinator = types.SimpleNamespace(
+            async_refresh=refresh,
+            last_update_success=False,
+            _fan=types.SimpleNamespace(name="Test fan"),
+        )
+        with self.assertRaisesRegex(RuntimeError, "Failed to confirm updated state"):
+            asyncio.run(namespace["async_refresh_confirmed"](coordinator))
+        self.assertEqual(events, ["refresh"])
+
+        coordinator.last_update_success = True
+        asyncio.run(namespace["async_refresh_confirmed"](coordinator))
+        self.assertEqual(events, ["refresh", "refresh"])
 
 
 if __name__ == "__main__":

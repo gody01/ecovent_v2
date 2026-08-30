@@ -79,7 +79,8 @@
             "unknown": "[%key:common::config_flow::error::unknown%]"
         },
         "abort": {
-            "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+            "already_configured": "[%key:common::config_flow::abort::already_configured_device%]",
+            "wrong_device": "The discovered device does not match the configured device."
         }
     },
     "services": {

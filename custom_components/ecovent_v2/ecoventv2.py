@@ -1,6 +1,7 @@
 """Library to handle communication with Wifi ecofan from TwinFresh / Blauberg."""
 
 import logging
+from threading import RLock
 
 __version__ = "loc_1.2.25"
 
@@ -308,8 +309,12 @@ class Fan(
         self._password = password
         self._unknown_params = {}
         self.socket = None
+        self._command_lock = RLock()
         self._bulk_read_supported = None
+        self._bulk_read_reprobe_countdown = 0
         self._last_response_param_ids = None
+        self._last_raw_response_param_ids = None
+        self._last_response_device_id = None
         self._unsupported_optional_poll_params = set()
         self.audible_write_command_count = 0
         self._profile_key = "vento"

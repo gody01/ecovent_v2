@@ -6,6 +6,25 @@ from ecovent_test_helpers import Fan, packet_with_payload
 
 
 class ExtractFanCapabilityTest(unittest.TestCase):
+    def test_extract_fan_delay_codes_decode_to_minutes(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0600"
+
+        for code, minutes in ((0, 0), (2, 5), (3, 15), (4, 30), (6, 60)):
+            with self.subTest(boost_code=code):
+                fan.boost_time = f"{code:02x}"
+                self.assertEqual(fan.boost_time, f"{minutes} m")
+
+        for code, minutes in ((0, 0), (1, 2), (2, 5)):
+            with self.subTest(turn_on_code=code):
+                fan.turn_on_delay_timer = f"{code:02x}"
+                self.assertEqual(fan.turn_on_delay_timer, f"{minutes} m")
+
+        with self.assertRaisesRegex(ValueError, "boost time code"):
+            fan.boost_time = "01"
+        with self.assertRaisesRegex(ValueError, "turn-on delay code"):
+            fan.turn_on_delay_timer = "03"
+
     def test_parse_response_uses_extract_fan_profile(self):
         fan = Fan("192.0.2.1")
         self.assertTrue(
@@ -90,3 +109,26 @@ class ExtractFanCapabilityTest(unittest.TestCase):
         self.assertFalse(
             fan.supports_entity(required_params=("analogV",))
         )
+
+    def test_extract_fan_three_byte_durations_are_total_seconds(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0600"
+
+        fan.boost_timer_countdown = "100e00"
+        fan.silent_mode_start_time = "4d0e00"
+        fan.silent_mode_end_time = "805101"
+        fan.rtc_time = "4d0e00"
+
+        self.assertEqual(fan.boost_timer_countdown, "1h 0m 0s ")
+        self.assertEqual(fan.silent_mode_start_time, "1h 1m 1s ")
+        self.assertEqual(fan.silent_mode_end_time, "24h 0m 0s ")
+        self.assertEqual(fan.rtc_time, "01:01:01")
+
+        for attribute in (
+            "boost_timer_countdown",
+            "silent_mode_start_time",
+            "silent_mode_end_time",
+        ):
+            with self.subTest(attribute=attribute):
+                with self.assertRaisesRegex(ValueError, "duration"):
+                    setattr(fan, attribute, "905f01")

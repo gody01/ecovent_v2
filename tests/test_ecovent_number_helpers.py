@@ -4,11 +4,7 @@ import ast
 import unittest
 
 from ecovent_test_helpers import COMPONENT_PATH, Fan  # noqa: F401  Sets module path.
-from number_helpers import (
-    encode_number_write_value,
-    encode_raw_number,
-    encode_speed_percent,
-)
+from number_helpers import encode_number_write_value, encode_raw_number, encode_speed_percent
 
 
 NUMBER_PATH = COMPONENT_PATH / "number.py"

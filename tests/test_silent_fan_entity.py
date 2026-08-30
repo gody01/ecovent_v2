@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from enum import IntFlag
 from pathlib import Path
 import importlib.util
@@ -9,7 +10,7 @@ import sys
 import types
 import unittest
 
-from ecovent_test_helpers import Fan, packet_with_payload
+from ecovent_test_helpers import Fan, packet_for_write_command
 
 
 COMPONENT_PATH = (
@@ -116,7 +117,7 @@ def _silent_entity(*, speed="manual", man_speed=63):
 
     calls = []
     fan.send = lambda data: calls.append(data) or True
-    fan.receive = lambda: packet_with_payload([])
+    fan.receive = lambda: packet_for_write_command(calls[-1])
 
     entity = VentoExpertFan.__new__(VentoExpertFan)
     entity._fan = fan
@@ -125,6 +126,43 @@ def _silent_entity(*, speed="manual", man_speed=63):
 
 
 class SilentFanEntityTest(unittest.TestCase):
+    def test_unchanged_turn_on_skips_write_and_confirmation_refresh(self):
+        async def run_test():
+            entity, fan, calls = _silent_entity(speed="manual", man_speed=63)
+
+            class Hass:
+                async def async_add_executor_job(self, callback, *args):
+                    return callback(*args)
+
+            refreshes = []
+
+            async def failed_refresh():
+                refreshes.append("failed")
+                raise RuntimeError("confirm failed")
+
+            entity.hass = Hass()
+            entity.async_write_ha_state = lambda: None
+            entity.coordinator.async_refresh_confirmed = failed_refresh
+
+            await entity.async_turn_on()
+
+            self.assertEqual(calls, [])
+            self.assertEqual(refreshes, [])
+            self.assertEqual(entity.coordinator.silent_preset_mode, "manual")
+
+            fan._speed = "high"
+
+            async def confirmed_refresh():
+                refreshes.append("confirmed")
+
+            entity.coordinator.async_refresh_confirmed = confirmed_refresh
+            await entity.async_turn_on()
+
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(refreshes, ["confirmed"])
+
+        asyncio.run(run_test())
+
     def test_entering_silent_manual_mode_allows_one_audible_mode_write(self):
         entity, fan, calls = _silent_entity(speed="high", man_speed=30)
 
@@ -186,6 +224,22 @@ class SilentFanEntityTest(unittest.TestCase):
         self.assertNotIn("02ff", calls[0])
         self.assertNotIn("fe036f", calls[0])
         self.assertEqual(entity.coordinator.silent_preset_mode, "manual")
+
+    def test_failed_silent_write_does_not_change_preset_facade(self):
+        entity, fan, _calls = _silent_entity(speed="manual", man_speed=63)
+        fan.set_parameters = lambda *_args, **_kwargs: False
+
+        with self.assertRaisesRegex(RuntimeError, "Failed to write"):
+            entity.set_preset_mode("medium")
+
+        self.assertIsNone(entity.coordinator.silent_preset_mode)
+
+    def test_failed_single_parameter_write_fails_the_fan_command(self):
+        entity, fan, _calls = _silent_entity(speed="manual", man_speed=63)
+        fan.set_param = lambda *_args, **_kwargs: False
+
+        with self.assertRaisesRegex(RuntimeError, "Failed to write state"):
+            entity._set_param_if_changed("state", "off")
 
     def test_steady_state_silent_zero_percentage_keeps_manual_mode_on(self):
         entity, fan, calls = _silent_entity(speed="manual", man_speed=11)

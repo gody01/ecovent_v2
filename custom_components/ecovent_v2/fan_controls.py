@@ -8,50 +8,55 @@ class FanControlsMixin:
         request = "0001"
         value = "01"
         if self.state == "off":
-            self.send_command(self.func["write_return"], request, value)
+            return self.send_command(self.func["write_return"], request, value)
+        return self.state == "on"
 
     def set_state_off(self):
         request = "0001"
         value = "00"
         if self.state == "on":
-            self.send_command(self.func["write_return"], request, value)
+            return self.send_command(self.func["write_return"], request, value)
+        return self.state == "off"
 
     def set_speed(self, speed):
-        if speed >= 1 and speed <= 5:
+        if 1 <= speed <= 5:
             request = "0002"
             value = hex(speed).replace("0x", "").zfill(2)
-            self.send_command(self.func["write_return"], request, value)
+            return self.send_command(self.func["write_return"], request, value)
+        return False
 
     def set_man_speed_percent(self, speed):
-        if speed >= 0 and speed <= 100:
-            request = "0044"
+        if 0 <= speed <= 100:
             if self.device_profile.speed_percent_scale == "percent":
                 value = speed
             else:
                 value = math.ceil(255 / 100 * speed)
             value = hex(value).replace("0x", "").zfill(2)
-            self.send_command(self.func["write_return"], request, value)
+            return self.set_param("man_speed", value)
+        return False
 
     #            request = "0002"
     #            value = "ff"
     #            self.send_command(self.func["write_return"], request, value)
 
     def set_man_speed(self, speed):
-        if speed >= 14 and speed <= 255:
+        if 14 <= speed <= 255:
             request = "0044"
             value = speed
             value = hex(value).replace("0x", "").zfill(2)
-            self.send_command(self.func["write_return"], request, value)
+            return self.send_command(self.func["write_return"], request, value)
+        return False
 
     #            request = "0002"
     #            value = "ff"
     #            self.send_command(self.func["write_return"], request, value)
 
     def set_airflow(self, val):
-        if val >= 0 and val <= 2:
+        if 0 <= val <= 2:
             request = "00b7"
             value = hex(val).replace("0x", "").zfill(2)
-            self.send_command(self.func["write_return"], request, value)
+            return self.send_command(self.func["write_return"], request, value)
+        return False
 
     @property
     def operating_mode_preset(self):
@@ -79,10 +84,15 @@ class FanControlsMixin:
         """Set speed setpoints used by autonomous operating modes."""
         target = max(30, min(100, int(percentage)))
         value = hex(target).replace("0x", "").zfill(2)
-        self.set_param("max_speed_setpoint", value)
-        self.set_param("interval_ventilation_speed_setpoint", value)
-        self.set_param("all_day_mode", "on")
-        self.set_param("silent_mode_state", "off")
+        for name, write_value in (
+            ("max_speed_setpoint", value),
+            ("interval_ventilation_speed_setpoint", value),
+            ("all_day_mode", "on"),
+            ("silent_mode_state", "off"),
+        ):
+            if not self.set_param(name, write_value):
+                return False
+        return True
 
     def set_operating_mode_preset(self, preset_mode):
         """Activate one autonomous operating mode and disable the others."""
@@ -112,4 +122,4 @@ class FanControlsMixin:
             raise ValueError(f"Invalid operating-mode preset: {preset_mode}")
 
         reset.update(target)
-        self.set_parameters(reset)
+        return self.set_parameters(reset)

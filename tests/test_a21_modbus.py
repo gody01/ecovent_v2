@@ -6,6 +6,7 @@ from datetime import datetime
 import importlib
 from pathlib import Path
 import sys
+import threading
 import types
 
 import pytest
@@ -29,6 +30,7 @@ A21ModbusDevice = a21_modbus.A21ModbusDevice
 A21ModbusError = a21_modbus.A21ModbusError
 Table = a21_registers.Table
 WeeklyScheduleRecord = schedule_helpers.WeeklyScheduleRecord
+RtcCalendar = a21_registers.RtcCalendar
 
 
 class Response:
@@ -180,6 +182,203 @@ def device(client=None, **kwargs):
     )
 
 
+def test_semantic_transactions_are_serialized_across_all_modbus_writes():
+    first_write = threading.Event()
+    release_first = threading.Event()
+
+    class BlockingClient(FakeModbusClient):
+        def write_coil(self, address, value, *, device_id):
+            result = super().write_coil(address, value, device_id=device_id)
+            if value is True:
+                first_write.set()
+                assert release_first.wait(timeout=1)
+            return result
+
+    client = BlockingClient()
+    fan = device(client)
+    results = {}
+
+    first = threading.Thread(
+        target=lambda: results.setdefault(
+            "first", fan.set_parameters({"state": "on", "speed": "manual"})
+        )
+    )
+    second = threading.Thread(
+        target=lambda: results.setdefault("second", fan.set_param("state", "off"))
+    )
+    first.start()
+    assert first_write.wait(timeout=1)
+    second.start()
+    second.join(timeout=0.05)
+    assert second.is_alive(), "second command entered a partial first transaction"
+
+    release_first.set()
+    first.join(timeout=1)
+    second.join(timeout=1)
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert results == {"first": True, "second": True}
+
+    writes = [call for call in client.calls if call[0].startswith("write_")]
+    assert writes[0][:3] == ("write_coil", 0, True)
+    assert writes[1][0:2] == ("write_register", 2)
+    assert writes[2][:3] == ("write_coil", 0, False)
+
+
+def test_typed_write_keeps_transport_and_semantic_cache_in_one_transaction():
+    first_raw_complete = threading.Event()
+    release_first = threading.Event()
+    client = FakeModbusClient()
+    fan = device(client)
+    original_write_raw = fan.write_raw
+
+    def paused_write_raw(table, address, values):
+        result = original_write_raw(table, address, values)
+        if address == 44 and tuple(values) == (24,):
+            first_raw_complete.set()
+            assert release_first.wait(timeout=1)
+        return result
+
+    fan.write_raw = paused_write_raw
+    results = []
+    first = threading.Thread(
+        target=lambda: results.append(fan.write_register("HR_SetTEMP", 24))
+    )
+    second = threading.Thread(
+        target=lambda: results.append(fan.write_register("HR_SetTEMP", 25))
+    )
+
+    first.start()
+    assert first_raw_complete.wait(timeout=1)
+    second.start()
+    second.join(timeout=0.05)
+    assert second.is_alive(), "second typed write entered a partial transaction"
+
+    release_first.set()
+    first.join(timeout=1)
+    second.join(timeout=1)
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert results == [True, True]
+    assert client.holding_registers[44] == 25
+    assert fan.raw_registers[(Table.HOLDING_REGISTER, 44)] == 25
+    assert fan.decoded_registers["HR_SetTEMP"] == 25
+    assert fan.temperature_treshold == 25
+
+
+def test_failed_poll_cannot_evict_a_newer_typed_write():
+    eviction_started = threading.Event()
+    release_eviction = threading.Event()
+    client = FakeModbusClient(fail_slots={("read_holding_registers", 44)})
+    fan = device(client)
+    fan.write_register("HR_SetTEMP", 24)
+    original_evict = fan._evict_cached_range
+
+    def paused_evict(table, address, count):
+        if table is Table.HOLDING_REGISTER and address == 44:
+            eviction_started.set()
+            assert release_eviction.wait(timeout=1)
+        return original_evict(table, address, count)
+
+    fan._evict_cached_range = paused_evict
+    results = {}
+    poll = threading.Thread(
+        target=lambda: results.setdefault(
+            "poll", fan._read_resilient(Table.HOLDING_REGISTER, 44, 1)
+        )
+    )
+    write = threading.Thread(
+        target=lambda: results.setdefault(
+            "write", fan.write_register("HR_SetTEMP", 25)
+        )
+    )
+
+    poll.start()
+    assert eviction_started.wait(timeout=1)
+    write.start()
+    write.join(timeout=0.05)
+    assert write.is_alive(), "typed write entered an unfinished poll transaction"
+
+    release_eviction.set()
+    poll.join(timeout=1)
+    write.join(timeout=1)
+    assert not poll.is_alive()
+    assert not write.is_alive()
+    assert results == {"poll": False, "write": True}
+    assert client.holding_registers[44] == 25
+    assert fan.raw_registers[(Table.HOLDING_REGISTER, 44)] == 25
+    assert fan.decoded_registers["HR_SetTEMP"] == 25
+    assert fan.temperature_treshold == 25
+    assert (Table.HOLDING_REGISTER, 44) not in fan.unavailable_addresses
+
+
+def test_failed_preset_poll_cannot_evict_a_newer_typed_write():
+    eviction_started = threading.Event()
+    release_eviction = threading.Event()
+
+    class FailingPresetClient(FakeModbusClient):
+        fail_preset = False
+
+        def read_holding_registers(self, address, *, count, device_id):
+            if self.fail_preset and address == 5:
+                raise ConnectionError("preset timeout")
+            return super().read_holding_registers(
+                address, count=count, device_id=device_id
+            )
+
+    client = FailingPresetClient()
+    fan = device(client)
+    fan.write_register("HR_SuSPEED1", 40)
+    client.fail_preset = True
+    original_evict = fan._evict_cached_range
+
+    def paused_evict(table, address, count):
+        if table is Table.HOLDING_REGISTER and address == 5:
+            eviction_started.set()
+            assert release_eviction.wait(timeout=1)
+        return original_evict(table, address, count)
+
+    fan._evict_cached_range = paused_evict
+    results = {}
+    poll = threading.Thread(
+        target=lambda: results.setdefault("poll", fan.update_preset_speed_settings())
+    )
+    write = threading.Thread(
+        target=lambda: results.setdefault(
+            "write", fan.write_register("HR_SuSPEED1", 55)
+        )
+    )
+
+    poll.start()
+    assert eviction_started.wait(timeout=1)
+    write.start()
+    write.join(timeout=0.05)
+    assert write.is_alive(), "typed write entered an unfinished preset poll"
+
+    release_eviction.set()
+    poll.join(timeout=1)
+    write.join(timeout=1)
+    assert not poll.is_alive()
+    assert not write.is_alive()
+    assert results == {"poll": False, "write": True}
+    assert client.holding_registers[7] == 55
+    assert fan.raw_registers[(Table.HOLDING_REGISTER, 7)] == 55
+    assert fan.decoded_registers["HR_SuSPEED1"] == 55
+    assert fan.supply_speed_low == 55
+
+
+def test_invalid_opportunistic_write_does_not_block_primary_command():
+    client = FakeModbusClient()
+    fan = device(client)
+    receipts = []
+    fan.extra_write_parameters_callback = lambda: {"rtc_time": "zzzz"}
+    fan.extra_write_parameters_result_callback = receipts.append
+
+    assert fan.set_param("state", "on") is True
+    assert client.coils[0] is True
+    assert receipts == [False]
+
+
 def test_identity_gate_rejects_non_a21_before_any_write():
     client = FakeModbusClient(identity=2)
     fan = device(client)
@@ -188,6 +387,151 @@ def test_identity_gate_rejects_non_a21_before_any_write():
     assert fan.identity_probe_failed is True
     assert fan.id == "DEFAULT_DEVICEID"
     assert [call[0] for call in client.calls] == ["connect", "read_input_registers"]
+    assert fan.raw_registers == {}
+    assert fan.decoded_registers == {}
+
+    assert fan.set_param("state", "on") is False
+    assert client.coils[0] is False
+    assert [call[0] for call in client.calls] == ["connect", "read_input_registers"]
+
+
+def test_identity_gate_rejects_a_non_integer_modbus_word_before_any_write():
+    client = FakeModbusClient()
+    client.input_registers[37] = 1.5
+    fan = device(client)
+
+    with pytest.raises(A21ModbusError, match="invalid input_register response"):
+        fan.init_device()
+
+    assert fan.identity_probe_failed is True
+    assert fan.raw_registers == {}
+    assert fan.decoded_registers == {}
+    assert fan.set_param("state", "on") is False
+    assert client.coils[0] is False
+
+
+def test_identity_reprobe_error_clears_state_and_blocks_writes():
+    client = FakeModbusClient()
+    fan = device(client)
+
+    assert fan.init_device() is True
+    assert fan.state == "off"
+    assert fan.speed == "speed_1"
+    client.fail_slots.add(("read_input_registers", 37))
+    calls_before_reprobe = len(client.calls)
+
+    with pytest.raises(a21_modbus.A21IllegalAddressError):
+        fan.init_device()
+
+    assert fan.identity_probe_failed is True
+    assert fan.last_poll_complete is False
+    assert fan.raw_registers == {}
+    assert fan.decoded_registers == {}
+    assert fan.state is None
+    assert fan.speed is None
+    assert fan.set_param("state", "on") is False
+    assert client.coils[0] is False
+    assert len(client.calls) == calls_before_reprobe + 1
+
+
+def test_poll_rejects_changed_identity_before_publishing_values():
+    client = FakeModbusClient()
+    fan = device(client)
+
+    assert fan.update() is True
+    assert fan.state == "off"
+    assert fan.speed == "speed_1"
+
+    client.input_registers[37] = 2
+    client.coils[0] = True
+    client.holding_registers[2] = 5
+
+    with pytest.raises(a21_modbus.A21IdentityError):
+        fan.update()
+
+    assert fan.identity_probe_failed is True
+    assert fan.last_poll_complete is False
+    assert fan.raw_registers == {}
+    assert fan.decoded_registers == {}
+    assert fan.state is None
+    assert fan.speed is None
+
+    client.input_registers[37] = 1
+    assert fan.update() is True
+    assert fan.identity_probe_failed is False
+    assert fan.state == "on"
+    assert fan.speed == "speed_5"
+
+
+def test_poll_missing_identity_does_not_publish_other_fresh_values():
+    client = FakeModbusClient()
+    fan = device(client)
+
+    assert fan.update() is True
+    client.fail_slots.add(("read_input_registers", 37))
+    client.coils[0] = True
+    client.holding_registers[2] = 5
+
+    assert fan.update() is False
+    assert fan.last_poll_complete is False
+    assert fan.raw_registers == {}
+    assert fan.decoded_registers == {}
+    assert fan.state is None
+    assert fan.speed is None
+
+    client.fail_slots.clear()
+    assert fan.update() is True
+    assert fan.state == "on"
+    assert fan.speed == "speed_5"
+
+
+def test_malformed_identity_replaces_prior_unavailable_classification():
+    client = FakeModbusClient()
+    fan = device(client)
+    identity_slot = (Table.INPUT_REGISTER, 37)
+
+    assert fan.update() is True
+    client.fail_slots.add(("read_input_registers", 37))
+    assert fan.update() is False
+    assert identity_slot in fan.unavailable_addresses
+
+    client.fail_slots.clear()
+    client.input_registers[37] = 1.5
+    with pytest.raises(a21_modbus.A21IdentityError, match="is None"):
+        fan.update()
+
+    assert identity_slot not in fan.unavailable_addresses
+    assert fan.identity_probe_failed is True
+    assert fan.last_poll_complete is False
+    assert fan.raw_registers == {}
+    assert fan.decoded_registers == {}
+    assert fan.set_param("state", "on") is False
+
+    client.input_registers[37] = 1
+    assert fan.update() is True
+    assert fan.identity_probe_failed is False
+
+
+def test_identity_rejection_blocks_writes_until_a_valid_poll():
+    client = FakeModbusClient()
+    fan = device(client)
+
+    assert fan.update() is True
+    client.input_registers[37] = 2
+    with pytest.raises(a21_modbus.A21IdentityError):
+        fan.update()
+
+    with pytest.raises(a21_modbus.A21IdentityError, match="writes are blocked"):
+        fan.write_register("CL_POWER", True)
+    assert fan.set_param("state", "on") is False
+    assert client.coils[0] is False
+    assert fan.state is None
+
+    client.input_registers[37] = 1
+    assert fan.update() is True
+    assert fan.set_param("state", "on") is True
+    assert client.coils[0] is True
+    assert fan.state == "on"
 
 
 def test_init_reads_complete_non_sensitive_surface_and_populates_semantics():
@@ -231,6 +575,22 @@ def test_configured_device_id_survives_endpoint_reconfiguration():
     assert fan.id == "a21-original-endpoint-502-7"
 
 
+def test_profile_entity_requirements_use_modbus_semantics():
+    fan = device()
+
+    assert fan.profile_has_entity_requirements(
+        required_params=("temperature",),
+        required_capabilities=("a21_modbus",),
+    )
+    assert not fan.profile_has_entity_requirements(
+        required_params=("analogV",),
+    )
+    assert fan.profile_has_entity_requirements(
+        required_params=("alarm_status",),
+        required_capabilities=("a21_modbus",),
+    )
+
+
 def test_raw_api_uses_all_published_modbus_function_shapes():
     client = FakeModbusClient()
     fan = device(client)
@@ -258,6 +618,31 @@ def test_raw_api_uses_all_published_modbus_function_shapes():
     assert all(call[-1] == 7 for call in client.calls if call[0] != "connect")
 
 
+def test_raw_io_rejects_values_that_integer_coercion_would_change():
+    client = FakeModbusClient()
+    fan = device(client)
+
+    client.input_registers[37] = True
+    with pytest.raises(A21ModbusError, match="invalid input_register response"):
+        fan.read_raw(Table.INPUT_REGISTER, 37)
+
+    client.coils[0] = 1.5
+    with pytest.raises(A21ModbusError, match="invalid coil response"):
+        fan.read_raw(Table.COIL, 0)
+
+    for invalid_bit in (-1, 2):
+        client.coils[0] = invalid_bit
+        with pytest.raises(A21ModbusError, match="invalid coil response"):
+            fan.read_raw(Table.COIL, 0)
+
+    with pytest.raises(ValueError, match="coil values must be boolean"):
+        fan.write_raw(Table.COIL, 0, (1.0,))
+    with pytest.raises(ValueError, match="register values must be 0..65535"):
+        fan.write_raw(Table.HOLDING_REGISTER, 2, (1.5,))
+    with pytest.raises(ValueError, match="register values must be 0..65535"):
+        fan.write_raw(Table.HOLDING_REGISTER, 2, (True,))
+
+
 def test_write_permissions_ranges_and_enum_are_enforced():
     fan = device(FakeModbusClient())
 
@@ -271,7 +656,7 @@ def test_write_permissions_ranges_and_enum_are_enforced():
         fan.write_register("IR_DeviceTYPE", 1)
     with pytest.raises(ValueError):
         fan.write_register("HR_SetTEMP", 99)
-    with pytest.raises(ValueError, match="enum value"):
+    with pytest.raises(ValueError, match="documented range"):
         fan.write_register("HR_OPERATION_MODE", 9)
     with pytest.raises(ValueError, match="documented range"):
         fan.write_register("CL_RESET_FILTER_TIMER", False)
@@ -293,14 +678,246 @@ def test_resilient_full_poll_records_one_missing_optional_address():
     assert fan.id == "DEFAULT_DEVICEID"
 
 
-def test_poll_fails_when_a_required_operational_address_is_missing():
-    client = FakeModbusClient(fail_slots={("read_coils", 0)})
+def test_resilient_poll_clears_stale_optional_semantic_value():
+    client = FakeModbusClient()
     fan = device(client)
     fan.read_register("IR_DeviceTYPE")
+
+    assert fan.update() is True
+    assert fan.outdoor_temperature == 5.0
+    assert fan.decoded_registers["IR_CurTEMP_SuAirIn"] == 5.0
+
+    client.fail_slots.add(("read_input_registers", 1))
+    client.input_registers[1] = 2500
+
+    assert fan.update() is True
+    assert fan.last_poll_complete is False
+    assert (Table.INPUT_REGISTER, 1) in fan.unavailable_addresses
+    assert (Table.INPUT_REGISTER, 1) not in fan.raw_registers
+    assert "IR_CurTEMP_SuAirIn" not in fan.decoded_registers
+    assert fan.outdoor_temperature is None
+
+
+@pytest.mark.parametrize("failed_address", (25, 26))
+def test_resilient_poll_evicts_every_word_of_failed_multiword_value(
+    failed_address,
+):
+    client = FakeModbusClient()
+    fan = device(client)
+    fan.read_register("IR_DeviceTYPE")
+
+    assert fan.update() is True
+    assert (Table.INPUT_REGISTER, 25) in fan.raw_registers
+    assert (Table.INPUT_REGISTER, 26) in fan.raw_registers
+
+    client.fail_slots.add(("read_input_registers", failed_address))
+
+    assert fan.update() is True
+    assert (Table.INPUT_REGISTER, 25) not in fan.raw_registers
+    assert (Table.INPUT_REGISTER, 26) not in fan.raw_registers
+    assert "IR_TimerCOUNT" not in fan.decoded_registers
+
+
+def test_quick_poll_refreshes_the_complete_alarm_bitmap():
+    client = FakeModbusClient()
+    fan = device(client)
+    fan.read_register("IR_DeviceTYPE")
+
+    assert fan.update() is True
+    assert fan.alarm_list == "none"
+
+    client.discrete_inputs[19] = True
+    client.calls.clear()
+    assert fan.quick_update() is True
+
+    assert fan.alarm_list == "0"
+    assert ("read_discrete_inputs", 0, 72, 7) in client.calls
+
+
+def test_direct_invalid_read_evicts_prior_raw_decoded_and_semantic_state():
+    client = FakeModbusClient()
+    fan = device(client)
+
+    assert fan.read_register("IR_CurRH_Int") == 55
+    assert fan.humidity == 55
+    client.input_registers[10] = 101
+
+    with pytest.raises(ValueError, match="outside documented range"):
+        fan.read_register("IR_CurRH_Int")
+
+    assert (Table.INPUT_REGISTER, 10) not in fan.raw_registers
+    assert "IR_CurRH_Int" not in fan.decoded_registers
+    assert fan.humidity is None
+
+
+def test_failed_direct_read_evicts_stale_decoded_and_semantic_value():
+    client = FakeModbusClient()
+    fan = device(client)
+
+    assert fan.read_register("IR_CurRH_Int") == 55
+    client.input_registers[10] = 60
+    client.fail_slots.add(("read_input_registers", 10))
+
+    with pytest.raises(a21_modbus.A21ModbusError):
+        fan.read_register("IR_CurRH_Int")
+
+    assert (Table.INPUT_REGISTER, 10) not in fan.raw_registers
+    assert "IR_CurRH_Int" not in fan.decoded_registers
+    assert fan.humidity is None
+
+    client.fail_slots.clear()
+    assert fan.read_register("IR_CurRH_Int") == 60
+    assert fan.humidity == 60
+
+
+def test_successful_write_clears_prior_unavailable_marker():
+    client = FakeModbusClient(fail_slots={("read_holding_registers", 44)})
+    fan = device(client)
+    fan.read_register("IR_DeviceTYPE")
+
+    assert fan.update() is True
+    assert (Table.HOLDING_REGISTER, 44) in fan.unavailable_addresses
+
+    client.fail_slots.clear()
+    assert fan.write_register("HR_SetTEMP", 25)
+    assert (Table.HOLDING_REGISTER, 44) not in fan.unavailable_addresses
+
+
+def test_poll_fails_when_a_required_operational_address_is_missing():
+    client = FakeModbusClient()
+    fan = device(client)
+    fan.read_register("IR_DeviceTYPE")
+
+    assert fan.update() is True
+    assert fan.state == "off"
+    assert fan.speed == "speed_1"
+
+    client.fail_slots.add(("read_coils", 0))
+    client.holding_registers[2] = 5
 
     assert fan.update() is False
     assert fan.last_poll_complete is False
     assert (Table.COIL, 0) in fan.unavailable_addresses
+    assert fan.state is None
+    assert fan.speed is None
+
+    client.fail_slots.clear()
+    assert fan.update() is True
+    assert fan.state == "off"
+    assert fan.speed == "speed_5"
+
+
+def test_poll_fails_and_evicts_a_malformed_required_value():
+    client = FakeModbusClient()
+    client.coils[0] = 2
+    fan = device(client)
+
+    assert fan.update() is False
+    assert fan.last_poll_complete is False
+    assert (Table.COIL, 0) not in fan.raw_registers
+    assert "CL_POWER" not in fan.decoded_registers
+    assert fan.state is None
+    assert (Table.COIL, 0) not in fan.unavailable_addresses
+
+    client.coils[0] = 1
+    assert fan.update() is True
+    assert fan.state == "on"
+
+
+def test_malformed_optional_value_keeps_core_update_but_marks_poll_incomplete():
+    fan = device(FakeModbusClient())
+    humidity_slot = (Table.INPUT_REGISTER, 10)
+    fan._raw = {humidity_slot: 101}
+    fan._decoded = {"IR_CurRH_Int": 55}
+    fan._humidity = 55
+
+    invalid_slots = fan._decode_cache()
+    assert invalid_slots == frozenset({humidity_slot})
+    assert humidity_slot not in fan.raw_registers
+    assert "IR_CurRH_Int" not in fan.decoded_registers
+    assert fan.humidity is None
+    assert humidity_slot not in fan.unavailable_addresses
+
+    fan._read_resilient = lambda *_args: True
+    fan._verify_cached_identity = lambda: None
+    fan._decode_cache = lambda: invalid_slots
+    assert fan.read_all_registers() is True
+    assert fan.last_poll_complete is False
+
+    fan._decode_cache = lambda: frozenset()
+    assert fan.read_all_registers() is True
+    assert fan.last_poll_complete is True
+
+
+def test_malformed_optional_raw_word_is_isolated_without_republishing_stale_state():
+    client = FakeModbusClient()
+    fan = device(client)
+    humidity_slot = (Table.INPUT_REGISTER, 10)
+
+    assert fan.update() is True
+    assert fan.humidity == 55
+    client.fail_slots.add(("read_input_registers", 10))
+
+    assert fan.update() is True
+    assert humidity_slot in fan.unavailable_addresses
+    assert fan.humidity is None
+
+    client.fail_slots.clear()
+    client.input_registers[10] = 1.5
+
+    assert fan.update() is True
+    assert fan.last_poll_complete is False
+    assert humidity_slot not in fan.raw_registers
+    assert "IR_CurRH_Int" not in fan.decoded_registers
+    assert fan.humidity is None
+    assert humidity_slot not in fan.unavailable_addresses
+
+    client.input_registers[10] = 60
+    assert fan.update() is True
+    assert fan.humidity == 60
+
+
+def test_quick_polls_publish_cache_transitions_serially():
+    decode_started = threading.Event()
+    release_decode = threading.Event()
+    client = FakeModbusClient()
+    fan = device(client)
+    assert fan.update() is True
+    original_decode = fan._decode_cache
+
+    def paused_decode():
+        if threading.current_thread().name == "first-quick-poll":
+            decode_started.set()
+            assert release_decode.wait(timeout=1)
+        return original_decode()
+
+    fan._decode_cache = paused_decode
+    results = {}
+    errors = []
+
+    def poll(name):
+        try:
+            results[name] = fan.quick_update()
+        except Exception as err:  # pragma: no cover - asserted below
+            errors.append(err)
+
+    first = threading.Thread(target=poll, args=("first",), name="first-quick-poll")
+    second = threading.Thread(target=poll, args=("second",))
+    first.start()
+    assert decode_started.wait(timeout=1)
+    client.fail_slots.add(("read_input_registers", 25))
+    second.start()
+    second.join(timeout=0.05)
+    assert second.is_alive(), "a second quick poll entered an unpublished cache state"
+
+    release_decode.set()
+    first.join(timeout=1)
+    second.join(timeout=1)
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert errors == []
+    assert results == {"first": True, "second": True}
+    assert fan.last_poll_complete is False
 
 
 def test_transport_wide_error_fails_fast_without_recursive_address_splitting():
@@ -368,9 +985,150 @@ def test_semantic_writes_schedule_and_rtc_preserve_a21_encoding():
         WeeklyScheduleRecord(1, 2, "speed_5", 10, 30, reserved=24)
     )
     assert client.holding_registers[128:130] == [0x0518, 0x0A1E]
+    assert ("write_registers", 128, [0x0518, 0x0A1E], 7) in client.calls
 
     assert fan.set_rtc_datetime(datetime(2026, 7, 16, 12, 34, 56))
     assert client.holding_registers[61:65] == [0x2238, 12, 0x1004, 0x071A]
+    assert ("write_registers", 61, [0x2238, 12, 0x1004, 0x071A], 7) in client.calls
+
+
+def test_grouped_a21_writes_fail_without_partial_state():
+    class RejectGroupedWrites(FakeModbusClient):
+        def write_registers(self, address, values, *, device_id):
+            self.calls.append(("write_registers", address, list(values), device_id))
+            return Response(error=True)
+
+    client = RejectGroupedWrites()
+    fan = device(client)
+    rtc_before = list(client.holding_registers[61:65])
+    schedule_before = list(client.holding_registers[128:130])
+
+    with pytest.raises(A21ModbusError):
+        fan.set_rtc_datetime(datetime(2026, 7, 16, 12, 34, 56))
+    assert client.holding_registers[61:65] == rtc_before
+    assert "HR_RTC_TIME" not in fan.decoded_registers
+    assert "HR_RTC_CALENDAR" not in fan.decoded_registers
+
+    with pytest.raises(A21ModbusError):
+        fan.write_weekly_schedule_record(
+            WeeklyScheduleRecord(1, 2, "speed_5", 10, 30, reserved=24)
+        )
+    assert client.holding_registers[128:130] == schedule_before
+    assert "HR_SetWEEK_Mo_P2" not in fan.decoded_registers
+    assert "HR_SetWEEK_Mo_P2_END" not in fan.decoded_registers
+
+
+def test_opportunistic_a21_write_reports_transport_result():
+    fan = device()
+    results = []
+    fan.extra_write_parameters_callback = lambda: {
+        "rtc_time": "1e2d13",
+        "rtc_date": "1704041a",
+    }
+    fan.extra_write_parameters_result_callback = results.append
+    assert not fan.set_parameters({"state": "on", "bogus": "value"})
+    assert results == [False]
+    assert fan.set_parameters({"state": "on"})
+    assert results == [False, True]
+
+
+def test_semantic_batch_validates_every_value_before_transport():
+    client = FakeModbusClient()
+    fan = device(client)
+
+    assert not fan.set_parameters({"state": "on", "temperature_treshold": 99})
+    assert not any(call[0].startswith("write_") for call in client.calls)
+
+
+def test_set_param_batches_callback_rtc_rows_and_reports_transport_failure():
+    class RejectRtcBatch(FakeModbusClient):
+        def write_registers(self, address, values, *, device_id):
+            self.calls.append(("write_registers", address, list(values), device_id))
+            return Response(error=True)
+
+    client = RejectRtcBatch()
+    fan = device(client)
+    results = []
+    fan.extra_write_parameters_callback = lambda: {
+        "rtc_time": "1e2d13",
+        "rtc_date": "1704041a",
+    }
+    fan.extra_write_parameters_result_callback = results.append
+
+    assert not fan.set_param("rtc_date", RtcCalendar(23, 4, 4, 26))
+    assert ("write_registers", 61, [0x2D1E, 19, 0x1704, 0x041A], 7) in client.calls
+    assert results == [False]
+
+
+def test_opportunistic_rtc_failure_does_not_fail_acknowledged_primary_write():
+    class RejectOnlyRtc(FakeModbusClient):
+        def write_registers(self, address, values, *, device_id):
+            self.calls.append(("write_registers", address, list(values), device_id))
+            if address == 61:
+                return Response(error=True)
+            return super().write_registers(
+                address, values, device_id=device_id
+            )
+
+    client = RejectOnlyRtc()
+    fan = device(client)
+    results = []
+    fan.extra_write_parameters_callback = lambda: {
+        "rtc_time": "1e2d13",
+        "rtc_date": "1704041a",
+    }
+    fan.extra_write_parameters_result_callback = results.append
+
+    assert fan.set_param("state", "on")
+    assert client.coils[0] is True
+    assert fan.state == "on"
+    assert results == [False]
+
+
+def test_preset_poll_decodes_values_and_evicts_them_after_transport_failure():
+    client = FakeModbusClient()
+    fan = device(client)
+
+    assert fan.update_preset_speed_settings()
+    assert fan.supply_speed_low == 40
+    assert fan.man_speed == 50
+
+    class FailedPresetClient(FakeModbusClient):
+        def read_holding_registers(self, address, *, count, device_id):
+            if address == 5 and count == 13:
+                self.calls.append(("read_holding_registers", address, count, device_id))
+                return Response(error=True)
+            return super().read_holding_registers(
+                address, count=count, device_id=device_id
+            )
+
+    fan._client = FailedPresetClient()
+    assert not fan.update_preset_speed_settings()
+    assert fan.supply_speed_low is None
+    assert fan.man_speed is None
+
+
+def test_schedule_day_returns_empty_for_missing_or_invalid_optional_rows():
+    client = FakeModbusClient(fail_slots={("read_holding_registers", 129)})
+    fan = device(client)
+
+    assert fan.read_weekly_schedule_day(1) == {}
+
+    client.fail_slots.clear()
+    client.holding_registers[126] = 0xFF17
+    assert fan.read_weekly_schedule_day(1) == {}
+
+
+def test_normal_poll_evicts_engineer_password_cache():
+    client = FakeModbusClient()
+    client.holding_registers[124:126] = [0x3131, 0x3131]
+    fan = device(client)
+
+    assert fan.read_register("HR_ENGINEER_PWD") == "1111"
+    assert "HR_ENGINEER_PWD" in fan.decoded_registers
+    assert fan.read_all_registers()
+    assert "HR_ENGINEER_PWD" not in fan.decoded_registers
+    assert (Table.HOLDING_REGISTER, 124) not in fan.raw_registers
 
 
 def test_short_or_error_response_is_not_accepted_as_success():

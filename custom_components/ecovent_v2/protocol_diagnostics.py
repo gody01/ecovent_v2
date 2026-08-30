@@ -77,6 +77,11 @@ _KNOWN_VARIANT_FIRMWARE_UNSUPPORTED_OPTIONAL_PARAMS = {
         "0.3 2020-08-26",
     ): _VENTO_EXPERT_A30_MINI_AIR_UNSUPPORTED_OPTIONAL_ROWS,
     (
+        "vento",
+        0x0500,
+        "0.5 2021-10-04",
+    ): _VENTO_EXPERT_A30_MINI_AIR_UNSUPPORTED_OPTIONAL_ROWS,
+    (
         "breezy",
         0x1100,
         "0.12 2025-09-01",
@@ -97,13 +102,24 @@ def reportable_hardware_profile_mismatch_param_ids(fan) -> frozenset[int]:
     """Return unsupported optional rows that still need a hardware report."""
     unsupported = fan.unsupported_optional_poll_parameter_ids()
     unit_type_id = getattr(fan, "_unit_type_id", None)
-    known_variant = _KNOWN_VARIANT_FIRMWARE_UNSUPPORTED_OPTIONAL_PARAMS.get(
-        (fan.profile_key, unit_type_id, fan.firmware),
-        _KNOWN_VARIANT_UNSUPPORTED_OPTIONAL_PARAMS.get(
-            (fan.profile_key, unit_type_id), frozenset()
-        ),
+    known_variant = _KNOWN_VARIANT_UNSUPPORTED_OPTIONAL_PARAMS.get(
+        (fan.profile_key, unit_type_id), frozenset()
+    ) | _KNOWN_VARIANT_FIRMWARE_UNSUPPORTED_OPTIONAL_PARAMS.get(
+        (fan.profile_key, unit_type_id, fan.firmware), frozenset()
     )
     return frozenset(unsupported - known_variant)
+
+
+def hardware_profile_mismatch_state(
+    fan,
+) -> tuple[str, int | None, str | None, frozenset[int]]:
+    """Return the device identity and unsupported rows that define one Repair."""
+    return (
+        fan.profile_key,
+        getattr(fan, "_unit_type_id", None),
+        fan.firmware,
+        reportable_hardware_profile_mismatch_param_ids(fan),
+    )
 
 
 def unsupported_optional_poll_parameter_details(

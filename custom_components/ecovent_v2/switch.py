@@ -241,7 +241,7 @@ async def async_setup_entry(
                 spec.assumed,
             )
             for spec in SWITCH_SPECS
-            if coordinator._fan.supports_entity(
+            if coordinator._fan.profile_has_entity_requirements(
                 required_params=(spec.method,),
                 required_capabilities=spec.required_capabilities,
             )
@@ -291,19 +291,25 @@ class VentoSwitch(StableObjectIdMixin, CoordinatorEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs):
         """Turn the switch on."""
-        self._attr_is_on = True
-        await self.hass.async_add_executor_job(self._fan.set_param, self._func, "on")
-        # self._fan.set_param(self._func, "on")
-        # self.schedule_update_ha_state()
-        self.async_write_ha_state()
+        try:
+            success = await self.hass.async_add_executor_job(
+                self._fan.set_param, self._func, "on"
+            )
+        finally:
+            await self.coordinator.async_refresh_confirmed()
+        if not success:
+            raise RuntimeError(f"Failed to turn on {self._func} for {self._fan.name}")
 
     async def async_turn_off(self, **kwargs):
         """Turn the device off."""
-        self._attr_is_on = False
-        await self.hass.async_add_executor_job(self._fan.set_param, self._func, "off")
-        # self._fan.set_param(self._func, "off")
-        # self.schedule_update_ha_state()
-        self.async_write_ha_state()
+        try:
+            success = await self.hass.async_add_executor_job(
+                self._fan.set_param, self._func, "off"
+            )
+        finally:
+            await self.coordinator.async_refresh_confirmed()
+        if not success:
+            raise RuntimeError(f"Failed to turn off {self._func} for {self._fan.name}")
 
     def humidity_sensor_state(self):
         """Humidity sensor state."""

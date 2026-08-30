@@ -203,6 +203,10 @@ class A21IllegalAddressError(A21ModbusError):
     """A controller rejected a range because at least one address is absent."""
 
 
+class A21InvalidResponseError(A21ModbusError):
+    """A controller returned a value outside the Modbus wire representation."""
+
+
 def _safe_identity(value: str) -> str:
     """Return an identifier containing only stable registry-safe characters."""
     return re.sub(r"[^a-zA-Z0-9_.-]+", "-", value).strip("-")
@@ -261,8 +265,10 @@ class A21ModbusDevice(Fan):
         self._raw: dict[tuple[Table, int], int] = {}
         self._decoded: dict[str, Any] = {}
         self._unavailable: set[tuple[Table, int]] = set()
+        self._invalid_response_slots: set[tuple[Table, int]] = set()
         self.last_poll_complete = False
         self.identity_probe_failed = False
+        self._writes_blocked_by_identity = False
         self.extra_write_parameters_callback = None
         self._unit_type = model
         self._unit_type_id = A21_IDENTITY_VALUE
@@ -314,12 +320,16 @@ class A21ModbusDevice(Fan):
         )
 
     def _initialize_semantic_state(self) -> None:
+        self._clear_semantic_state()
+        self._profile_key = "a21_modbus"
+        self.audible_write_command_count = 0
+
+    def _clear_semantic_state(self) -> None:
+        """Clear HA-facing values before rebuilding them from decoded registers."""
         for semantic in _SEMANTIC_REGISTERS:
             setattr(self, f"_{semantic}", None)
         self._alarm_list = None
         self._firmware = None
-        self._profile_key = "a21_modbus"
-        self.audible_write_command_count = 0
 
     @property
     def device_profile(self) -> DeviceProfile:
@@ -349,6 +359,14 @@ class A21ModbusDevice(Fan):
     def supports_parameter(self, parameter: str) -> bool:
         return parameter in _SEMANTIC_REGISTERS
 
+    def profile_supports_capability(self, capability: str) -> bool:
+        """Return an A21 capability; Modbus support is not learned per poll."""
+        return self.supports_capability(capability)
+
+    def profile_supports_parameter(self, parameter: str) -> bool:
+        """Return an A21 parameter; Modbus support is not learned per poll."""
+        return self.supports_parameter(parameter)
+
     def parameter_range(self, parameter: str) -> tuple[int, int] | None:
         """Return the A21 limits for a semantic HA number parameter."""
         key = _SEMANTIC_REGISTERS.get(parameter)
@@ -357,9 +375,9 @@ class A21ModbusDevice(Fan):
         spec = get_register(key)
         if spec.minimum is None or spec.maximum is None:
             return None
-        # HA NumberEntity cannot express the published disjoint range
-        # ``0 or 70..365``. Keep 0 available through the typed API and expose
-        # only the continuous timer setpoint interval in the UI.
+        # HA Number cannot express the published disjoint range ``0 or
+        # 70..365``. Expose only the continuous setpoint interval; the typed
+        # protocol API still accepts 0 to disable the timer.
         if key == "HR_SetFILTER_TIMER":
             return (70, 365)
         return (spec.minimum, spec.maximum)
@@ -462,19 +480,42 @@ class A21ModbusDevice(Fan):
                 self._invoke(method, address, count=count, device_id=self.unit_id),
                 f"read {table.value} {address}:{address + count - 1}",
             )
-            values = (
-                tuple(int(value) for value in response.bits[:count])
+            source = (
+                getattr(response, "bits", None)
                 if table in {Table.COIL, Table.DISCRETE_INPUT}
-                else tuple(int(value) for value in response.registers[:count])
+                else getattr(response, "registers", None)
             )
-            if len(values) != count:
+            raw_values = tuple(source[:count]) if source is not None else ()
+            if len(raw_values) != count:
                 raise A21ModbusError(
                     f"A21 Modbus short {table.value} response: "
-                    f"expected {count}, got {len(values)}"
+                    f"expected {count}, got {len(raw_values)}"
                 )
+            if table in {Table.COIL, Table.DISCRETE_INPUT}:
+                if any(
+                    not isinstance(value, (bool, int))
+                    or value not in {False, True, 0, 1}
+                    for value in raw_values
+                ):
+                    raise A21InvalidResponseError(
+                        f"A21 Modbus invalid {table.value} response: {raw_values!r}"
+                    )
+                values = tuple(int(value) for value in raw_values)
+            else:
+                if any(
+                    not isinstance(value, int)
+                    or isinstance(value, bool)
+                    or not 0 <= value <= 0xFFFF
+                    for value in raw_values
+                ):
+                    raise A21InvalidResponseError(
+                        f"A21 Modbus invalid {table.value} response: {raw_values!r}"
+                    )
+                values = raw_values
             for offset, value in enumerate(values):
                 self._raw[(table, address + offset)] = value
                 self._unavailable.discard((table, address + offset))
+                self._invalid_response_slots.discard((table, address + offset))
             return values
 
     def write_raw(
@@ -494,9 +535,18 @@ class A21ModbusDevice(Fan):
                 )
 
         with self._lock:
+            if self._writes_blocked_by_identity:
+                raise A21IdentityError(
+                    "A21 writes are blocked until the controller identity is "
+                    "confirmed again"
+                )
             self._ensure_connected()
             if table is Table.COIL:
-                if any(value not in {False, True, 0, 1} for value in values):
+                if any(
+                    not isinstance(value, (bool, int))
+                    or value not in {False, True, 0, 1}
+                    for value in values
+                ):
                     raise ValueError("Modbus coil values must be boolean")
                 bool_values = tuple(bool(value) for value in values)
                 if len(bool_values) == 1:
@@ -515,9 +565,14 @@ class A21ModbusDevice(Fan):
                     )
                 cached = tuple(int(value) for value in bool_values)
             else:
-                words = tuple(int(value) for value in values)
-                if any(value < 0 or value > 0xFFFF for value in words):
+                if any(
+                    not isinstance(value, int)
+                    or isinstance(value, bool)
+                    or not 0 <= value <= 0xFFFF
+                    for value in values
+                ):
                     raise ValueError("Modbus register values must be 0..65535")
+                words = tuple(values)
                 if len(words) == 1:
                     response = self._invoke(
                         self._client.write_register,
@@ -535,32 +590,67 @@ class A21ModbusDevice(Fan):
                 cached = words
             self._check_response(response, f"write {table.value} {address}")
             for offset, value in enumerate(cached):
-                self._raw[(table, address + offset)] = value
+                slot = (table, address + offset)
+                self._raw[slot] = value
+                self._unavailable.discard(slot)
+                self._invalid_response_slots.discard(slot)
             return True
 
     def read_register(self, key: str) -> Any:
         """Read and decode one official A21 register definition."""
-        spec = get_register(key)
-        if not spec.access.readable:
-            raise PermissionError(f"{key} is write-only")
-        words = self.read_raw(spec.table, spec.address, spec.word_count)
-        value = spec.decode(words)
-        self._decoded[key] = value
-        self._apply_semantics()
-        return value
+        with self._lock:
+            spec = get_register(key)
+            if not spec.access.readable:
+                raise PermissionError(f"{key} is write-only")
+            try:
+                words = self.read_raw(spec.table, spec.address, spec.word_count)
+                value = spec.decode(words)
+            except (A21ModbusError, ValueError):
+                self._evict_cached_range(spec.table, spec.address, spec.word_count)
+                self._clear_semantic_state()
+                self._apply_semantics()
+                raise
+            self._decoded[key] = value
+            self._apply_semantics()
+            return value
 
     def write_register(self, key: str, value: Any) -> bool:
         """Validate and write one official A21 register definition."""
-        spec = get_register(key)
-        if not spec.access.writable:
-            raise PermissionError(f"{key} is read-only")
-        if spec.enum is not None and isinstance(value, int) and value not in spec.enum:
-            raise ValueError(f"{key} has no documented enum value {value}")
-        words = spec.encode(value)
-        self.write_raw(spec.table, spec.address, words)
-        self._decoded[key] = value
-        self._apply_semantics()
-        return True
+        with self._lock:
+            spec = get_register(key)
+            if not spec.access.writable:
+                raise PermissionError(f"{key} is read-only")
+            words = spec.encode(value)
+            self.write_raw(spec.table, spec.address, words)
+            self._decoded[key] = value
+            self._apply_semantics()
+            return True
+
+    def _write_register_group(self, values: Sequence[tuple[str, Any]]) -> bool:
+        """Write adjacent typed registers in one Modbus request."""
+        with self._lock:
+            if not values:
+                return False
+
+            encoded = []
+            decoded = []
+            first_spec = get_register(values[0][0])
+            table = first_spec.table
+            address = first_spec.address
+            next_address = address
+            for key, value in values:
+                spec = get_register(key)
+                if spec.table is not table or spec.address != next_address:
+                    raise ValueError("A21 grouped registers must be contiguous")
+                words = spec.encode(value)
+                encoded.extend(words)
+                decoded.append((key, value))
+                next_address += len(words)
+
+            self.write_raw(table, address, encoded)
+            self._decoded.update(decoded)
+            self._apply_semantics()
+            return True
 
     def _read_resilient(
         self,
@@ -569,40 +659,91 @@ class A21ModbusDevice(Fan):
         count: int,
         split_budget: list[int] | None = None,
     ) -> bool:
-        if split_budget is None:
-            split_budget = [_MAX_ILLEGAL_ADDRESS_SPLITS]
-        try:
-            self.read_raw(table, address, count)
-            return True
-        except A21IllegalAddressError:
-            if split_budget[0] <= 0:
-                raise A21ModbusError(
-                    f"A21 {table.value} returned too many illegal-address responses"
+        with self._lock:
+            if split_budget is None:
+                split_budget = [_MAX_ILLEGAL_ADDRESS_SPLITS]
+            try:
+                self.read_raw(table, address, count)
+                return True
+            except (A21IllegalAddressError, A21InvalidResponseError) as err:
+                if split_budget[0] <= 0:
+                    raise A21ModbusError(
+                        f"A21 {table.value} returned too many illegal-address responses"
+                    )
+                split_budget[0] -= 1
+                if count == 1:
+                    slot = (table, address)
+                    if isinstance(err, A21IllegalAddressError):
+                        self._unavailable.add(slot)
+                        self._invalid_response_slots.discard(slot)
+                        reason = "unavailable"
+                    else:
+                        self._invalid_response_slots.add(slot)
+                        self._unavailable.discard(slot)
+                        reason = "invalid"
+                    spec = get_by_address(table, address)
+                    self._evict_cached_range(spec.table, spec.address, spec.word_count)
+                    _LOGGER.debug("A21 address %s: %s/%d", reason, table.value, address)
+                    return False
+                left = count // 2
+                left_complete = self._read_resilient(
+                    table, address, left, split_budget
                 )
-            split_budget[0] -= 1
-            if count == 1:
-                self._unavailable.add((table, address))
-                _LOGGER.debug("A21 address unavailable: %s/%d", table.value, address)
-                return False
-            left = count // 2
-            return self._read_resilient(
-                table, address, left, split_budget
-            ) & self._read_resilient(table, address + left, count - left, split_budget)
+                right_complete = self._read_resilient(
+                    table, address + left, count - left, split_budget
+                )
+                complete = left_complete & right_complete
+                if not complete:
+                    for unavailable_table, unavailable_address in tuple(
+                        self._unavailable
+                    ):
+                        if (
+                            unavailable_table is table
+                            and address <= unavailable_address < address + count
+                        ):
+                            spec = get_by_address(table, unavailable_address)
+                            self._evict_cached_range(
+                                spec.table, spec.address, spec.word_count
+                            )
+                return complete
 
-    def _decode_cache(self) -> None:
+    def _decode_cache(self) -> frozenset[tuple[Table, int]]:
+        invalid_slots: set[tuple[Table, int]] = set()
         for spec in REGISTERS:
             if not spec.access.readable or spec.key in _SENSITIVE_REGISTER_KEYS:
                 continue
-            slots = [
+            slots = tuple(
                 (spec.table, spec.address + offset) for offset in range(spec.word_count)
-            ]
+            )
             if not all(slot in self._raw for slot in slots):
                 continue
             try:
-                self._decoded[spec.key] = spec.decode(self._raw[slot] for slot in slots)
+                words = tuple(self._raw[slot] for slot in slots)
+                self._decoded[spec.key] = spec.decode(words)
             except ValueError:
+                invalid_slots.update(slots)
+                self._evict_cached_range(spec.table, spec.address, spec.word_count)
                 _LOGGER.debug("Invalid A21 value for %s", spec.key, exc_info=True)
+        self._clear_semantic_state()
         self._apply_semantics()
+        return frozenset(invalid_slots)
+
+    def _evict_cached_range(self, table: Table, address: int, count: int) -> None:
+        """Forget values whose next read was not confirmed by the controller."""
+        for offset in range(count):
+            self._raw.pop((table, address + offset), None)
+        for spec in REGISTERS:
+            if (
+                spec.table is table
+                and spec.address < address + count
+                and address < spec.address + spec.word_count
+            ):
+                self._decoded.pop(spec.key, None)
+
+    def _evict_sensitive_cache(self) -> None:
+        for spec in REGISTERS:
+            if spec.key in _SENSITIVE_REGISTER_KEYS:
+                self._evict_cached_range(spec.table, spec.address, spec.word_count)
 
     def read_all_registers(self, *, include_sensitive: bool = False) -> bool:
         """Poll the complete readable published surface.
@@ -611,31 +752,66 @@ class A21ModbusDevice(Fan):
         read after an explicit opt-in; raw read/write methods still implement
         its documented two-register protocol.
         """
-        ranges = (
-            (Table.COIL, 0, 17),
-            (Table.COIL, 20, 6),
-            (Table.DISCRETE_INPUT, 0, 72),
-            (Table.INPUT_REGISTER, 0, 54),
-            (Table.HOLDING_REGISTER, 0, 124),
-            (Table.HOLDING_REGISTER, 126, 57),
-        )
-        complete = True
-        for table, address, count in ranges:
-            complete = self._read_resilient(table, address, count) and complete
-        if include_sensitive:
-            complete = self._read_resilient(Table.HOLDING_REGISTER, 124, 2) and complete
-        self._decode_cache()
-        self._verify_cached_identity()
-        self.last_poll_complete = complete
-        return not bool(_REQUIRED_POLL_SLOTS & self._unavailable)
+        with self._lock:
+            ranges = (
+                (Table.COIL, 0, 17),
+                (Table.COIL, 20, 6),
+                (Table.DISCRETE_INPUT, 0, 72),
+                (Table.INPUT_REGISTER, 0, 54),
+                (Table.HOLDING_REGISTER, 0, 124),
+                (Table.HOLDING_REGISTER, 126, 57),
+            )
+            if not include_sensitive:
+                self._evict_sensitive_cache()
+            self._invalid_response_slots.clear()
+            complete = True
+            for table, address, count in ranges:
+                complete = self._read_resilient(table, address, count) and complete
+            if include_sensitive:
+                complete = (
+                    self._read_resilient(Table.HOLDING_REGISTER, 124, 2) and complete
+                )
+            self._verify_cached_identity()
+            invalid_slots = self._decode_cache()
+            self.last_poll_complete = complete and not invalid_slots
+            failed_slots = (
+                self._unavailable | self._invalid_response_slots | invalid_slots
+            )
+            required_failed = bool(_REQUIRED_POLL_SLOTS & failed_slots)
+            if required_failed:
+                # A failed core poll must not expose a mixture of cleared
+                # required values and freshly decoded optional values.  The
+                # coordinator rejects this update, so keep the entire semantic
+                # surface unknown until a complete core poll succeeds.
+                self._clear_semantic_state()
+            return not required_failed
 
     def _verify_cached_identity(self) -> None:
-        identity = self._decoded.get(A21_IDENTITY_REGISTER.key)
+        identity_slot = (
+            A21_IDENTITY_REGISTER.table,
+            A21_IDENTITY_REGISTER.address,
+        )
+        if identity_slot in self._unavailable:
+            self.identity_probe_failed = True
+            self.last_poll_complete = False
+            self._writes_blocked_by_identity = True
+            self._raw.clear()
+            self._decoded.clear()
+            self._clear_semantic_state()
+            return
+        identity = self._raw.get(identity_slot)
         if identity != A21_IDENTITY_VALUE:
             self.identity_probe_failed = True
+            self._writes_blocked_by_identity = True
+            self.last_poll_complete = False
+            self._raw.clear()
+            self._decoded.clear()
+            self._clear_semantic_state()
             raise A21IdentityError(
                 f"Controller identity register 37 is {identity!r}; expected A21 value 1"
             )
+        self.identity_probe_failed = False
+        self._writes_blocked_by_identity = False
 
     def init_device(self) -> bool:
         """Connect and accept only a controller that reports A21 at IR37."""
@@ -643,9 +819,20 @@ class A21ModbusDevice(Fan):
         try:
             identity = self.read_register(A21_IDENTITY_REGISTER.key)
         except A21ModbusError:
+            self.identity_probe_failed = True
+            self._writes_blocked_by_identity = True
+            self.last_poll_complete = False
+            self._raw.clear()
+            self._decoded.clear()
+            self._clear_semantic_state()
             raise
         if identity != A21_IDENTITY_VALUE:
             self.identity_probe_failed = True
+            self._writes_blocked_by_identity = True
+            self.last_poll_complete = False
+            self._raw.clear()
+            self._decoded.clear()
+            self._clear_semantic_state()
             return False
 
         endpoint_id = _safe_identity(
@@ -660,22 +847,46 @@ class A21ModbusDevice(Fan):
 
     def quick_update(self) -> bool:
         """Refresh the high-frequency operational portion of the table."""
-        ranges = (
-            (Table.COIL, 0, 17),
-            (Table.DISCRETE_INPUT, 0, 19),
-            (Table.INPUT_REGISTER, 0, 54),
-            (Table.HOLDING_REGISTER, 0, 76),
-        )
-        complete = True
-        for table, address, count in ranges:
-            complete = self._read_resilient(table, address, count) and complete
-        self._decode_cache()
-        self._verify_cached_identity()
-        self.last_poll_complete = complete
-        return not bool(_REQUIRED_POLL_SLOTS & self._unavailable)
+        with self._lock:
+            ranges = (
+                (Table.COIL, 0, 17),
+                # Alarm bits are one contiguous Modbus read. Keeping them in the
+                # quick poll prevents the aggregate alarm state from reusing a
+                # previous full poll.
+                (Table.DISCRETE_INPUT, 0, 72),
+                (Table.INPUT_REGISTER, 0, 54),
+                (Table.HOLDING_REGISTER, 0, 76),
+            )
+            self._evict_sensitive_cache()
+            self._invalid_response_slots.clear()
+            complete = True
+            for table, address, count in ranges:
+                complete = self._read_resilient(table, address, count) and complete
+            self._verify_cached_identity()
+            invalid_slots = self._decode_cache()
+            self.last_poll_complete = complete and not invalid_slots
+            failed_slots = (
+                self._unavailable | self._invalid_response_slots | invalid_slots
+            )
+            required_failed = bool(_REQUIRED_POLL_SLOTS & failed_slots)
+            if required_failed:
+                self._clear_semantic_state()
+            return not required_failed
 
     def update_preset_speed_settings(self) -> bool:
-        return self._read_resilient(Table.HOLDING_REGISTER, 5, 13)
+        with self._lock:
+            try:
+                complete = self._read_resilient(Table.HOLDING_REGISTER, 5, 13)
+            except A21ModbusError:
+                self._evict_cached_range(Table.HOLDING_REGISTER, 5, 13)
+                self._clear_semantic_state()
+                self._apply_semantics()
+                return False
+            invalid_slots = self._decode_cache()
+            preset_slots = {
+                (Table.HOLDING_REGISTER, address) for address in range(5, 18)
+            }
+            return complete and not bool(invalid_slots & preset_slots)
 
     @staticmethod
     def _valid_temperature(value: Any) -> float | None:
@@ -782,10 +993,12 @@ class A21ModbusDevice(Fan):
             self._alarm_status = {0: "no", 1: "alarm", 2: "warning"}.get(
                 value("IR_ALARM"), f"unknown_{value('IR_ALARM')}"
             )
-        alarm_codes = [
-            str(code) for code in range(53) if value(f"DI_AlarmCODE{code}") is True
-        ]
-        self._alarm_list = ", ".join(alarm_codes) if alarm_codes else "none"
+        alarm_keys = [f"DI_AlarmCODE{code}" for code in range(53)]
+        if all(key in self._decoded for key in alarm_keys):
+            alarm_codes = [
+                str(code) for code, key in enumerate(alarm_keys) if value(key) is True
+            ]
+            self._alarm_list = ", ".join(alarm_codes) if alarm_codes else "none"
         if "IR_CurWeekSpeed" in self._decoded:
             self._schedule_speed = _A21_SPEEDS.get(
                 value("IR_CurWeekSpeed"),
@@ -810,7 +1023,26 @@ class A21ModbusDevice(Fan):
         self.read_register(key)
         return True
 
-    def _semantic_value(self, parameter: str, value: Any) -> Any:
+    @staticmethod
+    def _rtc_value(parameter: str, value: Any) -> RtcTime | RtcCalendar:
+        expected = RtcTime if parameter == "rtc_time" else RtcCalendar
+        if isinstance(value, expected):
+            return value
+        if not isinstance(value, str):
+            raise ValueError(f"{parameter} requires {expected.__name__}")
+        try:
+            raw = bytes.fromhex(value)
+        except ValueError as err:
+            raise ValueError(f"Invalid {parameter} bytes: {value!r}") from err
+        if parameter == "rtc_time" and len(raw) == 3:
+            return RtcTime(hours=raw[2], minutes=raw[1], seconds=raw[0])
+        if parameter == "rtc_date" and len(raw) == 4:
+            return RtcCalendar(
+                day=raw[0], weekday=raw[1], month=raw[2], year=raw[3]
+            )
+        raise ValueError(f"Invalid {parameter} byte length")
+
+    def _semantic_value(self, parameter: str, value: Any) -> tuple[str, Any]:
         if parameter in {
             "state",
             "weekly_schedule_state",
@@ -821,45 +1053,150 @@ class A21ModbusDevice(Fan):
         }:
             if value not in {"on", "off", True, False, 0, 1}:
                 raise ValueError(f"Invalid {parameter} state: {value!r}")
-            return value in {"on", True, 1}
+            return _SEMANTIC_REGISTERS[parameter], value in {"on", True, 1}
         if parameter in {"filter_timer_reset", "reset_alarms"}:
-            return True
+            return _SEMANTIC_REGISTERS[parameter], True
         if parameter == "speed":
             if value == "off":
-                self.write_register("CL_POWER", False)
-                return None
+                return "CL_POWER", False
             if value not in _A21_SPEED_VALUES:
                 raise ValueError(f"Invalid A21 speed: {value!r}")
-            return _A21_SPEED_VALUES[value]
+            return _SEMANTIC_REGISTERS[parameter], _A21_SPEED_VALUES[value]
         if parameter == "timer_mode":
             if value not in _A21_TIMER_VALUES:
                 raise ValueError(f"Invalid A21 timer mode: {value!r}")
-            return _A21_TIMER_VALUES[value]
+            return _SEMANTIC_REGISTERS[parameter], _A21_TIMER_VALUES[value]
         if parameter in {"rtc_time", "rtc_date"}:
-            return value
-        return _as_raw_number(value)
+            return _SEMANTIC_REGISTERS[parameter], self._rtc_value(parameter, value)
+        return _SEMANTIC_REGISTERS[parameter], _as_raw_number(value)
+
+    def _prepared_semantic_writes(
+        self, values: Mapping[str, Any]
+    ) -> list[tuple[str, Any]]:
+        prepared: list[tuple[str, Any]] = []
+        for parameter, value in values.items():
+            if parameter not in _SEMANTIC_REGISTERS:
+                raise ValueError(f"Unknown A21 parameter: {parameter}")
+            key, converted = self._semantic_value(parameter, value)
+            spec = get_register(key)
+            if not spec.access.writable:
+                raise PermissionError(f"{key} is read-only")
+            # Validate every batch row before any transport operation.
+            spec.encode(converted)
+            prepared.append((key, converted))
+        return prepared
+
+    def _write_prepared_groups(self, values: Sequence[tuple[str, Any]]) -> bool:
+        values = list(values)
+        rtc_indexes = [
+            index
+            for index, (key, _) in enumerate(values)
+            if key in {"HR_RTC_TIME", "HR_RTC_CALENDAR"}
+        ]
+        if len(rtc_indexes) == 2:
+            rtc_values = sorted(
+                (values[index] for index in rtc_indexes),
+                key=lambda item: get_register(item[0]).address,
+            )
+            first_index = rtc_indexes[0]
+            values = [
+                item
+                for index, item in enumerate(values)
+                if index not in rtc_indexes
+            ]
+            values[first_index:first_index] = rtc_values
+        index = 0
+        while index < len(values):
+            group = [values[index]]
+            previous = get_register(values[index][0])
+            index += 1
+            while index < len(values):
+                candidate = get_register(values[index][0])
+                if (
+                    candidate.table is not previous.table
+                    or candidate.address != previous.address + previous.word_count
+                ):
+                    break
+                group.append(values[index])
+                previous = candidate
+                index += 1
+            if len(group) == 1:
+                self.write_register(*group[0])
+            else:
+                self._write_register_group(group)
+        return True
 
     def set_param(self, parameter: str, value: Any) -> bool:
-        key = _SEMANTIC_REGISTERS.get(parameter)
-        if key is None:
-            return False
-        converted = self._semantic_value(parameter, value)
-        if converted is None:
-            return True
-        return self.write_register(key, converted)
+        return self.set_parameters({parameter: value})
 
     def set_parameters(
         self,
         values: Mapping[str, Any],
         include_extra_write_parameters: bool = True,
     ) -> bool:
-        targets = dict(values)
+        with self._lock:
+            return self._set_parameters_locked(
+                values,
+                include_extra_write_parameters=include_extra_write_parameters,
+            )
+
+    def _set_parameters_locked(
+        self,
+        values: Mapping[str, Any],
+        include_extra_write_parameters: bool = True,
+    ) -> bool:
+        primary_targets = dict(values)
+        extra_parameters = {}
         if include_extra_write_parameters and self.extra_write_parameters_callback:
-            for key, value in self.extra_write_parameters_callback().items():
-                targets.setdefault(key, value)
-        if not targets:
+            extra_parameters = self.extra_write_parameters_callback()
+        if not primary_targets:
             return False
-        return all(self.set_param(key, value) for key, value in targets.items())
+
+        extra_targets = {
+            key: value
+            for key, value in extra_parameters.items()
+            if key not in primary_targets
+        }
+        # If RTC itself is the requested write, keep its adjacent counterpart in
+        # the same primary Modbus request. Otherwise RTC remains opportunistic
+        # and cannot turn an acknowledged user command into a false failure.
+        if {"rtc_time", "rtc_date"} & primary_targets.keys():
+            for key in ("rtc_time", "rtc_date"):
+                if key in extra_targets:
+                    primary_targets[key] = extra_targets.pop(key)
+
+        try:
+            prepared_primary = self._prepared_semantic_writes(primary_targets)
+        except (A21ModbusError, PermissionError, ValueError):
+            primary_success = False
+            extra_success = False
+        else:
+            try:
+                prepared_extra = self._prepared_semantic_writes(extra_targets)
+            except (A21ModbusError, PermissionError, ValueError):
+                prepared_extra = []
+                extra_valid = False
+            else:
+                extra_valid = True
+
+            try:
+                primary_success = self._write_prepared_groups(prepared_primary)
+            except (A21ModbusError, PermissionError, ValueError):
+                primary_success = False
+
+            extra_success = primary_success and extra_valid
+            if primary_success and extra_valid and prepared_extra:
+                try:
+                    extra_success = self._write_prepared_groups(prepared_extra)
+                except (A21ModbusError, PermissionError, ValueError):
+                    extra_success = False
+        if extra_parameters and (
+            result_callback := getattr(
+                self, "extra_write_parameters_result_callback", None
+            )
+        ):
+            result_callback(extra_success)
+        return primary_success
 
     set_params = set_parameters
 
@@ -868,26 +1205,38 @@ class A21ModbusDevice(Fan):
         return self.write_register("HR_ManualSPEED", target)
 
     def read_weekly_schedule_day(self, day: int) -> dict[int, WeeklyScheduleRecord]:
-        if day not in range(1, 8):
-            raise ValueError(f"Invalid schedule day: {day}")
-        labels = ("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")
-        label = labels[day - 1]
-        base = 126 + (day - 1) * 8
-        self.read_raw(Table.HOLDING_REGISTER, base, 8)
-        self._decode_cache()
-        records: dict[int, WeeklyScheduleRecord] = {}
-        for period in range(1, 5):
-            schedule = self._decoded[f"HR_SetWEEK_{label}_P{period}"]
-            end = self._decoded[f"HR_SetWEEK_{label}_P{period}_END"]
-            records[period] = WeeklyScheduleRecord(
-                day=day,
-                period=period,
-                speed=_A21_SPEEDS[schedule.speed],
-                end_hour=end.hour,
-                end_minute=end.minute,
-                reserved=schedule.temperature,
-            )
-        return records
+        with self._lock:
+            if day not in range(1, 8):
+                raise ValueError(f"Invalid schedule day: {day}")
+            labels = ("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")
+            label = labels[day - 1]
+            base = 126 + (day - 1) * 8
+            try:
+                complete = self._read_resilient(Table.HOLDING_REGISTER, base, 8)
+            except A21ModbusError:
+                self._evict_cached_range(Table.HOLDING_REGISTER, base, 8)
+                self._decode_cache()
+                return {}
+            self._decode_cache()
+            if not complete:
+                return {}
+            records: dict[int, WeeklyScheduleRecord] = {}
+            for period in range(1, 5):
+                schedule = self._decoded.get(f"HR_SetWEEK_{label}_P{period}")
+                end = self._decoded.get(f"HR_SetWEEK_{label}_P{period}_END")
+                if not isinstance(schedule, SchedulePeriod) or not isinstance(
+                    end, ScheduleEnd
+                ):
+                    return {}
+                records[period] = WeeklyScheduleRecord(
+                    day=day,
+                    period=period,
+                    speed=_A21_SPEEDS.get(schedule.speed, f"unknown_{schedule.speed}"),
+                    end_hour=end.hour,
+                    end_minute=end.minute,
+                    reserved=schedule.temperature,
+                )
+            return records
 
     def write_weekly_schedule_record(self, record: WeeklyScheduleRecord) -> bool:
         if not isinstance(record, WeeklyScheduleRecord):
@@ -897,18 +1246,17 @@ class A21ModbusDevice(Fan):
         labels = ("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")
         prefix = f"HR_SetWEEK_{labels[record.day - 1]}_P{record.period}"
         speed = _A21_SPEED_VALUES[record.speed]
-        written = self.write_register(
-            prefix, SchedulePeriod(speed=speed, temperature=record.reserved)
-        )
+        values = [
+            (prefix, SchedulePeriod(speed=speed, temperature=record.reserved))
+        ]
         if record.period < 4:
-            written = (
-                self.write_register(
+            values.append(
+                (
                     f"{prefix}_END",
                     ScheduleEnd(hour=record.end_hour, minute=record.end_minute),
                 )
-                and written
             )
-        return written
+        return self._write_register_group(values)
 
     def rtc_datetime_params(self, value: datetime) -> dict[str, Any]:
         return {
@@ -919,6 +1267,10 @@ class A21ModbusDevice(Fan):
         }
 
     def set_rtc_datetime(self, value: datetime) -> bool:
-        return self.set_parameters(
-            self.rtc_datetime_params(value), include_extra_write_parameters=False
+        params = self.rtc_datetime_params(value)
+        return self._write_register_group(
+            (
+                ("HR_RTC_TIME", params["rtc_time"]),
+                ("HR_RTC_CALENDAR", params["rtc_date"]),
+            )
         )

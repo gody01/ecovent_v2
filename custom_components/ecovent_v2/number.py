@@ -318,7 +318,7 @@ NUMBER_SPECS = (
         "analogV_treshold",
         "mdi:flash-triangle-outline",
         False,
-        native_min_value=0.0,
+        native_min_value=5.0,
         native_max_value=100.0,
         native_step=1,
         unit_of_measurement=PERCENTAGE,
@@ -425,7 +425,7 @@ async def async_setup_entry(
                 write_mode=spec.write_mode,
             )
             for spec in NUMBER_SPECS
-            if coordinator._fan.supports_entity(
+            if coordinator._fan.profile_has_entity_requirements(
                 required_params=(spec.method,),
                 required_capabilities=spec.required_capabilities,
             )
@@ -486,6 +486,12 @@ class VentoNumber(StableObjectIdMixin, CoordinatorEntity, NumberEntity):
             if device_range is not None:
                 native_min_value, native_max_value = device_range
 
+        parameter_step = getattr(self._fan, "parameter_step", None)
+        if callable(parameter_step):
+            device_step = parameter_step(method)
+            if device_step is not None:
+                native_step = device_step
+
         if native_min_value is not None:
             self._attr_native_min_value = native_min_value
         if native_max_value is not None:
@@ -514,15 +520,18 @@ class VentoNumber(StableObjectIdMixin, CoordinatorEntity, NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         """Update the current value."""
-        self._attr_native_value = value
-
         if self._write_mode == "manual_speed_percent":
-            await self.hass.async_add_executor_job(
-                self._fan.set_man_speed_percent,
-                int(value),
-            )
-            self.async_write_ha_state()
-            await self.coordinator.async_refresh()
+            try:
+                success = await self.hass.async_add_executor_job(
+                    self._fan.set_man_speed_percent,
+                    int(value),
+                )
+            finally:
+                await self.coordinator.async_refresh_confirmed()
+            if not success:
+                raise RuntimeError(
+                    f"Failed to write {self._func}={value!r} for {self._fan.name}"
+                )
             return
 
         if self._fan.supports_capability("a21_modbus"):
@@ -539,10 +548,15 @@ class VentoNumber(StableObjectIdMixin, CoordinatorEntity, NumberEntity):
                 value, self._value_bytes, native_numeric=False
             )
 
-        await self.hass.async_add_executor_job(
-            self._fan.set_param,
-            self._func,
-            write_value,
-        )
-        self.async_write_ha_state()
-        await self.coordinator.async_refresh()
+        try:
+            success = await self.hass.async_add_executor_job(
+                self._fan.set_param,
+                self._func,
+                write_value,
+            )
+        finally:
+            await self.coordinator.async_refresh_confirmed()
+        if not success:
+            raise RuntimeError(
+                f"Failed to write {self._func}={value!r} for {self._fan.name}"
+            )

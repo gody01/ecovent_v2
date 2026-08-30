@@ -20,6 +20,7 @@ class FanMiscPropertiesMixin:
     @analogV_treshold.setter
     def analogV_treshold(self, input):
         val = int(input, 16)
+        self._validate_parameter_range("analogV_treshold", val)
         self._analogV_treshold = str(val)
 
     @property
@@ -28,7 +29,12 @@ class FanMiscPropertiesMixin:
 
     @unit_type.setter
     def unit_type(self, input):
-        val = int(input, 16)
+        val = int.from_bytes(
+            self._decode_exact_bytes(input, 2, "unit_type"), byteorder="big"
+        )
+        previous_unit_type_id = getattr(self, "_unit_type_id", None)
+        if previous_unit_type_id is not None and previous_unit_type_id != val:
+            self._reset_learned_protocol_capabilities()
         self._unit_type_id = val
         self._unit_type = self._map_value(self.unit_types, val, "model")
         self._apply_device_profile()
@@ -61,7 +67,9 @@ class FanMiscPropertiesMixin:
 
     @night_mode_timer.setter
     def night_mode_timer(self, input):
-        val = int(input, 16).to_bytes(2, "big")
+        val = self._decode_exact_bytes(input, 2, "night_mode_timer")
+        if val[0] > 59 or val[1] > 23:
+            raise ValueError(f"Invalid night mode timer: {val[1]:02d}:{val[0]:02d}")
         self._night_mode_timer = (
             str(val[1]).zfill(2) + "h " + str(val[0]).zfill(2) + "m"
         )
@@ -72,7 +80,9 @@ class FanMiscPropertiesMixin:
 
     @party_mode_timer.setter
     def party_mode_timer(self, input):
-        val = int(input, 16).to_bytes(2, "big")
+        val = self._decode_exact_bytes(input, 2, "party_mode_timer")
+        if val[0] > 59 or val[1] > 23:
+            raise ValueError(f"Invalid party mode timer: {val[1]:02d}:{val[0]:02d}")
         self._party_mode_timer = (
             str(val[1]).zfill(2) + "h " + str(val[0]).zfill(2) + "m"
         )
@@ -112,7 +122,7 @@ class FanMiscPropertiesMixin:
         return self._unknown_params
 
     def reset_filter_timer(self):
-        self.set_param("filter_timer_reset", "")
+        return self.set_param("filter_timer_reset", "01")
 
     def reset_alarms(self):
-        self.set_param("reset_alarms", "")
+        return self.set_param("reset_alarms", "01")

@@ -62,8 +62,16 @@ def _bgcp_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     defaults = defaults or {}
     schema = {
         vol.Required(CONF_IP_ADDRESS, default=defaults.get(CONF_IP_ADDRESS, "")): str,
-        vol.Optional(CONF_PORT, default=defaults.get(CONF_PORT, 4000)): int,
-        vol.Required(CONF_PASSWORD, default=defaults.get(CONF_PASSWORD, "1111")): str,
+        vol.Optional(CONF_PORT, default=defaults.get(CONF_PORT, 4000)): vol.All(
+            int, vol.Range(min=1, max=65535)
+        ),
+        vol.Required(
+            CONF_PASSWORD, default=defaults.get(CONF_PASSWORD, "1111")
+        ): vol.All(
+            str,
+            vol.Length(max=8),
+            vol.Match(r"^[0-9A-Za-z]{0,8}\Z"),
+        ),
         **_common_schema(defaults),
         # Legacy initial form default=False; reconfigure uses the saved value.
         vol.Optional(
@@ -178,7 +186,14 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     finally:
         close = getattr(device, "close", None)
         if close is not None:
-            await hass.async_add_executor_job(close)
+            try:
+                await hass.async_add_executor_job(close)
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning(
+                    "Unable to close EcoVent V2 transport after validation: %s",
+                    err,
+                    exc_info=True,
+                )
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -292,7 +307,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors[UPDATE_INTERVAL] = "update_interval_too_low"
             else:
                 try:
-                    await validate_input(self.hass, data)
+                    info = await validate_input(self.hass, data)
                 except CannotConnect:
                     errors["base"] = "cannot_connect"
                 except InvalidAuth:
@@ -303,6 +318,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     _LOGGER.exception("Unexpected exception during device validation")
                     errors["base"] = "unknown"
                 else:
+                    if (
+                        transport == TRANSPORT_BGCP_UDP
+                        and entry.unique_id is not None
+                        and info["id"] != entry.unique_id
+                    ):
+                        return self.async_abort(reason="wrong_device")
                     return self.async_update_reload_and_abort(entry, data_updates=data)
 
         return self.async_show_form(

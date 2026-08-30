@@ -105,7 +105,11 @@ class FanCorePropertiesMixin:
 
     @timer_counter.setter
     def timer_counter(self, input):
-        val = int(input, 16).to_bytes(3, "big")
+        val = self._decode_exact_bytes(input, 3, "timer_counter")
+        if val[0] > 59 or val[1] > 59 or val[2] > 23:
+            raise ValueError(
+                f"Invalid timer countdown: {val[2]:02d}:{val[1]:02d}:{val[0]:02d}"
+            )
         self._timer_counter = (
             str(val[2]) + "h " + str(val[1]) + "m " + str(val[0]) + "s "
         )
@@ -147,10 +151,10 @@ class FanCorePropertiesMixin:
 
     @boost_timer_countdown.setter
     def boost_timer_countdown(self, input):
-        val = int(input, 16).to_bytes(3, "big")
-        self._boost_timer_countdown = (
-            str(val[2]) + "h " + str(val[1]) + "m " + str(val[0]) + "s "
+        hours, minutes, seconds = self._decode_duration_seconds(
+            input, "boost_timer_countdown"
         )
+        self._boost_timer_countdown = f"{hours}h {minutes}m {seconds}s "
 
     @property
     def timer_status(self):
@@ -313,6 +317,7 @@ class FanCorePropertiesMixin:
     @humidity_treshold.setter
     def humidity_treshold(self, input):
         val = int(input, 16)
+        self._validate_parameter_range("humidity_treshold", val)
         self._humidity_treshold = str(val)
 
     @property
@@ -322,6 +327,7 @@ class FanCorePropertiesMixin:
     @temperature_treshold.setter
     def temperature_treshold(self, input):
         val = int(input, 16)
+        self._validate_parameter_range("temperature_treshold", val)
         self._temperature_treshold = str(val)
 
     @property
@@ -331,8 +337,11 @@ class FanCorePropertiesMixin:
     @battery_voltage.setter
     def battery_voltage(self, input):
         val = int.from_bytes(
-            int(input, 16).to_bytes(2, "big"), byteorder="little", signed=False
+            self._decode_exact_bytes(input, 2, "battery_voltage"),
+            byteorder="little",
+            signed=False,
         )
+        self._validate_parameter_range("battery_voltage", val)
         self._battery_voltage = str(val) + " mV"
 
     @property
@@ -342,6 +351,7 @@ class FanCorePropertiesMixin:
     @humidity.setter
     def humidity(self, input):
         val = int(input, 16)
+        self._validate_parameter_range("humidity", val)
         self._humidity = str(val)
 
     @property
@@ -367,7 +377,9 @@ class FanCorePropertiesMixin:
 
     @air_quality.setter
     def air_quality(self, input):
-        self._air_quality = self._decode_uint(input)
+        value = self._decode_uint(input)
+        self._validate_parameter_range("air_quality", value)
+        self._air_quality = value
 
     @property
     def air_quality_treshold(self):
@@ -375,7 +387,9 @@ class FanCorePropertiesMixin:
 
     @air_quality_treshold.setter
     def air_quality_treshold(self, input):
-        self._air_quality_treshold = self._decode_uint(input)
+        value = self._decode_uint(input)
+        self._validate_parameter_range("air_quality_treshold", value)
+        self._air_quality_treshold = value
 
     @property
     def analogV(self):
@@ -384,6 +398,7 @@ class FanCorePropertiesMixin:
     @analogV.setter
     def analogV(self, input):
         val = int(input, 16)
+        self._validate_parameter_range("analogV", val)
         self._analogV = str(val)
 
     @property

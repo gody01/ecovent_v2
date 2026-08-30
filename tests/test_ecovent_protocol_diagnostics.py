@@ -6,6 +6,7 @@ import unittest
 from ecovent_test_helpers import Fan
 
 from protocol_diagnostics import (
+    hardware_profile_mismatch_state,
     hardware_profile_mismatch_issue_body,
     hardware_profile_mismatch_issue_url,
     reportable_hardware_profile_mismatch_param_ids,
@@ -15,6 +16,77 @@ from protocol_diagnostics import (
 
 
 class ProtocolDiagnosticsTest(unittest.TestCase):
+    def test_firmware_change_resets_only_previous_identity_capabilities(self):
+        fan = Fan("192.0.2.1")
+        fan._unsupported_optional_poll_params = {0x003A, 0x0063}
+        fan._optional_read_backoff = {0x003A: 7}
+        fan._bulk_read_supported = False
+
+        fan.firmware = "00031A08E407"
+        self.assertEqual(fan._unsupported_optional_poll_params, {0x003A, 0x0063})
+        self.assertEqual(fan._optional_read_backoff, {0x003A: 7})
+        self.assertFalse(fan._bulk_read_supported)
+
+        fan.firmware = "00031A08E407"
+        self.assertEqual(fan._unsupported_optional_poll_params, {0x003A, 0x0063})
+        self.assertEqual(fan._optional_read_backoff, {0x003A: 7})
+        self.assertFalse(fan._bulk_read_supported)
+
+        fan.firmware = "00040101EA07"
+        self.assertEqual(fan.firmware, "0.4 2026-01-01")
+        self.assertEqual(fan._unsupported_optional_poll_params, set())
+        self.assertEqual(fan._optional_read_backoff, {})
+        self.assertIsNone(fan._bulk_read_supported)
+
+    def test_unit_type_change_resets_same_profile_capabilities(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0300"
+        fan._unsupported_optional_poll_params = {0x003A, 0x0063}
+        fan._optional_read_backoff = {0x003A: 7}
+        fan._bulk_read_supported = False
+
+        fan.unit_type = "0300"
+        self.assertEqual(fan._unsupported_optional_poll_params, {0x003A, 0x0063})
+        self.assertEqual(fan._optional_read_backoff, {0x003A: 7})
+        self.assertFalse(fan._bulk_read_supported)
+
+        fan.unit_type = "0500"
+        self.assertEqual(fan.profile_key, "vento")
+        self.assertEqual(fan._unsupported_optional_poll_params, set())
+        self.assertEqual(fan._optional_read_backoff, {})
+        self.assertIsNone(fan._bulk_read_supported)
+
+    def test_profile_change_resets_learned_capabilities(self):
+        fan = Fan("192.0.2.1")
+        fan._unsupported_optional_poll_params = {0x003A, 0x0063}
+        fan._optional_read_backoff = {0x003A: 7}
+        fan._bulk_read_supported = False
+
+        fan._set_device_profile("breezy")
+        self.assertEqual(fan.profile_key, "breezy")
+        self.assertEqual(fan._unsupported_optional_poll_params, set())
+        self.assertEqual(fan._optional_read_backoff, {})
+        self.assertIsNone(fan._bulk_read_supported)
+
+    def test_repair_state_changes_with_identity_even_when_rows_match(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0500"
+        fan.firmware = "00031A08E407"
+        fan._unsupported_optional_poll_params = {0x0083}
+
+        old_state = hardware_profile_mismatch_state(fan)
+        self.assertEqual(
+            old_state,
+            ("vento", 0x0500, "0.3 2020-08-26", frozenset({0x0083})),
+        )
+
+        fan.firmware = "00040101EA07"
+        fan._unsupported_optional_poll_params = {0x0083}
+        new_state = hardware_profile_mismatch_state(fan)
+
+        self.assertNotEqual(old_state, new_state)
+        self.assertEqual(new_state[-1], old_state[-1])
+
     def test_unsupported_optional_details_are_public_safe(self):
         fan = Fan("192.0.2.1", password="secret", fan_id="known-device")
         fan._set_device_profile("breezy")
@@ -60,16 +132,7 @@ class ProtocolDiagnosticsTest(unittest.TestCase):
     def test_issue78_vento_a50_rows_do_not_request_mismatch_report(self):
         fan = Fan("192.0.2.1")
         fan.unit_type = "0300"
-
-        self.assertEqual(
-            reportable_hardware_profile_mismatch_param_ids(fan), frozenset()
-        )
-
-    def test_issue82_vento_a50_humidity_variant_is_known(self):
-        """The reported 0x0300 firmware variant must not reopen a Repair."""
-        fan = Fan("192.0.2.1")
-        fan.unit_type = "0300"
-        fan._firmware = "0.7 2021-10-04"
+        fan.firmware = "0004140CE307"
         fan._unsupported_optional_poll_params = {
             0x003A,
             0x003B,
@@ -80,6 +143,27 @@ class ProtocolDiagnosticsTest(unittest.TestCase):
             0x0063,
         }
 
+        self.assertEqual(fan.firmware, "0.4 2019-12-20")
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan), frozenset()
+        )
+
+    def test_issue82_vento_a50_humidity_variant_is_known(self):
+        """The reported 0x0300 firmware variant must not reopen a Repair."""
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0300"
+        fan.firmware = "0007040AE507"
+        fan._unsupported_optional_poll_params = {
+            0x003A,
+            0x003B,
+            0x003C,
+            0x003D,
+            0x003E,
+            0x003F,
+            0x0063,
+        }
+
+        self.assertEqual(fan.firmware, "0.7 2021-10-04")
         self.assertEqual(
             reportable_hardware_profile_mismatch_param_ids(fan), frozenset()
         )
@@ -122,6 +206,42 @@ class ProtocolDiagnosticsTest(unittest.TestCase):
             reportable_hardware_profile_mismatch_param_ids(fan), frozenset({0x00B7})
         )
 
+    def test_issue97_vento_old_firmware_speed_rows_are_known(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0300"
+        fan.firmware = "00061105E507"
+        fan._unsupported_optional_poll_params = {
+            0x003A,
+            0x003B,
+            0x003C,
+            0x003D,
+            0x003E,
+            0x003F,
+        }
+
+        self.assertEqual(fan.firmware, "0.6 2021-05-17")
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan), frozenset()
+        )
+
+    def test_issue97_vento_old_firmware_extra_row_still_requests_report(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0300"
+        fan.firmware = "00061105E507"
+        fan._unsupported_optional_poll_params = {
+            0x003A,
+            0x003B,
+            0x003C,
+            0x003D,
+            0x003E,
+            0x003F,
+            0x0083,
+        }
+
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan), frozenset({0x0083})
+        )
+
     def test_unknown_filter_timer_rejection_still_requests_mismatch_report(self):
         fan = Fan("192.0.2.1")
         fan.unit_type = "0300"
@@ -135,7 +255,7 @@ class ProtocolDiagnosticsTest(unittest.TestCase):
     def test_issue88_freshpoint_160e_standard_rows_do_not_request_report(self):
         fan = Fan("192.0.2.1")
         fan.unit_type = "1100"
-        fan._firmware = "0.12 2025-09-01"
+        fan.firmware = "000C0109E907"
         fan._unsupported_optional_poll_params = {
             0x0011,
             0x001A,
@@ -150,6 +270,7 @@ class ProtocolDiagnosticsTest(unittest.TestCase):
             0x0405,
         }
 
+        self.assertEqual(fan.firmware, "0.12 2025-09-01")
         self.assertEqual(
             reportable_hardware_profile_mismatch_param_ids(fan), frozenset()
         )
@@ -203,7 +324,31 @@ class ProtocolDiagnosticsTest(unittest.TestCase):
     def test_issue90_vento_a30_mini_air_rows_do_not_request_report(self):
         fan = Fan("192.0.2.1")
         fan.unit_type = "0500"
-        fan._firmware = "0.3 2020-08-26"
+        fan.firmware = "00031A08E407"
+        fan._unsupported_optional_poll_params = {
+            0x0016,
+            0x002D,
+            0x003A,
+            0x003B,
+            0x003C,
+            0x003D,
+            0x003E,
+            0x003F,
+            0x004B,
+            0x0063,
+            0x00B8,
+            0x0305,
+        }
+
+        self.assertEqual(fan.firmware, "0.3 2020-08-26")
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan), frozenset()
+        )
+
+    def test_issue95_vento_a30_firmware_05_rows_do_not_request_report(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0500"
+        fan.firmware = "0005040AE507"
         fan._unsupported_optional_poll_params = {
             0x0016,
             0x002D,
@@ -223,12 +368,37 @@ class ProtocolDiagnosticsTest(unittest.TestCase):
             reportable_hardware_profile_mismatch_param_ids(fan), frozenset()
         )
 
+    def test_issue95_vento_a30_extra_row_still_requests_report(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0500"
+        fan.firmware = "0005040AE507"
+        fan._unsupported_optional_poll_params = {
+            0x0016,
+            0x002D,
+            0x003A,
+            0x003B,
+            0x003C,
+            0x003D,
+            0x003E,
+            0x003F,
+            0x004B,
+            0x0063,
+            0x0083,
+            0x00B8,
+            0x0305,
+        }
+
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan), frozenset({0x0083})
+        )
+
     def test_issue92_extract_fan_motion_rows_do_not_request_report(self):
         fan = Fan("192.0.2.1")
         fan.unit_type = "0600"
-        fan._firmware = "2.2 2022-06-16"
+        fan.firmware = "02021006E607"
         fan._unsupported_optional_poll_params = {0x000B, 0x0012}
 
+        self.assertEqual(fan.firmware, "2.2 2022-06-16")
         self.assertEqual(
             reportable_hardware_profile_mismatch_param_ids(fan), frozenset()
         )

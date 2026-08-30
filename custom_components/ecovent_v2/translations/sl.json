@@ -1,7 +1,8 @@
 {
     "config": {
         "abort": {
-            "already_configured": "Ventilator je že konfiguriran."
+            "already_configured": "Ventilator je že konfiguriran.",
+            "wrong_device": "Zaznana naprava se ne ujema s konfigurirano napravo."
         },
         "error": {
             "cannot_connect": "Povezava ni uspela.",

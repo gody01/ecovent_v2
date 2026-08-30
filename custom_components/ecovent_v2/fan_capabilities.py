@@ -15,6 +15,86 @@ _CAPABILITY_PROBE_PARAMETERS = {
     "voc": ("voc",),
 }
 
+_PARAMETER_RANGES = {
+    "vento": {
+        "analogV": (0, 100),
+        "analogV_treshold": (5, 100),
+        "battery_voltage": (0, 5000),
+        "boost_time": (0, 60),
+        "fan1_speed": (0, 5000),
+        "fan2_speed": (0, 5000),
+        "filter_timer_setpoint": (70, 365),
+        "humidity": (0, 100),
+        "humidity_treshold": (40, 80),
+        "supply_speed_low": (4, 100),
+        "exhaust_speed_low": (4, 100),
+        "supply_speed_medium": (4, 100),
+        "exhaust_speed_medium": (4, 100),
+        "supply_speed_high": (4, 100),
+        "exhaust_speed_high": (4, 100),
+    },
+    "extract_fan": {
+        "boost_time": (0, 60),
+        "fan1_speed": (0, 6000),
+        "humidity": (0, 100),
+        "humidity_treshold": (40, 80),
+        "interval_ventilation_speed_setpoint": (30, 100),
+        "max_speed_setpoint": (30, 100),
+        "silent_speed_setpoint": (30, 100),
+        "temperature_treshold": (18, 36),
+    },
+    "breezy": {
+        "battery_voltage": (0, 5000),
+        "co2": (0, 2000),
+        "co2_treshold": (400, 2000),
+        "fan1_speed": (0, 5000),
+        "fan2_speed": (0, 5000),
+        "filter_timer_setpoint": (70, 365),
+        "humidity": (0, 100),
+        "humidity_treshold": (40, 80),
+        "man_speed": (10, 100),
+        "recovery_efficiency": (0, 100),
+        "screen_brightness": (1, 100),
+        "supply_speed_low": (10, 100),
+        "exhaust_speed_low": (10, 100),
+        "supply_speed_medium": (10, 100),
+        "exhaust_speed_medium": (10, 100),
+        "supply_speed_high": (10, 100),
+        "exhaust_speed_high": (10, 100),
+        "voc": (0, 500),
+        "voc_treshold": (50, 250),
+    },
+    "freshbox": {
+        "boost_time": (0, 60),
+        "supply_speed_low": (0, 100),
+        "exhaust_speed_low": (0, 100),
+        "supply_speed_medium": (0, 100),
+        "exhaust_speed_medium": (0, 100),
+        "supply_speed_high": (0, 100),
+        "exhaust_speed_high": (0, 100),
+        "supply_speed_4": (0, 100),
+        "exhaust_speed_4": (0, 100),
+        "supply_speed_5": (0, 100),
+        "exhaust_speed_5": (0, 100),
+        "filter_timer_setpoint": (70, 365),
+    },
+    "arc": {
+        "air_quality": (0, 500),
+        "air_quality_treshold": (50, 500),
+        "battery_voltage": (0, 5000),
+        "boost_time": (0, 60),
+        "fan1_speed": (0, 5000),
+        "humidity": (0, 100),
+        "humidity_treshold": (40, 80),
+        "temperature_treshold": (18, 36),
+    },
+}
+
+_PARAMETER_STEPS = {
+    "freshbox": {
+        "filter_timer_setpoint": 5,
+    },
+}
 
 class FanCapabilitiesMixin:
     @property
@@ -59,7 +139,7 @@ class FanCapabilitiesMixin:
 
     def supports_capability(self, capability):
         """Return whether the active profile declares a named capability."""
-        if capability not in self.device_profile.capabilities:
+        if not self.profile_supports_capability(capability):
             return False
 
         probe_parameters = _CAPABILITY_PROBE_PARAMETERS.get(capability, ())
@@ -74,6 +154,28 @@ class FanCapabilitiesMixin:
         if index is None:
             return False
         return index not in self.unsupported_optional_poll_parameter_ids()
+
+    def profile_supports_capability(self, capability):
+        """Return whether the stable hardware profile declares a capability."""
+        return capability in self.device_profile.capabilities
+
+    def profile_supports_parameter(self, parameter):
+        """Return whether the stable hardware profile declares a parameter."""
+        return self.get_params_index(parameter) is not None
+
+    def profile_has_entity_requirements(
+        self,
+        *,
+        required_params=(),
+        required_capabilities=(),
+    ):
+        """Return whether a profile can host an entity across learned states."""
+        return all(
+            self.profile_supports_parameter(param) for param in required_params
+        ) and all(
+            self.profile_supports_capability(capability)
+            for capability in required_capabilities
+        )
 
     def supports_entity(
         self,
@@ -101,6 +203,13 @@ class FanCapabilitiesMixin:
         """Return optional poll registers this device explicitly rejected."""
         unsupported = getattr(self, "_unsupported_optional_poll_params", set())
         return frozenset(unsupported)
+
+    def _reset_learned_protocol_capabilities(self):
+        """Discard protocol capabilities learned for a previous identity."""
+        self._bulk_read_supported = None
+        self._bulk_read_reprobe_countdown = 0
+        self._optional_read_backoff = {}
+        self._unsupported_optional_poll_params = set()
 
     def unsupported_optional_poll_parameters(self):
         """Return parameter names explicitly unsupported by this hardware."""
@@ -133,7 +242,9 @@ class FanCapabilitiesMixin:
     def available_schedule_speed_options(self):
         """Return schedule speed options that make sense for the active device."""
         speed_modes = self.device_profile.schedule_speed_modes or tuple(
-            preset for preset in self.fan_preset_modes if preset not in {"off", "manual"}
+            preset
+            for preset in self.fan_preset_modes
+            if preset not in {"off", "manual"}
         )
         options = [
             SCHEDULE_SPEED_TO_OPTION[mode]
@@ -145,7 +256,9 @@ class FanCapabilitiesMixin:
     def available_schedule_speed_option_meta(self):
         """Return schedule speed options with icons for the custom editor."""
         speed_modes = self.device_profile.schedule_speed_modes or tuple(
-            preset for preset in self.fan_preset_modes if preset not in {"off", "manual"}
+            preset
+            for preset in self.fan_preset_modes
+            if preset not in {"off", "manual"}
         )
         items = []
         for mode in speed_modes:
@@ -174,19 +287,80 @@ class FanCapabilitiesMixin:
         """Decode unsigned protocol integers from hex payload bytes."""
         return int.from_bytes(bytes.fromhex(input), byteorder=byteorder, signed=False)
 
+    def _validate_range(self, value, minimum, maximum, parameter):
+        """Reject scalar values outside the documented protocol range."""
+        if not minimum <= value <= maximum:
+            raise ValueError(
+                f"Invalid {parameter}: {value} is outside {minimum}..{maximum}"
+            )
+        return value
+
+    def parameter_range(self, parameter):
+        """Return the active profile's documented scalar range."""
+        return _PARAMETER_RANGES.get(self.profile_key, {}).get(parameter)
+
+    def parameter_step(self, parameter):
+        """Return the active profile's documented scalar increment."""
+        return _PARAMETER_STEPS.get(self.profile_key, {}).get(parameter)
+
+    def _validate_parameter_range(self, parameter, value):
+        """Validate a scalar against its active profile when documented."""
+        value_range = self.parameter_range(parameter)
+        if value_range is not None:
+            self._validate_range(value, *value_range, parameter)
+        return value
+
+    def _decode_exact_bytes(self, input, expected_size, parameter):
+        """Decode a fixed-width protocol value without padding or truncation."""
+        value = bytes.fromhex(input)
+        if len(value) != expected_size:
+            raise ValueError(
+                f"{parameter} must contain exactly {expected_size} bytes, "
+                f"got {len(value)}"
+            )
+        return value
+
     def _decode_signed_temperature(self, input):
         """Decode Breezy/Freshpoint signed tenths-of-degree temperature values."""
-        value = int.from_bytes(bytes.fromhex(input), byteorder="little", signed=True)
+        value = int.from_bytes(
+            self._decode_exact_bytes(input, 2, "temperature"),
+            byteorder="little",
+            signed=True,
+        )
         if value in (-32768, 32767):
             return None
         return round(value / 10, 1)
 
     def _decode_time_minutes_hours(self, input):
         """Decode two-byte minute/hour protocol time into HH:MM text."""
-        value = bytes.fromhex(input)
-        if len(value) < 2:
-            return None
+        value = self._decode_exact_bytes(input, 2, "time")
+        if value[0] > 59 or value[1] > 23:
+            raise ValueError(
+                f"Invalid time components: hours={value[1]}, minutes={value[0]}"
+            )
         return f"{value[1]:02d}:{value[0]:02d}"
+
+    def _decode_time_seconds_minutes_hours(self, input, parameter):
+        """Decode a three-byte wall-clock value into h/m/s components."""
+        seconds, minutes, hours = self._decode_exact_bytes(input, 3, parameter)
+        if seconds > 59 or minutes > 59 or hours > 23:
+            raise ValueError(
+                f"Invalid {parameter}: {hours:02d}:{minutes:02d}:{seconds:02d}"
+            )
+        return hours, minutes, seconds
+
+    def _decode_duration_seconds(self, input, parameter):
+        """Decode a three-byte little-endian duration into h/m/s components."""
+        value = int.from_bytes(
+            self._decode_exact_bytes(input, 3, parameter),
+            byteorder="little",
+            signed=False,
+        )
+        if value > 24 * 60 * 60:
+            raise ValueError(f"Invalid {parameter} duration: {value} seconds")
+        hours, remainder = divmod(value, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return hours, minutes, seconds
 
     def _set_device_profile(self, profile_key):
         """Apply protocol maps for the selected device family."""
@@ -200,8 +374,7 @@ class FanCapabilitiesMixin:
         self.write_params = getattr(type(self), profile.write_params_name).copy()
         self._write_only_params = set(self.write_params)
         if previous_profile != profile_key:
-            self._bulk_read_supported = None
-            self._optional_read_backoff = {}
+            self._reset_learned_protocol_capabilities()
 
     def _apply_device_profile(self):
         """Select parameter meanings after reading the model id."""

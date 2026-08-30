@@ -161,7 +161,7 @@ async def async_setup_entry(
                 spec.on_values,
             )
             for spec in BINARY_SENSOR_SPECS
-            if coordinator._fan.supports_entity(
+            if coordinator._fan.profile_has_entity_requirements(
                 required_params=(spec.method,),
                 required_capabilities=spec.required_capabilities,
             )

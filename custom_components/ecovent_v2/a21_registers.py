@@ -12,6 +12,7 @@ from this documentation alone.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from datetime import date
 from enum import Enum
 from typing import Any, Iterable, Mapping
 
@@ -269,6 +270,7 @@ def encode(kind: Kind, value: Any) -> tuple[int, ...]:
     if kind is Kind.FIRMWARE:
         if not isinstance(value, Firmware):
             raise ValueError("firmware record required")
+        date(value.year, value.month, value.day)
         return (
             _pair(value.major, value.minor),
             _pair(_range(value.day, 1, 31, "day"), _range(value.month, 1, 12, "month")),
@@ -277,6 +279,9 @@ def encode(kind: Kind, value: Any) -> tuple[int, ...]:
     if kind is Kind.RTC_CALENDAR:
         if not isinstance(value, RtcCalendar):
             raise ValueError("calendar record required")
+        calendar_date = date(2000 + value.year, value.month, value.day)
+        if calendar_date.isoweekday() != value.weekday:
+            raise ValueError("calendar weekday does not match calendar date")
         return (
             _pair(
                 _range(value.day, 1, 31, "day"), _range(value.weekday, 1, 7, "weekday")
@@ -333,7 +338,37 @@ class RegisterSpec:
     allowed_ranges: tuple[tuple[int, int], ...] = ()
 
     def decode(self, words: Iterable[int]) -> Any:
-        return decode(self.kind, words)
+        value = decode(self.kind, words)
+        # Decoding is untrusted input just as encoding is untrusted service
+        # input.  Reuse the type-specific codec validation for compound values
+        # (RTC, timers, schedules, etc.) and apply the catalogue's published
+        # scalar limits and documented enum values below.
+        if self.kind not in {
+            Kind.BOOL,
+            Kind.U8,
+            Kind.U16,
+            Kind.S16,
+            Kind.TENTHS_S16,
+        }:
+            encode(self.kind, value)
+            return value
+
+        numeric = (
+            int(value)
+            if self.kind is Kind.BOOL
+            else value * 10
+            if self.kind is Kind.TENTHS_S16
+            else value
+        )
+        if self.minimum is not None and not self.minimum <= numeric <= self.maximum:
+            raise ValueError(f"{self.key} outside documented range")
+        if self.allowed_ranges and not any(
+            low <= numeric <= high for low, high in self.allowed_ranges
+        ):
+            raise ValueError(f"{self.key} outside documented allowed ranges")
+        if self.enum is not None and numeric not in self.enum:
+            raise ValueError(f"{self.key} has no documented enum value {numeric}")
+        return value
 
     def encode(self, value: Any) -> tuple[int, ...]:
         if not self.access.writable:
@@ -359,6 +394,8 @@ class RegisterSpec:
                 low <= numeric <= high for low, high in self.allowed_ranges
             ):
                 raise ValueError(f"{self.key} outside documented allowed ranges")
+            if self.enum is not None and numeric not in self.enum:
+                raise ValueError(f"{self.key} has no documented enum value {numeric}")
         return words
 
 

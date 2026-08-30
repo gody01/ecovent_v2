@@ -2,6 +2,8 @@
 
 from pathlib import Path
 import ast
+import asyncio
+import types
 import unittest
 
 
@@ -64,6 +66,7 @@ class Issue49RegressionTest(unittest.TestCase):
         self.assertIn("get_host_info", source)
         self.assertIn("is_hassio", source)
         self.assertIn("extra_write_parameters_callback", source)
+        self.assertIn("extra_write_parameters_result_callback", source)
         self.assertTrue(
             any(
                 isinstance(node, ast.Attribute)
@@ -96,6 +99,9 @@ class Issue49RegressionTest(unittest.TestCase):
         sync_params = _class_method(
             tree, "EcoVentCoordinator", "_clock_sync_params_if_needed"
         )
+        sync_completed = _class_method(
+            tree, "EcoVentCoordinator", "_clock_sync_write_completed"
+        )
         clock_needed = _class_method(tree, "EcoVentCoordinator", "_clock_sync_needed")
         device_clock = _class_method(
             tree, "EcoVentCoordinator", "_device_clock_datetime"
@@ -122,6 +128,10 @@ class Issue49RegressionTest(unittest.TestCase):
             maybe_sync_source.index("_clock_sync_needed"),
         )
         self.assertLess(
+            maybe_sync_source.index("if self._silent_mode"),
+            maybe_sync_source.index("set_rtc_datetime"),
+        )
+        self.assertLess(
             maybe_sync_source.index("_recently_synced_clock"),
             maybe_sync_source.index("_host_clock_synchronized"),
         )
@@ -137,6 +147,10 @@ class Issue49RegressionTest(unittest.TestCase):
             maybe_sync_source.index("_device_clock_datetime"),
             maybe_sync_source.index("set_rtc_datetime"),
         )
+        self.assertLess(
+            maybe_sync_source.index("if not written"),
+            maybe_sync_source.index("_record_clock_sync"),
+        )
         refresh_source = ast.get_source_segment(
             COORDINATOR_PATH.read_text(), refresh_clock
         )
@@ -148,6 +162,28 @@ class Issue49RegressionTest(unittest.TestCase):
                 for node in ast.walk(sync_params)
             )
         )
+        self.assertFalse(
+            any(
+                isinstance(node, ast.Attribute) and node.attr == "_record_clock_sync"
+                for node in ast.walk(sync_params)
+            )
+        )
+        self.assertTrue(
+            any(
+                isinstance(node, ast.Attribute) and node.attr == "_record_clock_sync"
+                for node in ast.walk(sync_completed)
+            )
+        )
+
+    def test_manual_clock_sync_remains_explicit_in_silent_mode(self):
+        tree = _tree(COORDINATOR_PATH)
+        manual_sync = _class_method(
+            tree, "EcoVentCoordinator", "async_sync_device_clock"
+        )
+        source = ast.get_source_segment(COORDINATOR_PATH.read_text(), manual_sync)
+
+        self.assertIn("set_rtc_datetime", source)
+        self.assertNotIn("_silent_mode", source)
 
     def test_startup_discovery_defers_standalone_clock_sync(self):
         tree = _tree(COORDINATOR_PATH)
@@ -170,6 +206,10 @@ class Issue49RegressionTest(unittest.TestCase):
         tree = _tree(FAN_PATH)
         setup = _module_function(tree, "async_setup_entry")
         sync_method = _class_method(tree, "VentoExpertFan", "async_sync_device_clock")
+        coordinator_tree = _tree(COORDINATOR_PATH)
+        coordinator_sync = _class_method(
+            coordinator_tree, "EcoVentCoordinator", "async_sync_device_clock"
+        )
 
         self.assertTrue(
             any(
@@ -184,6 +224,256 @@ class Issue49RegressionTest(unittest.TestCase):
                 for node in ast.walk(sync_method)
             )
         )
+        coordinator_sync_source = ast.get_source_segment(
+            COORDINATOR_PATH.read_text(), coordinator_sync
+        )
+        self.assertLess(
+            coordinator_sync_source.index("if not written"),
+            coordinator_sync_source.index("await self.async_refresh()"),
+        )
+        self.assertLess(
+            coordinator_sync_source.index("await self.async_refresh()"),
+            coordinator_sync_source.index("self._record_clock_sync(now)"),
+        )
+
+    def test_manual_clock_sync_does_not_advance_marker_after_failed_refresh(self):
+        method = _class_method(
+            _tree(COORDINATOR_PATH), "EcoVentCoordinator", "async_sync_device_clock"
+        )
+        namespace = {}
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+                str(COORDINATOR_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+        events = []
+
+        class Hass:
+            async def async_add_executor_job(self, callback, *args):
+                return callback(*args)
+
+        def set_rtc_datetime(now):
+            events.append(("write", now))
+            return True
+
+        async def refresh():
+            events.append("refresh")
+            raise RuntimeError("refresh failed")
+
+        coordinator = types.SimpleNamespace(
+            hass=Hass(),
+            _fan=types.SimpleNamespace(
+                name="Test fan", set_rtc_datetime=set_rtc_datetime
+            ),
+            _device_clock_now=lambda: "NOW",
+            async_refresh=refresh,
+            last_update_success=False,
+            _clock_sync_confirmed=lambda _now: True,
+            _record_clock_sync=lambda now: events.append(("record", now)),
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "refresh failed"):
+            asyncio.run(namespace["async_sync_device_clock"](coordinator))
+        self.assertEqual(events, [("write", "NOW"), "refresh"])
+
+    def test_manual_clock_sync_checks_swallowed_refresh_failure(self):
+        method = _class_method(
+            _tree(COORDINATOR_PATH), "EcoVentCoordinator", "async_sync_device_clock"
+        )
+        namespace = {}
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+                str(COORDINATOR_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+        events = []
+
+        class Hass:
+            async def async_add_executor_job(self, callback, *args):
+                return callback(*args)
+
+        async def refresh():
+            events.append("refresh-failed-but-swallowed")
+
+        coordinator = types.SimpleNamespace(
+            hass=Hass(),
+            _fan=types.SimpleNamespace(
+                name="Test fan", set_rtc_datetime=lambda now: True
+            ),
+            _device_clock_now=lambda: "NOW",
+            async_refresh=refresh,
+            last_update_success=False,
+            _clock_sync_confirmed=lambda _now: True,
+            _record_clock_sync=lambda now: events.append(("record", now)),
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "Failed to confirm"):
+            asyncio.run(namespace["async_sync_device_clock"](coordinator))
+        self.assertEqual(events, ["refresh-failed-but-swallowed"])
+
+    def test_manual_clock_sync_rejects_mismatching_device_readback(self):
+        method = _class_method(
+            _tree(COORDINATOR_PATH), "EcoVentCoordinator", "async_sync_device_clock"
+        )
+        namespace = {}
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+                str(COORDINATOR_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+        events = []
+
+        class Hass:
+            async def async_add_executor_job(self, callback, *args):
+                return callback(*args)
+
+        async def refresh():
+            events.append("refresh")
+
+        coordinator = types.SimpleNamespace(
+            hass=Hass(),
+            _fan=types.SimpleNamespace(
+                name="Test fan", set_rtc_datetime=lambda now: True
+            ),
+            _device_clock_now=lambda: "NOW",
+            async_refresh=refresh,
+            last_update_success=True,
+            _clock_sync_confirmed=lambda _now: False,
+            _record_clock_sync=lambda now: events.append(("record", now)),
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "did not match"):
+            asyncio.run(namespace["async_sync_device_clock"](coordinator))
+        self.assertEqual(events, ["refresh"])
+
+    def test_periodic_clock_sync_does_not_record_unconfirmed_write(self):
+        method = _class_method(
+            _tree(COORDINATOR_PATH), "EcoVentCoordinator", "_async_maybe_sync_clock"
+        )
+        namespace = {
+            "_LOGGER": types.SimpleNamespace(
+                debug=lambda *_args: None,
+                warning=lambda *_args: None,
+            )
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+                str(COORDINATOR_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+        events = []
+
+        class Hass:
+            async def async_add_executor_job(self, callback, *args):
+                return callback(*args)
+
+        coordinator = types.SimpleNamespace(
+            hass=Hass(),
+            _fan=types.SimpleNamespace(
+                name="Test fan",
+                set_rtc_datetime=lambda now: events.append(("write", now)) or True,
+            ),
+            _silent_mode=False,
+            _last_clock_sync_check=None,
+            _device_clock_now=lambda: "NOW",
+            _clock_sync_check_due=lambda _now: True,
+            _recently_synced_clock=lambda _now: False,
+            _host_clock_synchronized=lambda: True,
+            _refresh_device_clock_state=lambda: True,
+            _device_clock_datetime=lambda: "STALE",
+            _clock_sync_needed=lambda _now: True,
+            _confirm_device_clock_sync=lambda _now: False,
+            _record_clock_sync=lambda now: events.append(("record", now)),
+        )
+
+        asyncio.run(namespace["_async_maybe_sync_clock"](coordinator))
+        self.assertEqual(events, [("write", "NOW")])
+
+    def test_periodic_clock_sync_skips_transient_rtc_read_exception(self):
+        method = _class_method(
+            _tree(COORDINATOR_PATH), "EcoVentCoordinator", "_async_maybe_sync_clock"
+        )
+        namespace = {
+            "_LOGGER": types.SimpleNamespace(debug=lambda *_args: None),
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+                str(COORDINATOR_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+        events = []
+
+        class Hass:
+            async def async_add_executor_job(self, callback, *args):
+                return callback(*args)
+
+        coordinator = types.SimpleNamespace(
+            hass=Hass(),
+            _fan=types.SimpleNamespace(name="Test fan"),
+            _silent_mode=False,
+            _last_clock_sync_check=None,
+            _device_clock_now=lambda: "NOW",
+            _clock_sync_check_due=lambda _now: True,
+            _recently_synced_clock=lambda _now: False,
+            _host_clock_synchronized=lambda: True,
+            _refresh_device_clock_state=lambda: (_ for _ in ()).throw(
+                ConnectionError("rtc read failed")
+            ),
+            _record_clock_sync=lambda now: events.append(("record", now)),
+        )
+
+        asyncio.run(namespace["_async_maybe_sync_clock"](coordinator))
+        self.assertEqual(events, [])
+
+    def test_opportunistic_clock_readback_failure_does_not_fail_primary_write(self):
+        tree = _tree(COORDINATOR_PATH)
+        methods = [
+            _class_method(tree, "EcoVentCoordinator", "_confirm_device_clock_sync"),
+            _class_method(tree, "EcoVentCoordinator", "_clock_sync_write_completed"),
+        ]
+        namespace = {
+            "_LOGGER": types.SimpleNamespace(warning=lambda *_args: None),
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=methods, type_ignores=[])),
+                str(COORDINATOR_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+        events = []
+        coordinator = types.SimpleNamespace(
+            _fan=types.SimpleNamespace(name="Test fan"),
+            _pending_clock_sync="NOW",
+            _refresh_device_clock_state=lambda: (_ for _ in ()).throw(
+                ConnectionError("rtc read failed")
+            ),
+            _clock_sync_confirmed=lambda _now: True,
+            _record_clock_sync=lambda now: events.append(("record", now)),
+        )
+        coordinator._confirm_device_clock_sync = types.MethodType(
+            namespace["_confirm_device_clock_sync"], coordinator
+        )
+
+        namespace["_clock_sync_write_completed"](coordinator, True)
+        self.assertEqual(events, [])
+        self.assertIsNone(coordinator._pending_clock_sync)
 
 
 if __name__ == "__main__":

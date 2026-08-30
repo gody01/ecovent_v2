@@ -169,7 +169,7 @@ async def async_setup_entry(
     entities = [
         VentoSelect(hass, config, spec)
         for spec in SELECT_SPECS
-        if coordinator._fan.supports_entity(
+        if coordinator._fan.profile_has_entity_requirements(
             required_params=(spec.method,),
             required_capabilities=spec.required_capabilities,
         )
@@ -218,7 +218,13 @@ class VentoSelect(StableObjectIdMixin, CoordinatorEntity, SelectEntity):
         if option not in self.options:
             raise ValueError(f"Invalid {self._method} option: {option}")
 
-        await self.hass.async_add_executor_job(
-            self._fan.set_param, self._method, option
-        )
-        await self.coordinator.async_refresh()
+        try:
+            success = await self.hass.async_add_executor_job(
+                self._fan.set_param, self._method, option
+            )
+        finally:
+            await self.coordinator.async_refresh_confirmed()
+        if not success:
+            raise RuntimeError(
+                f"Failed to write {self._method}={option!r} for {self._fan.name}"
+            )

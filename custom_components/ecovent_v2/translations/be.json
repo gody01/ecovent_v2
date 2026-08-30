@@ -1,7 +1,8 @@
 {
     "config": {
         "abort": {
-            "already_configured": "Вентылятар ужо наладжаны."
+            "already_configured": "Вентылятар ужо наладжаны.",
+            "wrong_device": "Выяўленая прылада не адпавядае наладжанай прыладзе."
         },
         "error": {
             "cannot_connect": "Не ўдалося падключыцца.",

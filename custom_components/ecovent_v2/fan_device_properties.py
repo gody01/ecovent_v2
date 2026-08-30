@@ -1,5 +1,8 @@
 """EcoVent Fan mixin extracted from the vendored protocol client."""
 
+from datetime import date
+
+
 class FanDevicePropertiesMixin:
     @property
     def device_search(self):
@@ -7,7 +10,9 @@ class FanDevicePropertiesMixin:
 
     @device_search.setter
     def device_search(self, val):
-        self._device_search = self.hex2str(val)
+        self._device_search = self.hex2str(
+            self._decode_exact_bytes(val, 16, "device_search").hex()
+        )
 
     @property
     def device_password(self):
@@ -23,9 +28,13 @@ class FanDevicePropertiesMixin:
 
     @machine_hours.setter
     def machine_hours(self, input):
-        val = int(input, 16).to_bytes(4, "big")
+        val = self._decode_exact_bytes(input, 4, "machine_hours")
+        if val[0] > 59 or val[1] > 23:
+            raise ValueError(
+                f"Invalid machine-hours time: {val[1]:02d}:{val[0]:02d}"
+            )
         self._machine_hours = (
-            str(int.from_bytes(val[2:3], "big"))
+            str(int.from_bytes(val[2:4], byteorder="little", signed=False))
             + "d "
             + str(val[1])
             + "h "
@@ -81,18 +90,24 @@ class FanDevicePropertiesMixin:
 
     @firmware.setter
     def firmware(self, input):
-        val = int(input, 16).to_bytes(6, "big")
-        self._firmware = (
+        val = self._decode_exact_bytes(input, 6, "firmware")
+        year = int.from_bytes(val[4:6], byteorder="little", signed=False)
+        firmware_date = date(year, val[3], val[2])
+        firmware = (
             str(val[0])
             + "."
             + str(val[1])
             + " "
-            + str(int.from_bytes(val[4:6], byteorder="little", signed=False))
+            + str(firmware_date.year)
             + "-"
-            + str(val[3]).zfill(2)
+            + str(firmware_date.month).zfill(2)
             + "-"
-            + str(val[2]).zfill(2)
+            + str(firmware_date.day).zfill(2)
         )
+        previous_firmware = getattr(self, "_firmware", None)
+        if previous_firmware is not None and previous_firmware != firmware:
+            self._reset_learned_protocol_capabilities()
+        self._firmware = firmware
 
     @property
     def filter_replacement_status(self):
@@ -176,7 +191,7 @@ class FanDevicePropertiesMixin:
 
     @wifi_assigned_ip.setter
     def wifi_assigned_ip(self, input):
-        val = int(input, 16).to_bytes(4, "big")
+        val = self._decode_exact_bytes(input, 4, "wifi_assigned_ip")
         self._wifi_assigned_ip = (
             str(val[0]) + "." + str(val[1]) + "." + str(val[2]) + "." + str(val[3])
         )
@@ -187,7 +202,7 @@ class FanDevicePropertiesMixin:
 
     @wifi_assigned_netmask.setter
     def wifi_assigned_netmask(self, input):
-        val = int(input, 16).to_bytes(4, "big")
+        val = self._decode_exact_bytes(input, 4, "wifi_assigned_netmask")
         self._wifi_assigned_netmask = (
             str(val[0]) + "." + str(val[1]) + "." + str(val[2]) + "." + str(val[3])
         )
@@ -198,7 +213,7 @@ class FanDevicePropertiesMixin:
 
     @wifi_main_gateway.setter
     def wifi_main_gateway(self, input):
-        val = int(input, 16).to_bytes(4, "big")
+        val = self._decode_exact_bytes(input, 4, "wifi_main_gateway")
         self._wifi_main_gateway = (
             str(val[0]) + "." + str(val[1]) + "." + str(val[2]) + "." + str(val[3])
         )
@@ -209,7 +224,7 @@ class FanDevicePropertiesMixin:
 
     @current_wifi_ip.setter
     def current_wifi_ip(self, input):
-        val = int(input, 16).to_bytes(4, "big")
+        val = self._decode_exact_bytes(input, 4, "current_wifi_ip")
         self._current_wifi_ip = (
             str(val[0]) + "." + str(val[1]) + "." + str(val[2]) + "." + str(val[3])
         )

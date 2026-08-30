@@ -142,9 +142,12 @@ External relabels and OEM names tracked as evidence or candidates:
     clock correction, so restarting HA does not make every fan beep
   - standalone periodic correction rereads the device RTC immediately before
     writing, and skips the write if the fresh RTC state is unavailable
+  - silent manual-speed mode suppresses standalone automatic RTC correction,
+    because RTC writes can make BGCP devices acknowledge audibly
   - device writes that would already beep also batch the RTC rows when the
     cached clock has drifted, avoiding a separate clock-only beep
-  - the `sync_device_clock` fan service can be used for manual or automated sync
+  - the explicit `sync_device_clock` fan service remains available when a clock
+    write is more important than silence and may make the device acknowledge
 
 # Changelog
 version 0.0.5:
@@ -566,10 +569,47 @@ Version 1.2.25
 * Treat standard Freshpoint 160-E firmware `0.12 2025-09-01` CO2/VOC/display
   rows as a known optional hardware variant instead of raising a Repair.
 * Treat Blauberg VENTO Expert A30 / VENTS TwinFresh Expert RW-30 firmware
-  `0.3 2020-08-26` rejected option rows as a known optional Vento variant.
+  `0.3 2020-08-26` and `0.5 2021-10-04` rejected option rows as known optional
+  Vento variants.
 * Treat Blauberg VENTO Expert / VENTS TwinFresh Expert firmware
-  `0.6 2021-05-17` filter-timer row `0x0063` as a known optional Vento
-  variant when that is the only rejected row.
+  `0.6 2021-05-17` preset-speed rows `0x003A` through `0x003F` and filter-timer
+  row `0x0063` as known optional Vento rows instead of raising a Repair.
+* Reset learned unsupported rows, optional-read backoff, and bulk-read support
+  when a device reports a different firmware or unit type, so capability state
+  from the previous identity cannot hide entities or raise a stale Repair.
+  Generated entities stay registered by hardware profile and are hidden or
+  restored only after successful refreshes as learned row support changes. A
+  confirmed identity change reloads the config entry so device metadata,
+  coordinator caches, and profile-specific entities are rebuilt together.
+* Report failed device writes back to Home Assistant instead of publishing an
+  optimistic switch, number, select, preset, schedule, or clock-sync state.
+  Opportunistic RTC writes suppress retries only after transport success.
+* Preserve the last complete weekly-schedule day when a transient read returns
+  fewer than all four periods instead of replacing good state with partial data.
+* Close and remove a coordinator when config-entry setup fails after opening its
+  transport, so a retry cannot leave a stale connection behind.
+* Validate the BGCP protocol type, controller-ID/password sizes, and response
+  function `0x06` instead of accepting any checksum-valid packet as a command;
+  apply decoded values only after the entire payload is valid, reject duplicate
+  or conflicting status rows, confirm that reads contain a requested parameter
+  with a decodable value, and confirm that writes echo every requested parameter
+  and raw value.
+* Preserve the active BGCP parameter page across batched reads and writes,
+  including an explicit return to page `0x00` before low-page parameters and
+  opportunistic RTC rows.
 * Restore Blauberg Smart Wi-Fi / VENTS iFan Wi-Fi extract-fan availability when
   firmware `2.2 2022-06-16` rejects optional motion rows `0x000B`/`0x0012`;
   state `0x0001` and fan speed `0x0004` remain the liveness rows.
+* Correlate normal BGCP replies with the configured controller ID while keeping
+  explicit broadcast discovery open to new device IDs.
+* Re-probe bulk reads after a temporary failure instead of permanently using
+  slower per-register polling until the device identity changes.
+* Reject mixed batch writes when any requested semantic key is unknown, and
+  refresh switch state from the controller after successful writes.
+* Treat failed UDP sends as failed commands without reading a stale response,
+  validate opportunistic RTC batches atomically, and report their failure to
+  the coordinator.
+* Suppress standalone automatic RTC correction in silent manual-speed mode;
+  explicit manual clock synchronization remains available and may be audible.
+* Reject malformed Breezy/Freshbox alarm lists with an unpaired trailing byte
+  instead of silently dropping the tail.

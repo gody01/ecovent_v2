@@ -13,6 +13,7 @@ except ImportError:
 _LOGGER = logging.getLogger(__name__)
 MAX_BULK_READ_PARAMS = 12
 OPTIONAL_PARAM_RETRY_BACKOFF_READS = 10
+BULK_READ_REPROBE_READS = 10
 PRESERVE_ON_SOFT_MISS_PARAMS = frozenset(
     {
         0x007C,  # device_search
@@ -34,6 +35,69 @@ def _format_param_ids(param_ids):
 def _request_param_ids(request):
     """Return parameter ids encoded in a read request string."""
     return {int(request[i : i + 4], 16) for i in range(0, len(request), 4)}
+
+
+def _decode_encoded_write_payload(encoded_params, *, initial_high_byte=0):
+    """Decode a BGCP write payload and return its values and final page."""
+    try:
+        payload = bytes.fromhex(encoded_params)
+    except ValueError:
+        return None
+
+    values = {}
+    high_byte = initial_high_byte
+    pointer = 0
+    while pointer < len(payload):
+        marker = payload[pointer]
+        pointer += 1
+        if marker == 0xFF:
+            if pointer >= len(payload):
+                return None
+            high_byte = payload[pointer]
+            pointer += 1
+            continue
+        if marker in (0xFC, 0xFD):
+            return None
+        if marker == 0xFE:
+            if pointer + 1 >= len(payload):
+                return None
+            value_size = payload[pointer]
+            low_byte = payload[pointer + 1]
+            pointer += 2
+            if value_size <= 1 or pointer + value_size > len(payload):
+                return None
+            value = payload[pointer : pointer + value_size]
+            pointer += value_size
+        else:
+            low_byte = marker
+            if pointer >= len(payload):
+                return None
+            value = payload[pointer : pointer + 1]
+            pointer += 1
+        param_id = (high_byte << 8) | low_byte
+        if param_id in values:
+            return None
+        values[param_id] = bytes(value)
+    if not values:
+        return None
+    return values, high_byte
+
+
+def _decode_encoded_write_values(encoded_params, *, initial_high_byte=0):
+    """Decode one internally generated BGCP write payload for acknowledgement."""
+    decoded = _decode_encoded_write_payload(
+        encoded_params, initial_high_byte=initial_high_byte
+    )
+    if decoded is None:
+        return None
+    return decoded[0]
+
+
+def _response_matches_write_values(expected, received, unsupported):
+    """Return whether a response confirms each requested raw write value."""
+    return set(expected).isdisjoint(unsupported) and all(
+        received.get(param_id) == value for param_id, value in expected.items()
+    )
 
 
 class FanProtocolMixin:
@@ -71,7 +135,6 @@ class FanProtocolMixin:
             i = 10
             while i > 1:
                 i = i - 1
-                self._device_search = self._id
                 try:
                     sock.sendto(payload, (target_host, target_port))
                     data, addr = sock.recvfrom(1024)
@@ -79,10 +142,29 @@ class FanProtocolMixin:
                     continue
                 except OSError:
                     continue
-                if (
-                    self.parse_response(data)
-                    and self._device_search != "DEFAULT_DEVICEID"
-                ):
+                with self._command_lock:
+                    cached_device_search = self._device_search
+                    try:
+                        self._device_search = "DEFAULT_DEVICEID"
+                        parsed = self.parse_response(
+                            data, allow_any_device_id=True, store=False
+                        )
+                        decoded_ids = (
+                            self._store_staged_response_params(
+                                {0x007C}, record_unknown=False
+                            )
+                            if parsed
+                            else set()
+                        )
+                        discovered = (
+                            self._device_search
+                            if decoded_ids == {0x007C}
+                            and self._device_search != "DEFAULT_DEVICEID"
+                            else None
+                        )
+                    finally:
+                        self._device_search = cached_device_search
+                if discovered:
                     ips.append(addr[0])
                     ips = list(set(ips))
             return ips
@@ -169,24 +251,31 @@ class FanProtocolMixin:
         else:
             return [None, None]
 
+    def _encode_parameter_value(self, param_id, value, current_high_byte=0):
+        """Encode one parameter while preserving the active BGCP id page."""
+        high_byte = param_id >> 8
+        low_byte = param_id & 0xFF
+        parameter = ""
+        if high_byte != current_high_byte:
+            parameter = f"ff{high_byte:02x}"
+
+        value_size = len(value) // 2 if value else 0
+        if value_size > 1:
+            parameter += f"fe{value_size:02x}{low_byte:02x}"
+        else:
+            parameter += f"{low_byte:02x}"
+        return parameter + value, high_byte
+
     def encode_params(self, param, value=""):
         parameter = ""
+        current_high_byte = 0
         for i in range(0, len(param), 4):
-            n_out = ""
             out = param[i : (i + 4)]
-            if out == "0077" and value == "":
-                value = "0101"
-            if value != "":
-                val_bytes = int(len(value) / 2)
-            else:
-                val_bytes = 0
-            if out[:2] != "00":
-                n_out = "ff" + out[:2]
-            if val_bytes > 1:
-                n_out += "fe" + hex(val_bytes).replace("0x", "").zfill(2) + out[2:4]
-            else:
-                n_out += out[2:4]
-            parameter += n_out + value
+            current_value = "0101" if out == "0077" and value == "" else value
+            encoded, current_high_byte = self._encode_parameter_value(
+                int(out, 16), current_value, current_high_byte
+            )
+            parameter += encoded
             if out == "0077":
                 value = ""
         return parameter
@@ -196,22 +285,15 @@ class FanProtocolMixin:
         try:
             self.socket = self.connect()
             if self.socket is None:
-                return None
+                return False
             payload = self.build_packet(data)
-            response = self.socket.sendall(bytes.fromhex(payload))
-        except socket.timeout:
-            # print ( "EcoventV2: Connection timeout send to device: " + self._host , file = sys.stderr )
-            return None
-        except (
-            OSError
-        ):  # this shall include all connection errors like Aborted, Refused and Reset
-            return None
-        except TypeError:
-            return (
-                None  # this can happen if the socket connection fails and returns None
-            )
-        else:
-            return response
+            self.socket.sendall(bytes.fromhex(payload))
+            return True
+        except (OSError, TypeError):
+            if self.socket is not None:
+                self.socket.close()
+                self.socket = None
+            return False
 
     def receive(self):
         try:
@@ -243,11 +325,15 @@ class FanProtocolMixin:
             param,
             value,
         )
+        expected_response_param_ids = None
+        if command == self.func["read"]:
+            expected_response_param_ids = _request_param_ids(param)
         return self.send_encoded_command(
             command,
             self.encode_params(param, value),
             retries=retries,
             include_extra_write_parameters=include_extra_write_parameters,
+            expected_response_param_ids=expected_response_param_ids,
         )
 
     def send_encoded_command(
@@ -256,30 +342,163 @@ class FanProtocolMixin:
         encoded_params,
         retries=10,
         include_extra_write_parameters=True,
+        expected_response_param_ids=None,
     ):
         """Execute a protocol command with an already encoded parameter payload."""
+        with self._command_lock:
+            return self._send_encoded_command(
+                command,
+                encoded_params,
+                retries=retries,
+                include_extra_write_parameters=include_extra_write_parameters,
+                expected_response_param_ids=expected_response_param_ids,
+            )
+
+    def _send_encoded_command(
+        self,
+        command,
+        encoded_params,
+        retries=10,
+        include_extra_write_parameters=True,
+        expected_response_param_ids=None,
+    ):
+        """Execute one lock-held send/receive/parse/retry transaction."""
+        expected_write_values = None
+        final_write_page = 0
+        if command == self.func["write_return"]:
+            decoded_write = _decode_encoded_write_payload(encoded_params)
+            if decoded_write is None:
+                return False
+            expected_write_values, final_write_page = decoded_write
+            if set(
+                expected_write_values
+            ) & self.unsupported_optional_poll_parameter_ids():
+                return False
+            if not self._parameter_values_are_decodable(expected_write_values):
+                return False
+
+        extra_write_parameters = ""
+        expected_extra_write_values = None
         if include_extra_write_parameters:
-            encoded_params += self._extra_write_parameters(command, encoded_params)
+            try:
+                extra_write_parameters = self._extra_write_parameters(
+                    command, encoded_params, initial_high_byte=final_write_page
+                )
+            except ValueError:
+                self._notify_extra_write_parameters_result(
+                    "", False, requested=True
+                )
+                return False
+            if extra_write_parameters:
+                expected_extra_write_values = _decode_encoded_write_values(
+                    extra_write_parameters, initial_high_byte=final_write_page
+                )
+                if expected_extra_write_values is None:
+                    self._notify_extra_write_parameters_result(
+                        extra_write_parameters, False
+                    )
+                    return False
+                if not self._parameter_values_are_decodable(
+                    expected_extra_write_values
+                ):
+                    self._notify_extra_write_parameters_result(
+                        extra_write_parameters, False
+                    )
+                    extra_write_parameters = ""
+                    expected_extra_write_values = None
+            encoded_params += extra_write_parameters
 
         if self._write_may_be_audible(command, encoded_params):
             self.audible_write_command_count += 1
 
         data = command + encoded_params
         response = False
+        extra_write_confirmed = False
         i = 0
         while not response:
             i = i + 1
             self._last_response_param_ids = None
+            self._last_raw_response_param_ids = None
+            self._last_response_param_values = None
             self._last_unsupported_param_ids = None
-            self.send(data)
-            response = self.receive()
+            if self.send(data):
+                response = self.receive()
+            else:
+                response = False
             if response:
-                if self.parse_response(response):
+                if self.parse_response(response, store=False):
+                    received_values = self._last_response_param_values or {}
+                    unsupported_ids = self._last_unsupported_param_ids or set()
+                    if expected_extra_write_values is not None:
+                        extra_write_confirmed = _response_matches_write_values(
+                            expected_extra_write_values,
+                            received_values,
+                            unsupported_ids,
+                        )
+                    write_confirmed = expected_write_values is None or (
+                        _response_matches_write_values(
+                            expected_write_values,
+                            received_values,
+                            unsupported_ids,
+                        )
+                    )
+                    if expected_response_param_ids is not None:
+                        requested_read_ids = set(expected_response_param_ids)
+                        decoded_read_ids = self._store_staged_response_params(
+                            requested_read_ids, record_unknown=False
+                        )
+                        read_confirmed = bool(
+                            requested_read_ids
+                            & (decoded_read_ids | set(unsupported_ids))
+                        )
+                    else:
+                        read_confirmed = True
+
+                    if write_confirmed and expected_write_values is not None:
+                        storable_write_values = {
+                            param_id: value
+                            for param_id, value in expected_write_values.items()
+                            if param_id not in self._write_only_params
+                        }
+                        decoded_write_ids = self._store_staged_response_params_atomic(
+                            storable_write_values
+                        )
+                        write_confirmed = decoded_write_ids == set(
+                            storable_write_values
+                        )
+                    if extra_write_confirmed:
+                        decoded_extra_ids = self._store_staged_response_params_atomic(
+                            expected_extra_write_values
+                        )
+                        extra_write_confirmed = decoded_extra_ids == set(
+                            expected_extra_write_values
+                        )
+                else:
+                    write_confirmed = False
+                    read_confirmed = False
+                if write_confirmed and read_confirmed:
+                    self._notify_extra_write_parameters_result(
+                        extra_write_parameters, extra_write_confirmed
+                    )
                     return True
                 response = False
             if i >= retries:
                 # print ("EcoventV2: Timeout device: " + self._host + " bail out after " + str(i) + " retries" , file = sys.stderr )
+                self._notify_extra_write_parameters_result(
+                    extra_write_parameters, extra_write_confirmed
+                )
                 return False
+
+    def _notify_extra_write_parameters_result(
+        self, extra_parameters, success, *, requested=False
+    ):
+        """Report whether opportunistic parameters reached the controller."""
+        if not extra_parameters and not requested:
+            return
+
+        callback = getattr(self, "extra_write_parameters_result_callback", None)
+        if callback is not None:
+            callback(success)
 
     def _write_may_be_audible(self, command, encoded_params):
         """Return whether a write is expected to make the device acknowledge.
@@ -295,7 +514,8 @@ class FanProtocolMixin:
 
     def _is_manual_speed_only_write(self, encoded_params):
         """Return whether encoded params contain exactly one 0x0044 write."""
-        return len(encoded_params) == 4 and encoded_params[:2].lower() == "44"
+        decoded = _decode_encoded_write_payload(encoded_params)
+        return decoded is not None and set(decoded[0]) == {0x0044}
 
     def _protocol_context(self):
         """Return non-secret device context for protocol diagnostics."""
@@ -348,7 +568,12 @@ class FanProtocolMixin:
             return True
 
         request = "003A003B003C003D003E003F"
-        return self._read_params(request, read_name="preset speed settings")
+        return self._read_params(
+            request,
+            required_params=frozenset(),
+            require_all_requested=True,
+            read_name="preset speed settings",
+        )
 
     def _mark_param_unavailable(self, param_id):
         """Clear a missing soft-poll value so Home Assistant does not keep stale data."""
@@ -394,7 +619,14 @@ class FanProtocolMixin:
             self._unsupported_optional_poll_params = unsupported
         return unsupported
 
-    def _read_params(self, request, *, required_params=None, read_name="custom read"):
+    def _read_params(
+        self,
+        request,
+        *,
+        required_params=None,
+        require_all_requested=False,
+        read_name="custom read",
+    ):
         """Read parameters without trusting a valid but incomplete bulk reply.
 
         The Smart Home protocol limits a packet to 256 bytes. Keep each request
@@ -439,6 +671,12 @@ class FanProtocolMixin:
         self._last_missing_optional_params = frozenset()
         self._last_unsupported_params = frozenset()
         chunk_size = MAX_BULK_READ_PARAMS * 4
+        try_bulk_read = self._bulk_read_supported is not False
+        if not try_bulk_read:
+            self._bulk_read_reprobe_countdown = max(
+                0, getattr(self, "_bulk_read_reprobe_countdown", 0) - 1
+            )
+            try_bulk_read = self._bulk_read_reprobe_countdown == 0
 
         def mark_unavailable(param_id, *, delay_optional_retry=False):
             nonlocal complete
@@ -457,12 +695,13 @@ class FanProtocolMixin:
             missing = [chunk[i : i + 4] for i in range(0, len(chunk), 4)]
             chunk_param_ids = {int(param, 16) for param in missing}
 
-            if self._bulk_read_supported is not False:
+            if try_bulk_read:
                 self._last_response_param_ids = None
                 self._last_unsupported_param_ids = None
                 if self.send_command(self.func["read"], chunk, retries=3):
                     received_response = True
                     self._bulk_read_supported = True
+                    self._bulk_read_reprobe_countdown = 0
                     response_ids = self._last_response_param_ids
                     unsupported_ids = self._last_unsupported_param_ids
                     if response_ids is None and unsupported_ids is None:
@@ -500,6 +739,8 @@ class FanProtocolMixin:
                         continue
                 else:
                     self._bulk_read_supported = False
+                    self._bulk_read_reprobe_countdown = BULK_READ_REPROBE_READS
+                    try_bulk_read = False
 
             for param in missing:
                 param_id = int(param, 16)
@@ -557,6 +798,10 @@ class FanProtocolMixin:
         # or untracked response and must not keep a dead device available.
         if required_params is not None and not required_param_ids:
             complete = complete and bool(received_params)
+        if require_all_requested and (
+            ignored_optional_params or missing_optional_params or unsupported_params
+        ):
+            complete = False
         available = complete and received_response
         if missing_required_params or missing_optional_params or unsupported_params:
             log_level = logging.WARNING if missing_required_params else logging.DEBUG
@@ -588,6 +833,8 @@ class FanProtocolMixin:
         return available
 
     def set_param(self, param, value):
+        if not self.supports_parameter(param):
+            return False
         valpar = self.get_params_values(param, value)
         # print ( "EcoventV2: " + " " + param + "/" + value , file = sys.stderr )
         if valpar[0] is not None:
@@ -605,27 +852,33 @@ class FanProtocolMixin:
                 )
         return False
 
-    def _encode_parameter_values(self, values):
+    def _encode_parameter_values(self, values, *, initial_high_byte=0):
         """Encode profile-mapped parameter values for one command payload."""
         request = ""
+        current_high_byte = initial_high_byte
         for param, value in values.items():
             valpar = self.get_params_values(param, value)
             if valpar[0] is None:
-                continue
+                raise ValueError(f"Unknown EcoVent parameter: {param}")
 
             if valpar[1] is not None:
                 value = hex(valpar[1]).replace("0x", "").zfill(2)
             else:
                 value = str(value)
-            request += self.encode_params(
-                hex(valpar[0]).replace("0x", "").zfill(4),
-                value,
+            encoded, current_high_byte = self._encode_parameter_value(
+                valpar[0], value, current_high_byte
             )
+            request += encoded
         return request
 
     def set_parameters(self, values, include_extra_write_parameters=True):
         """Write several profile-mapped parameters in one encoded command."""
-        request = self._encode_parameter_values(values)
+        if not values or not all(self.supports_parameter(param) for param in values):
+            return False
+        try:
+            request = self._encode_parameter_values(values)
+        except ValueError:
+            return False
 
         if request:
             return self.send_encoded_command(
@@ -637,7 +890,9 @@ class FanProtocolMixin:
 
     set_params = set_parameters
 
-    def _extra_write_parameters(self, command, encoded_params):
+    def _extra_write_parameters(
+        self, command, encoded_params, *, initial_high_byte=0
+    ):
         """Return encoded opportunistic parameters for write commands."""
         if command != self.func["write_return"] or not encoded_params:
             return ""
@@ -646,15 +901,17 @@ class FanProtocolMixin:
         if callback is None:
             return ""
 
-        return self._encode_parameter_values(callback())
+        return self._encode_parameter_values(
+            callback(), initial_high_byte=initial_high_byte
+        )
 
     def get_param(self, param):
         idx = self.get_params_index(param)
         if idx is not None:
-            #  _LOGGER.debug(f"Getting parameter {param} with index {idx}")
-            return self.send_command(
+            response = self.send_command(
                 self.func["read"], hex(idx).replace("0x", "").zfill(4)
             )
+            return response and idx in set(self._last_response_param_ids or ())
         return False
 
     def read_weekly_schedule_record(self, day, period):
@@ -667,11 +924,23 @@ class FanProtocolMixin:
                 f"Invalid weekly schedule slot: day={day}, period={period}"
             )
 
+        self._weekly_schedule_setup = None
         self._weekly_schedule_setup_record = None
         request_value = bytes([day, period]).hex()
-        if not self.send_command(self.func["read"], "0077", request_value):
+        read_complete = self.send_command(
+            self.func["read"], "0077", request_value
+        )
+        if 0x0077 in set(self._last_unsupported_param_ids or ()):
+            self._unsupported_optional_poll_param_ids().add(0x0077)
             return None
-        return self._weekly_schedule_setup_record
+        if not read_complete:
+            return None
+        record = self._weekly_schedule_setup_record
+        if record is None or record.day != day or record.period != period:
+            self._weekly_schedule_setup = None
+            self._weekly_schedule_setup_record = None
+            return None
+        return record
 
     def read_weekly_schedule_day(self, day):
         """Read all four schedule periods for a day."""
@@ -684,6 +953,8 @@ class FanProtocolMixin:
 
     def write_weekly_schedule_record(self, record):
         """Write one weekly schedule period via 0x0077."""
+        if not self.supports_parameter("weekly_schedule_setup"):
+            return False
         if not isinstance(record, WeeklyScheduleRecord):
             raise TypeError("record must be a WeeklyScheduleRecord")
         return self.send_command(

@@ -46,8 +46,10 @@ reports and earlier compatibility fixes show these differences:
 | Issue #82 | `0x0300` | Blauberg VENTO Expert A50-1 S8 W V.3 with humidity sensor | `0.7 2021-10-04` | Explicitly rejects the same optional preset-speed rows `0x003A`..`0x003F` and filter-timer setpoint `0x0063`; this is the same known Vento option-row variant as Issue #78. |
 | Issue #84 | `0x0300` | Blauberg VENTO Expert A50-1 S10 Pro / W V.2 | `0.7 2021-10-04`; another unit `0.9 2024-07-08` | Firmware `0.7` rejects preset-speed rows `0x003A`..`0x003F` and filter timer `0x0063`; firmware `0.9` rejects only the preset-speed rows and accepts `0x0063`. |
 | Issue #94 | `0x0300` | Blauberg VENTO Expert 50 m3/h Wi-Fi, only Wi-Fi option installed | `0.6 2021-05-17` | Explicitly rejects only filter-timer setpoint `0x0063`; this row is optional for the reported old firmware and must not reopen the same hardware/profile Repair. |
+| Issue #97 | `0x0300` | Blauberg VENTO Expert / VENTS TwinFresh Expert | `0.6 2021-05-17` | Explicitly rejects optional preset-speed rows `0x003A`..`0x003F`; these family-level option rows remain known when the same firmware-specific policy also adds the Issue #94 filter-timer exception. |
 | Issue #80 | `0x0400` | Blauberg VENTO Expert DUO A30-1 S10 W V.2 | `0.7 2021-10-04` | Explicitly rejects the same optional preset-speed rows `0x003A`..`0x003F` and filter-timer setpoint `0x0063`. |
 | Issue #90 | `0x0500` | Blauberg VENTO Expert A30 / VENTS TwinFresh Expert RW-30; reporter linked Blauberg Mini Air Smart Wi-Fi | `0.3 2020-08-26` | Explicitly rejects optional analog-voltage rows `0x0016`, `0x002D`, `0x00B8`, and `0x0305`, preset-speed rows `0x003A`..`0x003F`, fan2 speed `0x004B`, and filter timer `0x0063`. |
+| Issue #95 | `0x0500` | Blauberg VENTO Expert A30 / VENTS TwinFresh Expert RW-30 | `0.5 2021-10-04` | Explicitly rejects the same optional analog-voltage, preset-speed, fan2-speed, and filter-timer rows as the older Issue #90 firmware. |
 | Issue #86 | `0x0300` | Flexit Roomie One WiFi V2, reported as `Romventilator Roomie One WiFi V2` | `0.7 2021-10-04` | Reporter confirms the Flexit/Romventilator marketing variant on the shared Vento profile; it rejects the known optional rows `0x003A`..`0x003F` and `0x0063`. |
 | Issue #92 | `0x0600` | Blauberg Smart Wi-Fi / VENTS iFan Wi-Fi | `2.2 2022-06-16` | Three extract-fan devices explicitly reject motion rows `0x000B` and `0x0012` but remain controllable from Home Assistant when state `0x0001` and fan speed `0x0004` are used as the automatic-poll liveness rows. |
 
@@ -59,8 +61,10 @@ reports and earlier compatibility fixes show these differences:
 | Breezy/Freshpoint standard sensor rows | Freshpoint product documents describe relative humidity and four built-in temperature sensors on standard and Pro units; only the Pro package adds tVOC/CO2eq air-quality sensing. | Issue #74 reports a Freshpoint 160 whose humidity, built-in temperature, CO2, VOC, recovery-efficiency, and schedule entities stay unknown while the fan still works. Earlier reports also showed optional rows omitted or explicitly rejected. | Keep `0x0001`, `0x0002`, and `0x0044` as Breezy/Freshpoint availability rows. Missing or unsupported non-critical sensor/feature rows are retried, backed off, cleared, and hidden when permanently unsupported instead of flickering the fan entity unavailable. |
 | Smart Wi-Fi / iFan motion rows | The Smart Wi-Fi PDF documents motion status `0x000B` and motion sensor permission `0x0012` in the extract-fan map. | Issue #92 shows firmware `2.2 2022-06-16` can explicitly reject those motion rows on Smart Wi-Fi/iFan devices without affecting fan state, RPM/speed data, or HA control. | Keep the rows in the extract-fan entity map because other Smart Wi-Fi/iFan hardware may support motion features, but use only `0x0001` state and `0x0004` fan speed as extract-fan automatic-poll availability rows. Treat `0x000B`/`0x0012` as a known unsupported optional pair for the reported firmware so it does not repeatedly request another hardware/profile mismatch report by itself. |
 | Explicit `0xFD` unsupported markers | Source tables list readable rows, but the protocol can still answer an individual row with an unsupported marker. | Some firmware acknowledges a request with `0xFD` instead of returning fresh data. | Treat `0xFD` as "controller answered, but this row has no fresh value." Required rows still fail; optional rows become unavailable and may be removed from later automatic polls. |
+| Learned protocol capabilities | Unsupported optional rows, retry backoff, and bulk-read support are observations about one reported unit type and firmware. | A controller firmware update or changed unit identity can invalidate those observations without recreating the Home Assistant config entry, while one transient bulk timeout does not prove bulk reads are permanently unsupported. | Clear learned capability state when firmware or unit type changes, while preserving it when the same identity is merely read again. Re-probe bulk reads after ten successful individual-read cycles. Apply entity visibility changes only after a successful refresh, and reload the config entry after a confirmed identity change so metadata, coordinator caches, and profile-specific entities are rebuilt together. |
 | Weekly schedule rows | Vento/TwinFresh and Breezy/Freshpoint tables document `0x0072` (`weekly_schedule_state`) and `0x0077` (`weekly_schedule_setup`). | Some variants do not answer schedule rows during setup/reload, and probing all schedule records can cause delays. | Load the full schedule cache only after `0x0072` reports a known `on`/`off` state. If `0x0072` is unavailable, keep the fan available and leave schedule entities unavailable. |
 | Packet completeness | The guides impose a 256-byte packet limit, while older integration versions could accept a valid but partial response as a complete refresh. | Firmware can return a valid response that omits requested rows without using `0xFD`. | Split full polls into protocol-safe chunks, verify returned parameter ids, retry omitted rows individually, and distinguish required rows from optional rows. |
+| Response validation | Protocol type is `0x02`, controller IDs are 16 bytes, passwords are at most 8 bytes, and a controller reply uses response function `0x06`. For write-with-response function `0x03`, the reply reports the status of the requested parameters. Marker `0xFF` changes the active parameter-id high-byte page until another page marker changes it. | A checksum-valid packet from another controller, with another envelope value, nested/reserved markers, duplicate/conflicting status for one row, a malformed payload tail, an empty/different-row reply, an `0xFD` rejection, or a different echoed value is not proof that the requested command succeeded. A stale packet received after the current UDP send failed is not a reply to that command. Omitting `0xFF 0x00` after a high-page row also turns following low-page rows into different parameters. Applying a valid prefix before rejecting the tail would corrupt cached state. | Outside explicit discovery, require the response controller ID to match the configured controller. Do not call receive after a failed send. Validate the complete envelope and payload first, then apply decoded values atomically. Report a read successful only when it contains a requested row or explicit requested-row status; callers that need a fresh value reject `0xFD`. Report a write successful only when every requested row, including opportunistically batched rows, is echoed with the requested raw value and none is rejected, and reject main or opportunistic semantic batches before transport if any requested key is unmapped. Emit an explicit page change whenever a batch crosses parameter pages, including a return to page `0x00`. |
 | Shared parameter numbers across families | Several manuals reuse the same parameter ids for different device families. | `0x0002`, `0x0014`, `0x0068`, `0x0401`, and other rows do not always have the same semantics between Vento, extract-fan, Breezy/Freshpoint, Freshbox, and Arc profiles. | Keep profile-specific parameter maps instead of treating one PDF as a universal superset. |
 | A21 / Modbus controllers | VENTS A21 documents Modbus TCP/RTU and a controller identity at input register `37`. | A21 does not publish a BGCP `0x00B9` unit type and does not use the UDP BGCP parameter map. | Implement A21 as a separate Modbus transport. Do not infer BGCP compatibility from physical/OEM similarity alone. |
 | Unit-type parsing | The PDFs list unit-type values read from BGCP parameter `0x00B9`. | This parser stores those two response bytes as parser keys such as `0x0300`, and no reviewed PDF documents device type `7` / parser key `0x0700`. | Keep the byte-swapped parser keys documented next to the PDF values. Rows such as `0x0007` are parameters, not unit-type values. |
@@ -185,6 +189,19 @@ identity check. The reported `0x0100`/`vento` behavior remains the runtime
 evidence for the specific DF270 Connect device; it does not prove that DF270
 and VUT 270 are the same model.
 
+Resilient A21 polling evicts the raw, decoded, and HA-facing value for an
+address that is isolated as unavailable. Optional read failures may leave the
+device available, but they must not republish a value from an earlier poll.
+If any required operational address fails, the poll is rejected and the whole
+HA-facing semantic surface remains unknown until the next successful core poll;
+new optional values from that rejected poll are not published on their own. The
+disabled-by-default aggregate alarm sensor is likewise unknown unless all 53
+published alarm bits were decoded in the current cache.
+
+Adjacent A21 RTC time/calendar words and schedule period/end words are written
+as one Modbus multi-register request. A rejected request therefore cannot leave
+only the first semantic half applied or cached.
+
 The A21 implementation covers the complete published address surface: coils
 `0..25`, discrete inputs `0..71`, input registers `0..53`, and holding
 registers `0..182`, including multi-register timers, firmware, RTC, engineering
@@ -307,7 +324,14 @@ as `0x00B9` (`unit_type`) are preserved on soft misses so the active profile is
 not lost during a degraded poll. Targeted reads remain all-required and bypass
 optional poll backoff. The response parser keeps the current `0xFF` high-byte
 page until another page marker changes it, as required by the guide's packet
-example.
+example. Fixed-width rows, including one-byte enums/scalars, identity fields,
+and structured multi-byte values, are decoded only when their response value
+has the documented byte count. Malformed rows remain reportable as unknown and
+cannot overwrite the last valid decoded state. Explicitly variable-width rows,
+such as the alarm list and observed filter countdown variants, retain their own
+format validation. The extract-fan three-byte BOOST/SILENT counters are
+little-endian totals in seconds, not the component-byte time format used by
+other profiles.
 
 Documented unit type values from parameter `0x00B9`:
 
@@ -401,8 +425,8 @@ source document for this profile.
 | 0x001F | `silent_mode_start_time` | PDF | R/W/RW | Silent Mode start time in seconds | 3 |
 | 0x0020 | `silent_mode_end_time` | PDF | R/W/RW | Silent Mode end time in seconds | 3 |
 | 0x0021 | `rtc_time` | PDF | R/W/RW | Current time of the fan internal clock in seconds | 3 |
-| 0x0023 | `boost_time` | PDF | R/W/RW/INC/DEC | Turn-off delay timer/BOOST setpoint | 1 |
-| 0x0024 | `turn_on_delay_timer` | PDF | R/W/RW/INC/DEC | Turn-on delay timer setpoint | 1 |
+| 0x0023 | `boost_time` | PDF | R/W/RW/INC/DEC | Turn-off delay timer/BOOST setpoint | 1; wire codes `0`, `2`, `3`, `4`, `6` mean 0, 5, 15, 30, 60 minutes |
+| 0x0024 | `turn_on_delay_timer` | PDF | R/W/RW/INC/DEC | Turn-on delay timer setpoint | 1; wire codes `0`, `1`, `2` mean 0, 2, 5 minutes |
 | 0x0025 | `factory_reset` | PDF | W | Resetting parameters to factory settings | 1 |
 | 0x002E | `humidity` | ynsgnr/blauberg-assistant | R | Current humidity sensor value | 1 |
 | 0x0031 | `temperature` | ynsgnr/blauberg-assistant | R | Current temperature sensor value | 1 |
@@ -546,7 +570,7 @@ Implemented Arc Smart / O2 Supreme parameters:
 | 0x0320 | `air_quality` | R | Current air quality level | sensor |
 | 0x0323 | `temperature_status` | R | Temperature sensor status | diagnostic binary sensor |
 | 0x0324 | `temperature_sensor_state` | R/W/RW | Temperature sensor-based control | switch |
-| 0x0325 | `temperature_treshold` | R/W/RW/INC/DEC | Temperature threshold setting | number |
+| 0x0325 | `temperature_treshold` | R/W/RW/INC/DEC | Temperature threshold setting, 18–36 °C | number |
 | 0x032F | `temperature_airflow` | R/W/RW | Airflow when the temperature sensor is triggered | select |
 
 The Arc/O2 PDFs also document Wi-Fi setup mode, SSID/password/encryption, DHCP,

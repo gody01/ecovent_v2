@@ -11,6 +11,7 @@ from .schedule_helpers import (
     SCHEDULE_DAY_TO_INDEX,
     WeeklyScheduleRecord,
     changed_schedule_records,
+    validate_schedule_day,
 )
 
 from homeassistant.config_entries import ConfigEntry
@@ -34,8 +35,8 @@ except ImportError:
 
 from .const import CONF_AUTO_CLOCK_SYNC, CONF_SILENT_MODE, DOMAIN
 from .protocol_diagnostics import (
+    hardware_profile_mismatch_state,
     hardware_profile_mismatch_issue_url,
-    reportable_hardware_profile_mismatch_param_ids,
     unsupported_optional_poll_parameter_summary,
 )
 
@@ -82,8 +83,12 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         self._silent_preset_mode: str | None = None
         self._last_clock_sync = None
         self._last_clock_sync_check = None
-        self._reported_unsupported_optional_params = None
+        self._pending_clock_sync = None
+        self._reported_hardware_profile_mismatch_state = None
         self._fan.extra_write_parameters_callback = self._clock_sync_params_if_needed
+        self._fan.extra_write_parameters_result_callback = (
+            self._clock_sync_write_completed
+        )
         _LOGGER.debug(
             "EcoVentCoordinator initialized with update rate: %d", update_seconds
         )
@@ -102,8 +107,12 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         """
         if not self.fan_initialized:
             _LOGGER.debug("EcoVentCoordinator: Initializing fan for the first time...")
-            await self.hass.async_add_executor_job(self._fan.init_device)
-            if self._fan.id is None or self._fan.id == "DEFAULT_DEVICEID":
+            initialized = await self.hass.async_add_executor_job(self._fan.init_device)
+            if (
+                not initialized
+                or self._fan.id is None
+                or self._fan.id == "DEFAULT_DEVICEID"
+            ):
                 _LOGGER.error(
                     "EcoVentCoordinator: Failed to initialize fan, check connection and configuration."
                 )
@@ -150,11 +159,11 @@ class EcoVentCoordinator(DataUpdateCoordinator):
 
     def _update_hardware_profile_mismatch_repair_issue(self) -> None:
         """Show a Repairs issue when this hardware omits profile-declared rows."""
-        unsupported = reportable_hardware_profile_mismatch_param_ids(self._fan)
-        if unsupported == self._reported_unsupported_optional_params:
+        mismatch_state = hardware_profile_mismatch_state(self._fan)
+        if mismatch_state == self._reported_hardware_profile_mismatch_state:
             return
 
-        self._reported_unsupported_optional_params = unsupported
+        unsupported = mismatch_state[-1]
 
         try:
             from homeassistant.helpers import issue_registry as ir
@@ -166,40 +175,50 @@ class EcoVentCoordinator(DataUpdateCoordinator):
             return
 
         issue_id = self._hardware_profile_mismatch_issue_id()
-        if not unsupported:
-            async_delete_hardware_profile_mismatch_issue(
-                self.hass, self.config_entry.entry_id
+        try:
+            if not unsupported:
+                async_delete_hardware_profile_mismatch_issue(
+                    self.hass, self.config_entry.entry_id
+                )
+            else:
+                unsupported_params = unsupported_optional_poll_parameter_summary(
+                    self._fan, unsupported
+                )
+                issue_url = hardware_profile_mismatch_issue_url(self._fan, unsupported)
+                ir.async_create_issue(
+                    self.hass,
+                    DOMAIN,
+                    issue_id,
+                    is_fixable=False,
+                    is_persistent=True,
+                    learn_more_url=issue_url,
+                    severity=ir.IssueSeverity.WARNING,
+                    translation_key="hardware_profile_mismatch",
+                    translation_placeholders={
+                        "name": self._fan.name,
+                        "unit_type": self._fan.unit_type or "unknown",
+                        "profile": self._fan.profile_key,
+                        "unsupported_params": unsupported_params,
+                    },
+                    data={
+                        "entry_id": self.config_entry.entry_id,
+                        "profile": self._fan.profile_key,
+                        "unit_type": self._fan.unit_type,
+                        "unit_type_id": getattr(self._fan, "_unit_type_id", None),
+                        "unsupported_optional_params": unsupported_params,
+                        "github_issue_url": issue_url,
+                    },
+                )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning(
+                "Unable to update EcoVent V2 hardware profile Repair for %s: %s",
+                self._fan.name,
+                err,
+                exc_info=True,
             )
             return
 
-        unsupported_params = unsupported_optional_poll_parameter_summary(
-            self._fan, unsupported
-        )
-        issue_url = hardware_profile_mismatch_issue_url(self._fan, unsupported)
-        ir.async_create_issue(
-            self.hass,
-            DOMAIN,
-            issue_id,
-            is_fixable=False,
-            is_persistent=True,
-            learn_more_url=issue_url,
-            severity=ir.IssueSeverity.WARNING,
-            translation_key="hardware_profile_mismatch",
-            translation_placeholders={
-                "name": self._fan.name,
-                "unit_type": self._fan.unit_type or "unknown",
-                "profile": self._fan.profile_key,
-                "unsupported_params": unsupported_params,
-            },
-            data={
-                "entry_id": self.config_entry.entry_id,
-                "profile": self._fan.profile_key,
-                "unit_type": self._fan.unit_type,
-                "unit_type_id": getattr(self._fan, "_unit_type_id", None),
-                "unsupported_optional_params": unsupported_params,
-                "github_issue_url": issue_url,
-            },
-        )
+        self._reported_hardware_profile_mismatch_state = mismatch_state
 
     def _defer_startup_clock_sync(self) -> None:
         """Avoid clock-only writes during Home Assistant startup discovery."""
@@ -235,10 +254,45 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         """Read and cache the full weekly schedule from the device."""
         self._load_schedule_days(range(1, 8))
 
-    def _load_schedule_days(self, days) -> None:
-        """Read and cache selected weekly schedule days from the device."""
+    def _load_schedule_days(self, days) -> set[int]:
+        """Read selected schedule days and return those confirmed as fresh."""
+        loaded_days: set[int] = set()
         for day in sorted(set(days)):
-            self._weekly_schedule[day] = self._fan.read_weekly_schedule_day(day)
+            try:
+                records = self._fan.read_weekly_schedule_day(day)
+            except OSError as err:
+                _LOGGER.warning(
+                    "EcoVentCoordinator: preserving cached schedule for %s day %s "
+                    "after a read error: %s",
+                    self._fan.name,
+                    day,
+                    err,
+                )
+                continue
+            if not records or set(records) != {1, 2, 3, 4}:
+                _LOGGER.warning(
+                    "EcoVentCoordinator: preserving cached schedule for %s day %s "
+                    "after an incomplete read (%s/4 periods)",
+                    self._fan.name,
+                    day,
+                    len(records or {}),
+                )
+                continue
+            try:
+                validate_schedule_day([records[period] for period in range(1, 5)])
+            except ValueError as err:
+                _LOGGER.warning(
+                    "EcoVentCoordinator: preserving cached schedule for %s day %s "
+                    "after invalid readback: %s",
+                    self._fan.name,
+                    day,
+                    err,
+                )
+                continue
+            self._weekly_schedule[day] = records
+            loaded_days.add(day)
+
+        return loaded_days
 
     def _supports_device_clock_sync(self) -> bool:
         """Return whether this device exposes writable RTC date and time rows."""
@@ -253,6 +307,13 @@ class EcoVentCoordinator(DataUpdateCoordinator):
             return
         self._last_clock_sync_check = now
 
+        if self._silent_mode:
+            _LOGGER.debug(
+                "EcoVentCoordinator: skipping standalone clock sync because "
+                "silent manual-speed mode is enabled"
+            )
+            return
+
         if self._recently_synced_clock(now):
             return
 
@@ -263,9 +324,18 @@ class EcoVentCoordinator(DataUpdateCoordinator):
             )
             return
 
-        clock_read = await self.hass.async_add_executor_job(
-            self._refresh_device_clock_state
-        )
+        try:
+            clock_read = await self.hass.async_add_executor_job(
+                self._refresh_device_clock_state
+            )
+        except OSError as err:
+            _LOGGER.debug(
+                "EcoVentCoordinator: skipping standalone clock sync after "
+                "RTC read error for %s: %s",
+                self._fan.name,
+                err,
+            )
+            return
         if not clock_read:
             _LOGGER.debug(
                 "EcoVentCoordinator: skipping standalone clock sync because "
@@ -286,7 +356,24 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         if not self._clock_sync_needed(now):
             return
 
-        await self.hass.async_add_executor_job(self._fan.set_rtc_datetime, now)
+        written = await self.hass.async_add_executor_job(
+            self._fan.set_rtc_datetime, now
+        )
+        if not written:
+            _LOGGER.warning(
+                "EcoVentCoordinator: failed to synchronize device clock for %s",
+                self._fan.name,
+            )
+            return
+        confirmed = await self.hass.async_add_executor_job(
+            self._confirm_device_clock_sync, now
+        )
+        if not confirmed:
+            _LOGGER.warning(
+                "EcoVentCoordinator: device did not confirm synchronized clock for %s",
+                self._fan.name,
+            )
+            return
         self._record_clock_sync(now)
 
     def _refresh_device_clock_state(self) -> bool:
@@ -324,8 +411,34 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         if not self._clock_sync_needed(now):
             return {}
 
-        self._record_clock_sync(now)
+        self._pending_clock_sync = now
         return self._fan.rtc_datetime_params(now)
+
+    def _clock_sync_write_completed(self, success: bool) -> None:
+        """Record an opportunistic RTC write only after fresh device readback."""
+        pending = self._pending_clock_sync
+        self._pending_clock_sync = None
+        if (
+            success
+            and pending is not None
+            and self._confirm_device_clock_sync(pending)
+        ):
+            self._record_clock_sync(pending)
+
+    def _confirm_device_clock_sync(self, expected) -> bool:
+        """Read back the device RTC and compare it with the requested wall clock."""
+        try:
+            refreshed = self._refresh_device_clock_state()
+        except OSError as err:
+            _LOGGER.warning(
+                "EcoVentCoordinator: failed to read back device clock for %s: %s",
+                self._fan.name,
+                err,
+            )
+            return False
+        if not refreshed:
+            return False
+        return self._clock_sync_confirmed(expected)
 
     def _device_clock_now(self):
         """Return the HA-local wall clock value the device RTC should store."""
@@ -383,7 +496,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         return True
 
     def _record_clock_sync(self, now) -> None:
-        """Remember a clock write attempt from either periodic or batched sync."""
+        """Remember a successful clock write from periodic or batched sync."""
         self._last_clock_sync = now
 
     def _recently_synced_clock(self, now) -> bool:
@@ -444,6 +557,36 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         """Return the full weekly schedule for Home Assistant attributes."""
         return [self.schedule_day_payload(day) for day in range(1, 8)]
 
+    async def _async_reconcile_schedule_day(self, day: int):
+        """Read one complete day after writes and expose only confirmed state."""
+        try:
+            confirmed_records = await self.hass.async_add_executor_job(
+                self._fan.read_weekly_schedule_day,
+                day,
+            )
+        except Exception as err:  # noqa: BLE001
+            self._weekly_schedule.pop(day, None)
+            _LOGGER.warning(
+                "Failed to read schedule day %d after a write for %s: %s",
+                day,
+                self._fan.name,
+                err,
+            )
+            return None
+
+        if set(confirmed_records) != {1, 2, 3, 4}:
+            self._weekly_schedule.pop(day, None)
+            return None
+        try:
+            validate_schedule_day(
+                [confirmed_records[period] for period in range(1, 5)]
+            )
+        except ValueError:
+            self._weekly_schedule.pop(day, None)
+            return None
+        self._weekly_schedule[day] = confirmed_records
+        return confirmed_records
+
     async def async_write_schedule(
         self,
         *,
@@ -452,56 +595,189 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         days: list[dict[str, object]] | None = None,
     ) -> None:
         """Apply one schedule payload from the custom dialog."""
-        if selected_day is not None:
-            self._schedule_day = SCHEDULE_DAY_TO_INDEX[selected_day]
+        selected_day_index = (
+            SCHEDULE_DAY_TO_INDEX[selected_day] if selected_day is not None else None
+        )
 
-        if weekly_schedule_enabled is not None:
-            target = "on" if weekly_schedule_enabled else "off"
-            if self._fan.weekly_schedule_state != target:
-                await self.hass.async_add_executor_job(
-                    self._fan.set_param,
-                    "weekly_schedule_state",
-                    target,
-                )
+        if (
+            weekly_schedule_enabled is not None or days
+        ) and not self._fan.supports_parameter("weekly_schedule_setup"):
+            raise RuntimeError(
+                f"Weekly schedules are not supported by {self._fan.name}"
+            )
 
-        if days:
-            day_payloads = []
-            for day_payload in days:
-                day_label = str(day_payload["day"])
-                day = SCHEDULE_DAY_TO_INDEX[day_label]
-                day_payloads.append((day_label, day, day_payload))
+        day_payloads = []
+        prepared_day_writes = []
+        requested_days: set[int] = set()
 
-            if self._fan.supports_parameter("weekly_schedule_setup"):
-                await self.hass.async_add_executor_job(
-                    self._load_schedule_days,
-                    [day for _, day, _ in day_payloads],
-                )
-
+        def prepare_day_writes():
+            working_records_by_day = {}
+            prepared = []
             for day_label, day, day_payload in day_payloads:
-                current_records = self.schedule_day_records(day)
+                current_records = working_records_by_day.get(day)
+                if current_records is None:
+                    current_records = self.schedule_day_records(day)
                 records_to_write = changed_schedule_records(
                     day,
                     current_records,
                     day_payload.get("periods", []),
                 )
+                invalid_speeds = []
+                if records_to_write:
+                    allowed_speeds = set(self._fan.device_profile.schedule_speed_modes)
+                    invalid_speeds = sorted(
+                        record.speed
+                        for record in records_to_write
+                        if record.speed not in allowed_speeds
+                    )
+                if invalid_speeds:
+                    raise ValueError(
+                        "Schedule speeds are not supported by "
+                        f"{self._fan.name}: {invalid_speeds}"
+                    )
+                expected_records = dict(current_records)
+                for record in records_to_write:
+                    expected_records[record.period] = record
+                working_records_by_day[day] = expected_records
+                prepared.append((day_label, day, records_to_write, expected_records))
+            return prepared
 
+        if days:
+            for day_payload in days:
+                day_label = str(day_payload["day"])
+                day = SCHEDULE_DAY_TO_INDEX[day_label]
+                day_payloads.append((day_label, day, day_payload))
+
+            requested_days = {day for _, day, _ in day_payloads}
+            if self._fan.supports_parameter("weekly_schedule_setup"):
+                refreshed_days = await self.hass.async_add_executor_job(
+                    self._load_schedule_days,
+                    requested_days,
+                )
+                if refreshed_days != requested_days:
+                    failed_days = sorted(requested_days - refreshed_days)
+                    raise RuntimeError(
+                        "Failed to refresh weekly schedule before writing "
+                        f"days {failed_days} for {self._fan.name}"
+                    )
+
+            prepared_day_writes = prepare_day_writes()
+
+        schedule_state_changed = False
+        if weekly_schedule_enabled is not None:
+            target = "on" if weekly_schedule_enabled else "off"
+            if self._fan.weekly_schedule_state != target:
+                written = await self.hass.async_add_executor_job(
+                    self._fan.set_param,
+                    "weekly_schedule_state",
+                    target,
+                )
+                if not written:
+                    raise RuntimeError(
+                        "Failed to write weekly schedule state "
+                        f"{target!r} for {self._fan.name}"
+                    )
+                # Confirm the new state through the normal coordinator path before
+                # listeners render the schedule summary.
+                await self.async_refresh()
+                if (
+                    not self.last_update_success
+                    or self._fan.weekly_schedule_state != target
+                ):
+                    raise RuntimeError(
+                        "Device did not confirm weekly schedule state "
+                        f"{target!r} for {self._fan.name}"
+                    )
+                schedule_state_changed = True
+
+        if schedule_state_changed and day_payloads:
+            refreshed_days = await self.hass.async_add_executor_job(
+                self._load_schedule_days,
+                requested_days,
+            )
+            if refreshed_days != requested_days:
+                failed_days = sorted(requested_days - refreshed_days)
+                raise RuntimeError(
+                    "Failed to refresh weekly schedule after changing its state "
+                    f"for days {failed_days} on {self._fan.name}"
+                )
+            prepared_day_writes = prepare_day_writes()
+
+        if prepared_day_writes:
+            for (
+                day_label,
+                day,
+                records_to_write,
+                expected_records,
+            ) in prepared_day_writes:
                 for record in records_to_write:
                     written = await self.hass.async_add_executor_job(
                         self._fan.write_weekly_schedule_record,
                         record,
                     )
                     if not written:
+                        await self._async_reconcile_schedule_day(day)
+                        self.async_update_listeners()
                         raise RuntimeError(
                             "Failed to write schedule record "
                             f"{day_label} period {record.period}"
                         )
-                    self._weekly_schedule.setdefault(day, {})[record.period] = record
 
+                if records_to_write:
+                    confirmed_records = await self._async_reconcile_schedule_day(day)
+                    if confirmed_records is None:
+                        self.async_update_listeners()
+                        raise RuntimeError(
+                            "Incomplete schedule readback after writing "
+                            f"{day_label} for {self._fan.name}"
+                        )
+                    if any(
+                        confirmed_records.get(record.period)
+                        != expected_records[record.period]
+                        for record in records_to_write
+                    ):
+                        self.async_update_listeners()
+                        raise RuntimeError(
+                            "Device did not confirm schedule write for "
+                            f"{day_label} on {self._fan.name}"
+                        )
+
+        if selected_day_index is not None:
+            self._schedule_day = selected_day_index
         self.async_update_listeners()
 
     async def async_sync_device_clock(self) -> None:
         """Synchronize the device RTC with HA local time immediately."""
         now = self._device_clock_now()
-        await self.hass.async_add_executor_job(self._fan.set_rtc_datetime, now)
-        self._last_clock_sync = now
+        written = await self.hass.async_add_executor_job(
+            self._fan.set_rtc_datetime, now
+        )
+        if not written:
+            raise RuntimeError(
+                f"Failed to synchronize device clock for {self._fan.name}"
+            )
         await self.async_refresh()
+        if not self.last_update_success:
+            raise RuntimeError(
+                f"Failed to confirm synchronized device clock for {self._fan.name}"
+            )
+        if not self._clock_sync_confirmed(now):
+            raise RuntimeError(
+                f"Device clock did not match synchronized time for {self._fan.name}"
+            )
+        self._record_clock_sync(now)
+
+    def _clock_sync_confirmed(self, expected) -> bool:
+        """Compare cached RTC state from the latest coordinator refresh."""
+        device_now = self._device_clock_datetime()
+        if device_now is None:
+            return False
+        return abs(self._local_wall_clock(expected) - device_now) <= CLOCK_SYNC_DRIFT
+
+    async def async_refresh_confirmed(self) -> None:
+        """Refresh entities and fail when Home Assistant swallowed the read error."""
+        await self.async_refresh()
+        if not self.last_update_success:
+            raise RuntimeError(
+                f"Failed to confirm updated state for {self._fan.name}"
+            )

@@ -212,10 +212,15 @@ class VentoBinarySensor(
     def is_on(self):
         """Is on."""
         value = getattr(self._fan, self._method)
-        self._state = None if value is None else value in self._on_values
+        self._state = (
+            None
+            if value is None
+            or (isinstance(value, str) and value.lower().startswith("unknown"))
+            else value in self._on_values
+        )
         # self.async_write_ha_state() dangerous not allowed
         # self.schedule_update_ha_state() # not needed
-        # _LOGGER.debug(f"VentoBinarySensor: {self._attr_name} state updated to {self._state}")
+        # Avoid writing state from a property getter; the coordinator owns updates.
         return self._state
 
     @property

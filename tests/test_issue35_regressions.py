@@ -818,17 +818,22 @@ class Issue35RegressionTest(unittest.TestCase):
                 return None
 
         class ConfigEntries:
+            def __init__(self, unload_result=True):
+                self.unload_result = unload_result
+
             async def async_forward_entry_setups(self, _entry, platforms):
                 events.append(("forward", tuple(platforms)))
 
             async def async_unload_platforms(self, _entry, platforms):
                 events.append(("unload", tuple(platforms)))
-                return True
+                if isinstance(self.unload_result, Exception):
+                    raise self.unload_result
+                return self.unload_result
 
         class Hass:
-            def __init__(self):
+            def __init__(self, unload_result=True):
                 self.data = {}
-                self.config_entries = ConfigEntries()
+                self.config_entries = ConfigEntries(unload_result)
 
             async def async_add_executor_job(self, callback):
                 return callback()
@@ -872,6 +877,59 @@ class Issue35RegressionTest(unittest.TestCase):
             ],
         )
         self.assertNotIn("entry-1", hass.data["ecovent_v2"])
+
+        for unload_result in (False, RuntimeError("unload failed")):
+            with self.subTest(unload_result=unload_result):
+                events.clear()
+                hass = Hass(unload_result)
+                with self.assertRaisesRegex(RuntimeError, "registry sync failed"):
+                    asyncio.run(namespace["async_setup_entry"](hass, entry))
+
+                self.assertEqual(
+                    events,
+                    [
+                        ("forward", ("sensor", "fan")),
+                        ("unload", ("sensor", "fan")),
+                    ],
+                )
+                self.assertIn("entry-1", hass.data["ecovent_v2"])
+
+    def test_binary_sensor_preserves_unknown_diagnostic_state(self):
+        method = _class_method(_tree(BINARY_SENSOR_PATH), "VentoBinarySensor", "is_on")
+        binary_class = ast.ClassDef(
+            name="ExecutableBinarySensor",
+            bases=[],
+            keywords=[],
+            body=[method],
+            decorator_list=[],
+        )
+        namespace = {}
+        exec(
+            compile(
+                ast.fix_missing_locations(
+                    ast.Module(body=[binary_class], type_ignores=[])
+                ),
+                str(BINARY_SENSOR_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+        sensor = namespace["ExecutableBinarySensor"]()
+        sensor._method = "alarm_status"
+        sensor._on_values = ("alarm", "warning")
+        sensor._state = None
+
+        for value, expected in (
+            ("alarm", True),
+            ("warning", True),
+            ("no", False),
+            ("unknown_3", None),
+            ("Unknown alarm_status 3", None),
+            (None, None),
+        ):
+            with self.subTest(value=value):
+                sensor._fan = types.SimpleNamespace(alarm_status=value)
+                self.assertIs(sensor.is_on, expected)
 
     def test_switch_none_state_remains_unknown(self):
         switch_source = SWITCH_PATH.read_text()

@@ -110,7 +110,7 @@ class ProtocolDiagnosticsTest(unittest.TestCase):
 
         body = hardware_profile_mismatch_issue_body(fan)
         self.assertIn("Integration profile: `breezy`", body)
-        self.assertIn("EcoVent V2 integration version: `1.2.25`", body)
+        self.assertIn("EcoVent V2 integration version: `1.2.26`", body)
         self.assertIn("Firmware: `1.2.3`", body)
         self.assertIn("`0x0027` `co2`", body)
         self.assertIn("this one EcoVent config entry", body)

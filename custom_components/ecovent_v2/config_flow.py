@@ -70,7 +70,6 @@ def _bgcp_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
         ): vol.All(
             str,
             vol.Length(max=8),
-            vol.Match(r"^[0-9A-Za-z]{0,8}\Z"),
         ),
         **_common_schema(defaults),
         # Legacy initial form default=False; reconfigure uses the saved value.

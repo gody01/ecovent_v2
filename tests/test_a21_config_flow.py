@@ -60,7 +60,7 @@ class A21ConfigFlowTest(unittest.TestCase):
             )
         )
 
-    def test_bgcp_schema_rejects_values_the_wire_format_cannot_represent(self):
+    def test_bgcp_schema_uses_serializable_form_validators(self):
         function = _module_function(ast.parse(CONFIG_FLOW.read_text()), "_bgcp_schema")
         calls = {
             node.func.attr: {
@@ -72,19 +72,19 @@ class A21ConfigFlowTest(unittest.TestCase):
             and isinstance(node.func, ast.Attribute)
             and isinstance(node.func.value, ast.Name)
             and node.func.value.id == "vol"
-            and node.func.attr in {"Range", "Length", "Match"}
+            and node.func.attr in {"Range", "Length"}
         }
 
         self.assertEqual(calls["Range"], {"min": 1, "max": 65535})
         self.assertEqual(calls["Length"], {"max": 8})
-        match_call = next(
-            node
-            for node in ast.walk(function)
-            if isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
-            and node.func.attr == "Match"
+        self.assertFalse(
+            any(
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "Match"
+                for node in ast.walk(function)
+            )
         )
-        self.assertEqual(ast.literal_eval(match_call.args[0]), r"^[0-9A-Za-z]{0,8}\Z")
 
     def test_all_translations_label_every_new_transport_form(self):
         expected_steps = {"user", "bgcp", "modbus_tcp", "modbus_rtu", "reconfigure"}

@@ -287,6 +287,7 @@ SENSOR_SPECS = (
         "_air_quality_status",
         "Air quality status",
         "air_quality_status",
+        device_class=SensorDeviceClass.ENUM,
         entity_category=EntityCategory.DIAGNOSTIC,
         icon="mdi:air-filter",
         required_capabilities=("arc_environment",),

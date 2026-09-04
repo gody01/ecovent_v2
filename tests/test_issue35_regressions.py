@@ -1095,6 +1095,29 @@ class Issue35RegressionTest(unittest.TestCase):
             },
         )
 
+    def test_arc_air_quality_status_sensor_is_enum(self):
+        tree = _tree(SENSOR_SPECS_PATH)
+        matching_specs = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if not isinstance(node.func, ast.Name) or node.func.id != "SensorSpec":
+                continue
+            if not node.args or not isinstance(node.args[0], ast.Constant):
+                continue
+            if node.args[0].value != "_air_quality_status":
+                continue
+            keywords = {keyword.arg: keyword.value for keyword in node.keywords}
+            capabilities = ast.literal_eval(keywords["required_capabilities"])
+            if capabilities == ("arc_environment",):
+                matching_specs.append(keywords)
+
+        self.assertEqual(len(matching_specs), 1)
+        self.assertEqual(
+            ast.unparse(matching_specs[0]["device_class"]),
+            "SensorDeviceClass.ENUM",
+        )
+
     def test_preset_translations_group_boost_modes(self):
         translation_paths = [STRINGS_PATH, *TRANSLATIONS_PATH.glob("*.json")]
 

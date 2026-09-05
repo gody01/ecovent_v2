@@ -870,7 +870,7 @@ class FanProtocolMixin:
         if required_params is not None and not available and self.profile_key == "vento":
             # Failed quick polls also invalidate confidence in controls they did
             # not request. Keep display values, but never use them for a no-op.
-            for param_id in VENTO_SOFT_MISS_CONTROL_PARAMS:
+            for param_id in VENTO_SOFT_MISS_CONTROL_PARAMS - received_params:
                 self._mark_param_unavailable(param_id)
         if missing_required_params or missing_optional_params or unsupported_params:
             log_level = logging.WARNING if missing_required_params else logging.DEBUG

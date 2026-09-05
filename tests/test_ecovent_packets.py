@@ -73,6 +73,34 @@ class PacketBuilderTest(unittest.TestCase):
                 self.assertTrue(fan._read_params(request, required_params=frozenset()))
                 self.assertEqual(calls, ["0025"])
 
+    def test_soft_miss_preservation_is_limited_to_vento_controls(self):
+        for unit_type, param_id, attr in (
+            ("0e00", 0x0025, "humidity"),
+            ("0e00", 0x0064, "filter_timer_countdown"),
+            ("0200", 0x0001, "state"),
+        ):
+            with self.subTest(unit_type=unit_type, param=param_id):
+                fan = Fan("192.0.2.1")
+                fan.unit_type = unit_type
+                setattr(fan, f"_{attr}", 42)
+                calls = []
+
+                def send_command(func, param, value="", retries=10):
+                    calls.append(param)
+                    if len(param) > 4:
+                        fan._last_response_param_ids = {0x0002}
+                        return True
+                    return False
+
+                fan.send_command = send_command
+                request = f"{param_id:04x}0002"
+                self.assertTrue(fan._read_params(request, required_params=frozenset()))
+                self.assertIsNone(getattr(fan, f"_{attr}"))
+                self.assertIn(f"{param_id:04x}", calls)
+                calls.clear()
+                self.assertTrue(fan._read_params(request, required_params=frozenset()))
+                self.assertEqual(calls, [request])
+
     def test_builds_default_discovery_packet(self):
         fan = Fan("192.0.2.1")
         packet = fan.build_packet(
@@ -417,8 +445,8 @@ class PacketBuilderTest(unittest.TestCase):
         calls.clear()
         self.assertTrue(fan.update())
         self.assertEqual(
-            {int(param, 16) for param, retries in calls if retries == 1},
-            retried,
+            [param for param, retries in calls if retries == 1],
+            [],
         )
         self.assertIn(0x0025, fan.last_missing_optional_params)
 
@@ -1101,7 +1129,7 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertEqual(fan.last_missing_required_params, set())
         self.assertLessEqual(missing_optional, fan.last_missing_optional_params)
 
-    def test_vento_soft_miss_diagnostics_report_next_poll_retry(self):
+    def test_vento_optional_backoff_diagnostics_do_not_claim_retry(self):
         fan = Fan("192.0.2.1")
         missing_optional = {0x0006}
 
@@ -1122,8 +1150,8 @@ class PacketBuilderTest(unittest.TestCase):
 
         messages = "\n".join(logs.output)
         self.assertIn("missing from bulk response: 0x0006", messages)
-        self.assertIn("individual retries attempted: 0x0006", messages)
-        self.assertIn("no-response individual retries: 0x0006", messages)
+        self.assertIn("individual retries attempted: none", messages)
+        self.assertIn("Optional parameter 0x0006 still unavailable", messages)
 
     def test_vento_init_device_allows_missing_optional_poll_params(self):
         fan = Fan("192.0.2.1")

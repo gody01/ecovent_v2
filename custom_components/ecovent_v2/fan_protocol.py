@@ -14,11 +14,9 @@ _LOGGER = logging.getLogger(__name__)
 MAX_BULK_READ_PARAMS = 12
 OPTIONAL_PARAM_RETRY_BACKOFF_READS = 10
 BULK_READ_REPROBE_READS = 10
+VENTO_SOFT_MISS_CONTROL_PARAMS = frozenset({0x0001, 0x0002, 0x0044})
 PRESERVE_ON_SOFT_MISS_PARAMS = frozenset(
     {
-        0x0001,  # state
-        0x0002,  # speed
-        0x0044,  # man_speed
         0x007C,  # device_search
         0x0086,  # firmware
         0x009C,  # wifi_assigned_ip
@@ -587,9 +585,14 @@ class FanProtocolMixin:
             read_name="preset speed settings",
         )
 
+    def _is_vento_soft_miss_control(self, param_id):
+        return self.profile_key == "vento" and param_id in VENTO_SOFT_MISS_CONTROL_PARAMS
+
     def _mark_param_unavailable(self, param_id, *, unsupported=False):
         """Retain soft-missing controls/identity, but clear explicitly rejected data."""
-        if not unsupported and param_id in PRESERVE_ON_SOFT_MISS_PARAMS:
+        if param_id in PRESERVE_ON_SOFT_MISS_PARAMS or (
+            not unsupported and self._is_vento_soft_miss_control(param_id)
+        ):
             return
 
         definition = self.params.get(param_id)
@@ -700,7 +703,7 @@ class FanProtocolMixin:
 
             missing_optional_params.add(param_id)
             self._mark_param_unavailable(param_id, unsupported=unsupported)
-            if unsupported:
+            if unsupported or not self._is_vento_soft_miss_control(param_id):
                 self._delay_optional_param_retry(param_id)
 
         for start in range(0, len(request), chunk_size):
@@ -793,8 +796,8 @@ class FanProtocolMixin:
                     self._mark_param_available_for_retry(param_id)
                 if not param_complete:
                     no_response_params.add(param_id)
-                    # Silence is not evidence of an unsupported parameter. Retry
-                    # at the next poll rather than blanking controls for minutes.
+                    # Vento can transiently omit its control rows. Keep their
+                    # values and retry next poll; other probes retain backoff.
                     mark_unavailable(param_id)
                     if param_id not in required_param_ids:
                         _LOGGER.debug(

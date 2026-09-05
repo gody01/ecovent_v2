@@ -533,6 +533,14 @@ class VentoNumber(StableObjectIdMixin, CoordinatorEntity, NumberEntity):
                 raise RuntimeError(
                     f"Failed to write {self._func}={value!r} for {self._fan.name}"
                 )
+            if getattr(self._fan, "retained_control_params", ()):
+                confirmed = await self.hass.async_add_executor_job(
+                    self._fan.confirm_retained_controls, (self._func,)
+                )
+                if not confirmed:
+                    raise RuntimeError(
+                        f"Failed to confirm retained control {self._func} for {self._fan.name}"
+                    )
             if self.native_value != expected_value:
                 raise RuntimeError(
                     f"Device did not confirm {self._func}={expected_value!r} "

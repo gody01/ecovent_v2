@@ -325,9 +325,23 @@ and `0x0044` retain their last known values and retry next poll without backoff.
 Other optional rows and other profiles keep their existing clearing/backoff policy.
 Retained control values are display-only evidence: fan commands require a
 successful targeted read before accepting them as unchanged or confirmed.
-This requirement survives quick polls that do not request the retained row.
+This requirement survives quick polls that do not request the retained row,
+and failed polls mark cached controls unconfirmed. Confirmation reads only the
+parameters used by a command: power-off does not depend on manual speed.
+The manual-speed number entity uses the same targeted-confirmation policy.
 Malformed control values and explicit rejections clear the cache; a changed
 unit type or firmware also clears controls inherited from the previous identity.
+Both identity rows are decoded before controls in the same response. Poll
+accounting and transport commands share the lock so concurrent writes cannot
+replace a poll response before its parameter IDs are consumed.
+
+A captured TwinFresh Style Wi-Fi (`0x0E00`, firmware `0.3 2021-10-04`) returns
+a four-byte `0x0064`: minute, hour, then little-endian 16-bit days. This exact
+variant uses the existing four-byte decoder with minute/hour bounds and a
+365-day limit; other Vento variants retain their three-byte requirement.
+Initialization reads firmware before the first full poll. The captured full/quick
+cycle is replayed by `tests/test_twinfresh_capture.py`; identity/IP values are
+redacted, and operational payload bytes are preserved.
 This does not satisfy poll liveness: at least one requested row must be received,
 and an explicit rejection still clears the value. Targeted reads remain all-required and bypass
 optional poll backoff. The response parser keeps the current `0xFF` high-byte

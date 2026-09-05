@@ -329,5 +329,6 @@ class Fan(
         if not self._id:
             return False
         self.get_param("unit_type")
+        self.get_param("firmware")
         self._apply_device_profile()
         return self.update()

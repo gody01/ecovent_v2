@@ -149,6 +149,46 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertFalse(fan.retained_control_params)
         self.assertEqual(fan.state, "off")
 
+    def test_firmware_change_keeps_controls_from_the_same_response(self):
+        for firmware_first in (False, True):
+            with self.subTest(firmware_first=firmware_first):
+                fan = Fan("192.0.2.1")
+                fan.unit_type = "0e00"
+                fan.firmware = "00030101ea07"
+                fan._state = "off"
+                identity = [0xFE, 6, 0x86, 4, 0, 1, 1, 0xEA, 7]
+                controls = [1, 1, 0x25, 55]
+                payload = identity + controls if firmware_first else controls + identity
+                fan.send = lambda _data: True
+                fan.receive = lambda: packet_with_payload(payload)
+                self.assertTrue(fan._read_params("000100250086", required_params=frozenset()))
+                self.assertEqual(fan.firmware, "4.0 2026-01-01")
+                self.assertEqual(fan.state, "on")
+                self.assertFalse(fan.retained_control_params)
+
+    def test_public_targeted_read_reconciles_retention_and_capabilities(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0e00"
+        fan._state = "on"
+        fan._mark_param_unavailable(1)
+        fan._unsupported_optional_poll_params = {0x25}
+        fan._optional_read_backoff = {0x25: 10}
+        fan.send = lambda _data: True
+        fan.receive = lambda: packet_with_payload([1, 0, 0x25, 55])
+        self.assertTrue(fan.get_param("state"))
+        self.assertFalse(fan.retained_control_params)
+        self.assertTrue(fan.get_param("humidity"))
+        self.assertTrue(fan.supports_parameter("humidity"))
+        self.assertNotIn(0x25, fan._optional_read_backoff)
+
+    def test_failed_quick_poll_marks_unrequested_controls_retained(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0e00"
+        fan._state, fan._speed, fan._man_speed = "on", "manual", 30
+        fan.send_command = lambda *args, **kwargs: False
+        self.assertFalse(fan.quick_update())
+        self.assertEqual(fan.retained_control_params, {1, 2, 0x44})
+
     def test_builds_default_discovery_packet(self):
         fan = Fan("192.0.2.1")
         packet = fan.build_packet(

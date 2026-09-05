@@ -1351,6 +1351,32 @@ class Issue35RegressionTest(unittest.TestCase):
                 method_source = ast.get_source_segment(source, method)
                 self.assertIn(f'"{parameter}", "01"', method_source)
 
+    def test_manual_speed_number_rejects_retained_post_write_value(self):
+        from ecovent_test_helpers import Fan
+
+        method = _class_method(_tree(NUMBER_PATH), "VentoNumber", "async_set_native_value")
+        namespace = {}
+        exec(compile(ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])), str(NUMBER_PATH), "exec"), namespace)
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0e00"
+        fan._man_speed = 55
+        fan.set_man_speed_percent = lambda _value: True
+        fan.send_command = lambda *args, **kwargs: False
+
+        class Hass:
+            async def async_add_executor_job(self, callback, *args):
+                return callback(*args)
+
+        async def refresh():
+            fan._mark_param_unavailable(0x44)
+
+        number = types.SimpleNamespace(
+            hass=Hass(), coordinator=types.SimpleNamespace(async_refresh_confirmed=refresh),
+            _fan=fan, _func="man_speed", _write_mode="manual_speed_percent", native_value=55.0,
+        )
+        with self.assertRaisesRegex(RuntimeError, "retained control"):
+            asyncio.run(namespace["async_set_native_value"](number, 55.0))
+
     def test_fan_entity_service_callables_accept_home_assistant_service_call(self):
         """Callable entity services receive the entity and ServiceCall object."""
         tree = _tree(FAN_PATH)

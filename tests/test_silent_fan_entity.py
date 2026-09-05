@@ -194,6 +194,38 @@ class SilentFanEntityTest(unittest.TestCase):
             asyncio.run(entity.async_turn_on())
         self.assertTrue(writes)
 
+    def test_turn_off_does_not_require_missing_manual_speed(self):
+        entity, fan, writes = _silent_entity()
+        fan.unit_type = "0e00"
+        fan._mark_param_unavailable(0x44)
+        entity.coordinator.silent_mode_enabled = False
+
+        class Hass:
+            async def async_add_executor_job(self, callback, *args):
+                return callback(*args)
+
+        async def refresh():
+            pass
+
+        original = fan.send_command
+        def command(func, param, *args, **kwargs):
+            if func == fan.func["read"]:
+                return False
+            return original(func, param, *args, **kwargs)
+
+        fan.send_command = command
+        entity.hass = Hass()
+        entity.coordinator.async_refresh_confirmed = refresh
+        asyncio.run(entity.async_turn_off())
+        self.assertEqual(fan.state, "off")
+        self.assertTrue(writes)
+
+    def test_unknown_power_enum_is_not_off(self):
+        entity, fan, _writes = _silent_entity()
+        fan.state = "99"
+        self.assertIsNone(entity.is_on)
+        self.assertIsNone(entity.percentage)
+
     def test_combined_preset_and_percentage_is_rejected_before_writing(self):
         async def run_test():
             entity, _fan, calls = _silent_entity(speed="high", man_speed=30)

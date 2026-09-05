@@ -457,6 +457,14 @@ class FanProtocolMixin:
                         decoded_read_ids = self._store_staged_response_params(
                             requested_read_ids, record_unknown=False
                         )
+                        # An answered but undecodable control row is not silence.
+                        invalid_read_ids = (
+                            requested_read_ids
+                            & set(self._last_raw_response_param_ids or ())
+                        ) - decoded_read_ids
+                        for param_id in invalid_read_ids:
+                            if self._is_vento_soft_miss_control(param_id):
+                                self._mark_param_unavailable(param_id, invalid=True)
                         read_confirmed = bool(
                             requested_read_ids
                             & (decoded_read_ids | set(unsupported_ids))
@@ -588,12 +596,21 @@ class FanProtocolMixin:
     def _is_vento_soft_miss_control(self, param_id):
         return self.profile_key == "vento" and param_id in VENTO_SOFT_MISS_CONTROL_PARAMS
 
-    def _mark_param_unavailable(self, param_id, *, unsupported=False):
+    @property
+    def retained_control_params(self):
+        """Control values kept for display that still need a fresh read."""
+        return frozenset(getattr(self, "_retained_control_params", ()))
+
+    def _mark_param_unavailable(self, param_id, *, unsupported=False, invalid=False):
         """Retain soft-missing controls/identity, but clear explicitly rejected data."""
-        if param_id in PRESERVE_ON_SOFT_MISS_PARAMS or (
-            not unsupported and self._is_vento_soft_miss_control(param_id)
-        ):
+        if param_id in PRESERVE_ON_SOFT_MISS_PARAMS:
             return
+        if not (unsupported or invalid) and self._is_vento_soft_miss_control(param_id):
+            definition = self.params[param_id]
+            if getattr(self, f"_{definition[0]}", None) is not None:
+                self._retained_control_params = set(self.retained_control_params) | {param_id}
+            return
+        self._retained_control_params = set(self.retained_control_params) - {param_id}
 
         definition = self.params.get(param_id)
         if definition is None:
@@ -609,6 +626,7 @@ class FanProtocolMixin:
         return backoff
 
     def _mark_param_available_for_retry(self, param_id):
+        self._retained_control_params = set(self.retained_control_params) - {param_id}
         self._optional_param_backoff().pop(param_id, None)
         self._unsupported_optional_poll_param_ids().discard(param_id)
 
@@ -697,6 +715,8 @@ class FanProtocolMixin:
         def mark_unavailable(param_id, *, unsupported=False):
             nonlocal complete
             if param_id in required_param_ids:
+                if unsupported:
+                    self._mark_param_unavailable(param_id, unsupported=True)
                 complete = False
                 missing_required_params.add(param_id)
                 return

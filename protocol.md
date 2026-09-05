@@ -323,6 +323,11 @@ as `0x00B9` (`unit_type`) are preserved on soft misses so the active profile is
 not lost during a degraded poll. For the Vento profile, soft-missing control rows `0x0001`, `0x0002`,
 and `0x0044` retain their last known values and retry next poll without backoff.
 Other optional rows and other profiles keep their existing clearing/backoff policy.
+Retained control values are display-only evidence: fan commands require a
+successful targeted read before accepting them as unchanged or confirmed.
+This requirement survives quick polls that do not request the retained row.
+Malformed control values and explicit rejections clear the cache; a changed
+unit type or firmware also clears controls inherited from the previous identity.
 This does not satisfy poll liveness: at least one requested row must be received,
 and an explicit rejection still clears the value. Targeted reads remain all-required and bypass
 optional poll backoff. The response parser keeps the current `0xFF` high-byte

@@ -101,6 +101,54 @@ class PacketBuilderTest(unittest.TestCase):
                 self.assertTrue(fan._read_params(request, required_params=frozenset()))
                 self.assertEqual(calls, [request])
 
+    def test_targeted_rejection_clears_retained_controls(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0e00"
+        fan._state = "on"
+        fan._mark_param_unavailable(1)
+        fan.send = lambda _data: True
+        fan.receive = lambda: packet_with_payload([0xFD, 1])
+        self.assertFalse(fan._read_params("0001"))
+        self.assertIsNone(fan.state)
+        self.assertFalse(fan.retained_control_params)
+
+    def test_malformed_control_is_not_a_soft_omission(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0e00"
+        fan._state = "on"
+        fan.send = lambda _data: True
+        fan.receive = lambda: packet_with_payload([0xFE, 2, 1, 2, 3, 0x25, 55])
+        self.assertTrue(fan._read_params("00010025", required_params=frozenset()))
+        self.assertIsNone(fan.state)
+        self.assertFalse(fan.retained_control_params)
+        self.assertFalse(fan.last_unsupported_params)
+
+    def test_identity_change_does_not_retain_previous_controls(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0300"
+        fan._state, fan._speed, fan._man_speed = "on", "high", 31
+        fan.send = lambda _data: True
+        fan.receive = lambda: packet_with_payload([0xFE, 2, 0xB9, 0x0E, 0, 0x25, 55])
+        self.assertTrue(fan._read_params("00b90001000200440025", required_params=frozenset()))
+        self.assertEqual(fan._unit_type_id, 0x0E00)
+        self.assertEqual((fan.state, fan.speed, fan.man_speed), (None, None, None))
+        self.assertFalse(fan.retained_control_params)
+
+    def test_retained_controls_survive_quick_poll_bookkeeping(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0e00"
+        fan._state = "on"
+        fan._mark_param_unavailable(1)
+        fan.send = lambda _data: True
+        fan.receive = lambda: packet_with_payload([0x25, 55])
+        self.assertTrue(fan._read_params("0025", required_params=frozenset()))
+        self.assertFalse(fan.last_missing_optional_params)
+        self.assertEqual(fan.retained_control_params, {1})
+        fan.receive = lambda: packet_with_payload([1, 0])
+        self.assertTrue(fan._read_params("0001"))
+        self.assertFalse(fan.retained_control_params)
+        self.assertEqual(fan.state, "off")
+
     def test_builds_default_discovery_packet(self):
         fan = Fan("192.0.2.1")
         packet = fan.build_packet(

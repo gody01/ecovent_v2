@@ -206,6 +206,9 @@ class FanCapabilitiesMixin:
 
     def _reset_learned_protocol_capabilities(self):
         """Discard protocol capabilities learned for a previous identity."""
+        # Retained controls describe the old unit/firmware, not the new identity.
+        self._state = self._speed = self._man_speed = None
+        self._retained_control_params = set()
         self._bulk_read_supported = None
         self._bulk_read_reprobe_countdown = 0
         self._optional_read_backoff = {}

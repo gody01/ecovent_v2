@@ -438,6 +438,20 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         """Boost time."""
         return self._fan.analogV_treshold
 
+    async def _async_confirm_retained_controls(self) -> None:
+        """Keep display continuity separate from successful control commands."""
+        params = getattr(self._fan, "retained_control_params", frozenset())
+        if not params:
+            return
+        request = "".join(f"{param_id:04x}" for param_id in sorted(params))
+        confirmed = await self.hass.async_add_executor_job(
+            self._fan._read_params, request
+        )
+        if not confirmed:
+            raise RuntimeError(
+                f"Failed to confirm retained control state for {self._fan.name}"
+            )
+
     async def async_turn_on(
         self,
         percentage: int | None = None,
@@ -445,6 +459,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
         **kwargs: Any,
     ) -> None:
         """Turn on the entity."""
+        await self._async_confirm_retained_controls()
         speed = kwargs.get("speed")
         if (
             preset_mode is None
@@ -504,6 +519,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
                     )
         finally:
             await self.coordinator.async_refresh_confirmed()
+            await self._async_confirm_retained_controls()
 
         if preset_mode is not None and self.preset_mode != preset_mode:
             raise RuntimeError(
@@ -532,6 +548,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the entity."""
+        await self._async_confirm_retained_controls()
         if self._fan.state == "off":
             _LOGGER.debug("Skipping unchanged turn_off command for %s", self._fan.name)
             return
@@ -542,6 +559,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             )
         finally:
             await self.coordinator.async_refresh_confirmed()
+            await self._async_confirm_retained_controls()
         if self.is_on is not False:
             raise RuntimeError(f"Device did not confirm power off for {self._fan.name}")
 
@@ -583,6 +601,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set the preset mode of the fan."""
+        await self._async_confirm_retained_controls()
         if self._is_preset_mode_unchanged(preset_mode):
             if preset_mode == "off":
                 self.coordinator.set_silent_preset_mode(None)
@@ -602,6 +621,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             )
         finally:
             await self.coordinator.async_refresh_confirmed()
+            await self._async_confirm_retained_controls()
         if self.preset_mode != preset_mode:
             raise RuntimeError(
                 f"Device did not confirm preset {preset_mode!r} for {self._fan.name}"
@@ -645,6 +665,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
 
     async def async_set_percentage(self, percentage: int) -> None:
         """Set the speed of the fan, as a percentage."""
+        await self._async_confirm_retained_controls()
         if (
             percentage <= 0
             and self._fan.state == "off"
@@ -679,6 +700,7 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
             )
         finally:
             await self.coordinator.async_refresh_confirmed()
+            await self._async_confirm_retained_controls()
         if self.percentage != self._confirmed_percentage_target(percentage):
             raise RuntimeError(
                 f"Device did not confirm speed {percentage}% for {self._fan.name}"
@@ -686,10 +708,12 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
 
     async def async_set_direction(self, direction: str) -> None:
         """Set the direction of the fan."""
+        await self._async_confirm_retained_controls()
         try:
             await self.hass.async_add_executor_job(self.set_direction, direction)
         finally:
             await self.coordinator.async_refresh_confirmed()
+            await self._async_confirm_retained_controls()
         if self.current_direction != direction:
             raise RuntimeError(
                 f"Device did not confirm direction {direction!r} for {self._fan.name}"
@@ -708,10 +732,12 @@ class VentoExpertFan(CoordinatorEntity, FanEntity):
 
     async def async_oscillate(self, oscillating: bool) -> None:
         """Set oscillation."""
+        await self._async_confirm_retained_controls()
         try:
             await self.hass.async_add_executor_job(self.set_oscillating, oscillating)
         finally:
             await self.coordinator.async_refresh_confirmed()
+            await self._async_confirm_retained_controls()
         if self.oscillating is not oscillating:
             raise RuntimeError(
                 f"Device did not confirm oscillation={oscillating!r} "

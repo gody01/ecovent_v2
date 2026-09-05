@@ -342,14 +342,31 @@ variant uses the existing four-byte decoder with minute/hour bounds and a
 Initialization reads firmware before the first full poll. The captured full/quick
 cycle is replayed by `tests/test_twinfresh_capture.py`; identity/IP values are
 redacted, and operational payload bytes are preserved.
-This does not satisfy poll liveness: at least one requested row must be received,
+For the HA-visible regression, run `python tests/ha_issue100_smoke.py` in an
+environment with Home Assistant installed (validated with `2026.6.0.dev0`).
+The harness uses real coordinator updates, entity listeners, and the HA state
+machine with captured values and controlled omissions. Each of the three control
+rows is checked across 26 accelerated cycles with bulk and individual recovery.
+It also checks failed command confirmation, offline recovery, empty/unrelated
+replies, wrong device IDs, invalid checksums, malformed controls, and explicit
+rejections. No network traffic is sent. Schedule and Repairs side effects are
+excluded from this focused test.
+
+`python tests/ha_issue100_smoke.py --baseline b72970a` substitutes the old polling
+handlers for comparison. With state/speed absent from bulk replies, the old
+handlers produce 22 blank cycles (11 minutes at the default interval); the current
+handlers preserve the displayed value and accept the changed value on the next
+full poll. This is deterministic fault injection, not a measurement of natural
+packet-loss frequency or a 13-minute wall-clock soak.
+
+Retaining a control value does not satisfy poll liveness: at least one requested row must be received,
 and an explicit rejection still clears the value. Targeted reads remain all-required and bypass
 optional poll backoff. The response parser keeps the current `0xFF` high-byte
 page until another page marker changes it, as required by the guide's packet
 example. Fixed-width rows, including one-byte enums/scalars, identity fields,
 and structured multi-byte values, are decoded only when their response value
-has the documented byte count. Malformed rows remain reportable as unknown and
-cannot overwrite the last valid decoded state. Explicitly variable-width rows,
+has the documented byte count. Malformed rows remain reportable as unknown and cannot install invalid decoded
+values; malformed Vento control rows additionally clear the cached control value. Explicitly variable-width rows,
 such as the alarm list and observed filter countdown variants, retain their own
 format validation. The extract-fan three-byte BOOST/SILENT counters are
 little-endian totals in seconds, not the component-byte time format used by

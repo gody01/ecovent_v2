@@ -16,6 +16,9 @@ OPTIONAL_PARAM_RETRY_BACKOFF_READS = 10
 BULK_READ_REPROBE_READS = 10
 PRESERVE_ON_SOFT_MISS_PARAMS = frozenset(
     {
+        0x0001,  # state
+        0x0002,  # speed
+        0x0044,  # man_speed
         0x007C,  # device_search
         0x0086,  # firmware
         0x009C,  # wifi_assigned_ip
@@ -584,9 +587,9 @@ class FanProtocolMixin:
             read_name="preset speed settings",
         )
 
-    def _mark_param_unavailable(self, param_id):
-        """Clear a missing soft-poll value so Home Assistant does not keep stale data."""
-        if param_id in PRESERVE_ON_SOFT_MISS_PARAMS:
+    def _mark_param_unavailable(self, param_id, *, unsupported=False):
+        """Retain soft-missing controls/identity, but clear explicitly rejected data."""
+        if not unsupported and param_id in PRESERVE_ON_SOFT_MISS_PARAMS:
             return
 
         definition = self.params.get(param_id)
@@ -688,7 +691,7 @@ class FanProtocolMixin:
             )
             try_bulk_read = self._bulk_read_reprobe_countdown == 0
 
-        def mark_unavailable(param_id, *, delay_optional_retry=False):
+        def mark_unavailable(param_id, *, unsupported=False):
             nonlocal complete
             if param_id in required_param_ids:
                 complete = False
@@ -696,8 +699,8 @@ class FanProtocolMixin:
                 return
 
             missing_optional_params.add(param_id)
-            self._mark_param_unavailable(param_id)
-            if delay_optional_retry:
+            self._mark_param_unavailable(param_id, unsupported=unsupported)
+            if unsupported:
                 self._delay_optional_param_retry(param_id)
 
         for start in range(0, len(request), chunk_size):
@@ -726,7 +729,7 @@ class FanProtocolMixin:
                         unsupported_params.add(param_id)
                         if param_id not in required_param_ids:
                             self._unsupported_optional_poll_param_ids().add(param_id)
-                        mark_unavailable(param_id, delay_optional_retry=True)
+                        mark_unavailable(param_id, unsupported=True)
                     missing = [
                         param
                         for param in missing
@@ -780,7 +783,7 @@ class FanProtocolMixin:
                     unsupported_params.add(param_id)
                     if param_id not in required_param_ids:
                         self._unsupported_optional_poll_param_ids().add(param_id)
-                    mark_unavailable(param_id, delay_optional_retry=True)
+                    mark_unavailable(param_id, unsupported=True)
                     continue
                 if param_complete and response_ids is not None:
                     param_complete = param_id in response_ids
@@ -790,7 +793,9 @@ class FanProtocolMixin:
                     self._mark_param_available_for_retry(param_id)
                 if not param_complete:
                     no_response_params.add(param_id)
-                    mark_unavailable(param_id, delay_optional_retry=True)
+                    # Silence is not evidence of an unsupported parameter. Retry
+                    # at the next poll rather than blanking controls for minutes.
+                    mark_unavailable(param_id)
                     if param_id not in required_param_ids:
                         _LOGGER.debug(
                             "EcoVent optional parameter 0x%04X did not respond "

@@ -520,6 +520,7 @@ class VentoNumber(StableObjectIdMixin, CoordinatorEntity, NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         """Update the current value."""
+        expected_value = float(int(value))
         if self._write_mode == "manual_speed_percent":
             try:
                 success = await self.hass.async_add_executor_job(
@@ -531,6 +532,19 @@ class VentoNumber(StableObjectIdMixin, CoordinatorEntity, NumberEntity):
             if not success:
                 raise RuntimeError(
                     f"Failed to write {self._func}={value!r} for {self._fan.name}"
+                )
+            if getattr(self._fan, "retained_control_params", ()):
+                confirmed = await self.hass.async_add_executor_job(
+                    self._fan.confirm_retained_controls, (self._func,)
+                )
+                if not confirmed:
+                    raise RuntimeError(
+                        f"Failed to confirm retained control {self._func} for {self._fan.name}"
+                    )
+            if self.native_value != expected_value:
+                raise RuntimeError(
+                    f"Device did not confirm {self._func}={expected_value!r} "
+                    f"for {self._fan.name}"
                 )
             return
 
@@ -559,4 +573,9 @@ class VentoNumber(StableObjectIdMixin, CoordinatorEntity, NumberEntity):
         if not success:
             raise RuntimeError(
                 f"Failed to write {self._func}={value!r} for {self._fan.name}"
+            )
+        if self.native_value != expected_value:
+            raise RuntimeError(
+                f"Device did not confirm {self._func}={expected_value!r} "
+                f"for {self._fan.name}"
             )

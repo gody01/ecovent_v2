@@ -1,0 +1,358 @@
+{
+  "start": "2026-09-05T10:50:39.384764+00:00",
+  "interval_seconds": 30,
+  "model": "VENTS TwinFresh Style Wi-Fi",
+  "firmware": "0.3 2021-10-04",
+  "unit_type_id": 3584,
+  "identity_transactions": [
+    {
+      "request": "00b90086",
+      "retries": 3,
+      "ok": true,
+      "frames": [
+        {
+          "payload": "fe02b90e00fe06860003040ae507",
+          "valid_checksum": true
+        }
+      ]
+    }
+  ],
+  "polls": [
+    {
+      "at": "2026-09-05T10:50:39.468479+00:00",
+      "mode": "full",
+      "ok": true,
+      "state": "on",
+      "speed": "manual",
+      "man_speed": 11,
+      "missing": [
+        100
+      ],
+      "unsupported": [],
+      "transactions": [
+        {
+          "request": "0001000200060007000b000f00140016001900240025002d",
+          "retries": 3,
+          "ok": true,
+          "frames": [
+            {
+              "payload": "010102ff06000700fe030b0000000f00140016001928fe0224030c25462d00",
+              "valid_checksum": true
+            }
+          ]
+        },
+        {
+          "request": "0032003a003b003c003d003e003f0044004a004b00630064",
+          "retries": 3,
+          "ok": true,
+          "frames": [
+            {
+              "payload": "32003a1d3b193c713d653ea13fa4441dfe024a8403fe024bdc05fe02636d01fe0464240b9700",
+              "valid_checksum": true
+            }
+          ]
+        },
+        {
+          "request": "0064",
+          "retries": 1,
+          "ok": false,
+          "frames": [
+            {
+              "payload": "fe0464240b9700",
+              "valid_checksum": true
+            }
+          ]
+        },
+        {
+          "request": "0066006f0070007c007e008300850086008800a300b700b8",
+          "retries": 3,
+          "ok": true,
+          "frames": [
+            {
+              "payload": "661ffe036f37320efe04700506091afe107c434150545552455F4445564943455F31fe047e0711af0283008500fe06860003040ae5078800fe04a3c0000201b702b83a",
+              "valid_checksum": true
+            }
+          ]
+        },
+        {
+          "request": "00b90072009c03020303030403050306",
+          "retries": 3,
+          "ok": true,
+          "frames": [
+            {
+              "payload": "fe02b90e007200fe049cff050000ff03fe02020008fe02030004040005000601",
+              "valid_checksum": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "at": "2026-09-05T10:51:09.497163+00:00",
+      "mode": "quick",
+      "ok": true,
+      "state": "on",
+      "speed": "manual",
+      "man_speed": 11,
+      "missing": [],
+      "unsupported": [],
+      "transactions": [
+        {
+          "request": "0006000B002D003200440016004A004B03040305",
+          "retries": 3,
+          "ok": true,
+          "frames": [
+            {
+              "payload": "0600fe030b0000002d003200441d1600fe024a8403fe024bdc05ff0304000500",
+              "valid_checksum": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "at": "2026-09-05T10:51:40.159433+00:00",
+      "mode": "full",
+      "ok": true,
+      "state": "on",
+      "speed": "manual",
+      "man_speed": 11,
+      "missing": [
+        100
+      ],
+      "unsupported": [],
+      "transactions": [
+        {
+          "request": "0001000200060007000b000f00140016001900240025002d",
+          "retries": 3,
+          "ok": true,
+          "frames": [
+            {
+              "payload": "010102ff06000700fe030b0000000f00140016001928fe0224030c25462d00",
+              "valid_checksum": true
+            }
+          ]
+        },
+        {
+          "request": "0032003a003b003c003d003e003f0044004a004b00630064",
+          "retries": 3,
+          "ok": true,
+          "frames": [
+            null,
+            {
+              "payload": "32003a1d3b193c713d653ea13fa4441dfe024a8403fe024bdc05fe02636d01fe0464230b9700",
+              "valid_checksum": true
+            }
+          ]
+        },
+        {
+          "request": "0066006f0070007c007e008300850086008800a300b700b8",
+          "retries": 3,
+          "ok": true,
+          "frames": [
+            {
+              "payload": "661ffe036f38330efe04700506091afe107c434150545552455F4445564943455F31fe047e0811af0283008500fe06860003040ae5078800fe04a3c0000201b702b83a",
+              "valid_checksum": true
+            }
+          ]
+        },
+        {
+          "request": "00b90072009c03020303030403050306",
+          "retries": 3,
+          "ok": true,
+          "frames": [
+            {
+              "payload": "fe02b90e007200fe049cff050000ff03fe02020008fe02030004040005000601",
+              "valid_checksum": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "at": "2026-09-05T10:52:10.174004+00:00",
+      "mode": "quick",
+      "ok": true,
+      "state": "on",
+      "speed": "manual",
+      "man_speed": 11,
+      "missing": [],
+      "unsupported": [],
+      "transactions": [
+        {
+          "request": "0006000B002D003200440016004A004B03040305",
+          "retries": 3,
+          "ok": true,
+          "frames": [
+            {
+              "payload": "0600fe030b0000002d003200441d1600fe024a8403fe024bdc05ff0304000500",
+              "valid_checksum": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "at": "2026-09-05T10:52:40.238270+00:00",
+      "mode": "full",
+      "ok": true,
+      "state": "on",
+      "speed": "manual",
+      "man_speed": 11,
+      "missing": [
+        100
+      ],
+      "unsupported": [],
+      "transactions": [
+        {
+          "request": "0001000200060007000b000f00140016001900240025002d",
+          "retries": 3,
+          "ok": true,
+          "frames": [
+            {
+              "payload": "010102ff06000700fe030b0000000f00140016001928fe0224030c25462d00",
+              "valid_checksum": true
+            }
+          ]
+        },
+        {
+          "request": "0032003a003b003c003d003e003f0044004a004b00630064",
+          "retries": 3,
+          "ok": true,
+          "frames": [
+            {
+              "payload": "32003a1d3b193c713d653ea13fa4441dfe024a8403fe024bdc05fe02636d01fe0464220b9700",
+              "valid_checksum": true
+            }
+          ]
+        },
+        {
+          "request": "0066006f0070007c007e008300850086008800a300b700b8",
+          "retries": 3,
+          "ok": true,
+          "frames": [
+            {
+              "payload": "661ffe036f38340efe04700506091afe107c434150545552455F4445564943455F31fe047e0911af0283008500fe06860003040ae5078800fe04a3c0000201b702b83a",
+              "valid_checksum": true
+            }
+          ]
+        },
+        {
+          "request": "00b90072009c03020303030403050306",
+          "retries": 3,
+          "ok": true,
+          "frames": [
+            {
+              "payload": "fe02b90e007200fe049cff050000ff03fe02020008fe02030004040005000601",
+              "valid_checksum": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "at": "2026-09-05T10:53:10.252000+00:00",
+      "mode": "quick",
+      "ok": true,
+      "state": "on",
+      "speed": "manual",
+      "man_speed": 11,
+      "missing": [],
+      "unsupported": [],
+      "transactions": [
+        {
+          "request": "0006000B002D003200440016004A004B03040305",
+          "retries": 3,
+          "ok": true,
+          "frames": [
+            {
+              "payload": "0600fe030b0000002d003200441d1600fe024a8403fe024bdc05ff0304000500",
+              "valid_checksum": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "at": "2026-09-05T10:53:40.316385+00:00",
+      "mode": "full",
+      "ok": true,
+      "state": "on",
+      "speed": "manual",
+      "man_speed": 11,
+      "missing": [
+        100
+      ],
+      "unsupported": [],
+      "transactions": [
+        {
+          "request": "0001000200060007000b000f00140016001900240025002d",
+          "retries": 3,
+          "ok": true,
+          "frames": [
+            {
+              "payload": "010102ff06000700fe030b0000000f00140016001928fe0224030c25462d00",
+              "valid_checksum": true
+            }
+          ]
+        },
+        {
+          "request": "0032003a003b003c003d003e003f0044004a004b00630064",
+          "retries": 3,
+          "ok": true,
+          "frames": [
+            {
+              "payload": "32003a1d3b193c713d653ea13fa4441dfe024a8403fe024bdc05fe02636d01fe0464210b9700",
+              "valid_checksum": true
+            }
+          ]
+        },
+        {
+          "request": "0066006f0070007c007e008300850086008800a300b700b8",
+          "retries": 3,
+          "ok": true,
+          "frames": [
+            {
+              "payload": "661ffe036f38350efe04700506091afe107c434150545552455F4445564943455F31fe047e0a11af0283008500fe06860003040ae5078800fe04a3c0000201b702b83a",
+              "valid_checksum": true
+            }
+          ]
+        },
+        {
+          "request": "00b90072009c03020303030403050306",
+          "retries": 3,
+          "ok": true,
+          "frames": [
+            {
+              "payload": "fe02b90e007200fe049cff050000ff03fe02020008fe02030004040005000601",
+              "valid_checksum": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "at": "2026-09-05T10:54:10.330287+00:00",
+      "mode": "quick",
+      "ok": true,
+      "state": "on",
+      "speed": "manual",
+      "man_speed": 11,
+      "missing": [],
+      "unsupported": [],
+      "transactions": [
+        {
+          "request": "0006000B002D003200440016004A004B03040305",
+          "retries": 3,
+          "ok": true,
+          "frames": [
+            {
+              "payload": "0600fe030b0000002d003200441d1600fe024a8403fe024bdc05ff0304000500",
+              "valid_checksum": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

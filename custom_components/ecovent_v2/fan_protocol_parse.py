@@ -34,7 +34,8 @@ _FIXED_VALUE_SIZES = {
     "voc_treshold": 2,
 }
 
-_PROFILE_SELECTING_PARAM_IDS = frozenset({0x00B9})
+# Both identities can reset cached controls; decode them before ordinary rows.
+_PROFILE_SELECTING_PARAM_IDS = frozenset({0x0086, 0x00B9})
 
 
 class FanProtocolParseMixin:

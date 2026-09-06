@@ -6,6 +6,7 @@ import unittest
 from ecovent_test_helpers import Fan
 
 from protocol_diagnostics import (
+    _report_version,
     hardware_profile_mismatch_state,
     hardware_profile_mismatch_issue_body,
     hardware_profile_mismatch_issue_url,
@@ -110,7 +111,10 @@ class ProtocolDiagnosticsTest(unittest.TestCase):
 
         body = hardware_profile_mismatch_issue_body(fan)
         self.assertIn("Integration profile: `breezy`", body)
-        self.assertIn("EcoVent V2 integration version: `1.2.26`", body)
+        self.assertIn(
+            f"EcoVent V2 integration version: `{_report_version()}`", body
+        )
+        self.assertNotIn("loc_", body)
         self.assertIn("Firmware: `1.2.3`", body)
         self.assertIn("`0x0027` `co2`", body)
         self.assertIn("this one EcoVent config entry", body)

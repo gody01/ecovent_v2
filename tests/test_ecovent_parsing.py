@@ -318,6 +318,25 @@ class ParseRobustnessTest(unittest.TestCase):
         )
         self.assertEqual(fan.filter_timer_countdown, "72d 8h 17m ")
 
+    def test_twinfresh_style_captured_filter_timer_variant(self):
+        for unit, firmware, valid in (
+            ("0e00", "0003040ae507", True),
+            ("0e00", "0004040ae507", False),
+            ("0500", "0003040ae507", False),
+        ):
+            with self.subTest(unit=unit, firmware=firmware):
+                fan = Fan("192.0.2.1")
+                fan.unit_type = unit
+                fan.firmware = firmware
+                fan.parse_response(packet_with_payload([0xFE, 4, 0x64, 36, 11, 151, 0]))
+                self.assertEqual(0x64 in fan._last_response_param_ids, valid)
+                if valid:
+                    self.assertEqual(fan.filter_timer_countdown, "151d 11h 36m ")
+                    fan.parse_response(packet_with_payload([0xFE, 4, 0x64, 60, 11, 151, 0]))
+                    self.assertNotIn(0x64, fan._last_response_param_ids)
+                    fan.parse_response(packet_with_payload([0xFE, 4, 0x64, 0, 0, 0x6E, 1]))
+                    self.assertNotIn(0x64, fan._last_response_param_ids)
+
     def test_filter_countdown_rejects_days_beyond_profile_limit(self):
         cases = (
             ("0500", [0, 0, 181], [0, 0, 182], "181d 0h 0m "),

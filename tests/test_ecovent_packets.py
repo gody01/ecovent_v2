@@ -9,6 +9,186 @@ from schedule_helpers import WeeklyScheduleRecord
 
 
 class PacketBuilderTest(unittest.TestCase):
+    def test_vento_soft_miss_preserves_controls_and_retries_next_poll(self):
+        for param_id, attr, initial, recovered in (
+            (0x0001, "state", 1, 0),
+            (0x0002, "speed", 2, 1),
+            (0x0044, "man_speed", 80, 60),
+        ):
+            with self.subTest(param=param_id):
+                fan = Fan("192.0.2.1")
+                fan.unit_type = "0e00"
+                self.assertTrue(fan.parse_response(packet_with_payload([param_id, initial])))
+                previous = getattr(fan, attr)
+                calls = []
+                recovering = False
+
+                def send_command(func, param, value="", retries=10):
+                    calls.append(param)
+                    if len(param) > 4:
+                        return fan.parse_response(packet_with_payload([0x25, 42]))
+                    if recovering:
+                        return fan.parse_response(packet_with_payload([param_id, recovered]))
+                    return False
+
+                fan.send_command = send_command
+                request = f"{param_id:04x}0025"
+                self.assertTrue(fan._read_params(request, required_params=frozenset()))
+                self.assertEqual(getattr(fan, attr), previous)
+                self.assertEqual(fan.last_missing_optional_params, {param_id})
+                calls.clear()
+                recovering = True
+                self.assertTrue(fan._read_params(request, required_params=frozenset()))
+                self.assertIn(f"{param_id:04x}", calls)
+                self.assertNotEqual(getattr(fan, attr), previous)
+                self.assertFalse(fan.last_missing_optional_params)
+
+                # Retained state must not make an offline controller available.
+                fan.send_command = lambda *args, **kwargs: False
+                self.assertFalse(fan._read_params(request, required_params=frozenset()))
+                # A targeted confirmation must still fail on a missing row.
+                self.assertFalse(fan._read_params(f"{param_id:04x}"))
+
+    def test_vento_explicitly_unsupported_controls_clear_and_stop_polling(self):
+        for param_id, attr in ((1, "state"), (2, "speed"), (0x44, "man_speed")):
+            with self.subTest(param=param_id):
+                fan = Fan("192.0.2.1")
+                fan.unit_type = "0e00"
+                fan.parse_response(packet_with_payload([param_id, 1]))
+                calls = []
+
+                def send_command(func, param, value="", retries=10):
+                    calls.append(param)
+                    payload = [0x25, 42]
+                    if f"{param_id:04x}" in param:
+                        payload.extend([0xFD, param_id])
+                    return fan.parse_response(packet_with_payload(payload))
+
+                fan.send_command = send_command
+                request = f"{param_id:04x}0025"
+                self.assertTrue(fan._read_params(request, required_params=frozenset()))
+                self.assertIsNone(getattr(fan, attr))
+                self.assertEqual(fan.last_unsupported_params, {param_id})
+                calls.clear()
+                self.assertTrue(fan._read_params(request, required_params=frozenset()))
+                self.assertEqual(calls, ["0025"])
+
+    def test_soft_miss_preservation_is_limited_to_vento_controls(self):
+        for unit_type, param_id, attr in (
+            ("0e00", 0x0025, "humidity"),
+            ("0e00", 0x0064, "filter_timer_countdown"),
+            ("0200", 0x0001, "state"),
+        ):
+            with self.subTest(unit_type=unit_type, param=param_id):
+                fan = Fan("192.0.2.1")
+                fan.unit_type = unit_type
+                setattr(fan, f"_{attr}", 42)
+                calls = []
+
+                def send_command(func, param, value="", retries=10):
+                    calls.append(param)
+                    if len(param) > 4:
+                        fan._last_response_param_ids = {0x0002}
+                        return True
+                    return False
+
+                fan.send_command = send_command
+                request = f"{param_id:04x}0002"
+                self.assertTrue(fan._read_params(request, required_params=frozenset()))
+                self.assertIsNone(getattr(fan, f"_{attr}"))
+                self.assertIn(f"{param_id:04x}", calls)
+                calls.clear()
+                self.assertTrue(fan._read_params(request, required_params=frozenset()))
+                self.assertEqual(calls, [request])
+
+    def test_targeted_rejection_clears_retained_controls(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0e00"
+        fan._state = "on"
+        fan._mark_param_unavailable(1)
+        fan.send = lambda _data: True
+        fan.receive = lambda: packet_with_payload([0xFD, 1])
+        self.assertFalse(fan._read_params("0001"))
+        self.assertIsNone(fan.state)
+        self.assertFalse(fan.retained_control_params)
+
+    def test_malformed_control_is_not_a_soft_omission(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0e00"
+        fan._state = "on"
+        fan.send = lambda _data: True
+        fan.receive = lambda: packet_with_payload([0xFE, 2, 1, 2, 3, 0x25, 55])
+        self.assertTrue(fan._read_params("00010025", required_params=frozenset()))
+        self.assertIsNone(fan.state)
+        self.assertFalse(fan.retained_control_params)
+        self.assertFalse(fan.last_unsupported_params)
+
+    def test_identity_change_does_not_retain_previous_controls(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0300"
+        fan._state, fan._speed, fan._man_speed = "on", "high", 31
+        fan.send = lambda _data: True
+        fan.receive = lambda: packet_with_payload([0xFE, 2, 0xB9, 0x0E, 0, 0x25, 55])
+        self.assertTrue(fan._read_params("00b90001000200440025", required_params=frozenset()))
+        self.assertEqual(fan._unit_type_id, 0x0E00)
+        self.assertEqual((fan.state, fan.speed, fan.man_speed), (None, None, None))
+        self.assertFalse(fan.retained_control_params)
+
+    def test_retained_controls_survive_quick_poll_bookkeeping(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0e00"
+        fan._state = "on"
+        fan._mark_param_unavailable(1)
+        fan.send = lambda _data: True
+        fan.receive = lambda: packet_with_payload([0x25, 55])
+        self.assertTrue(fan._read_params("0025", required_params=frozenset()))
+        self.assertFalse(fan.last_missing_optional_params)
+        self.assertEqual(fan.retained_control_params, {1})
+        fan.receive = lambda: packet_with_payload([1, 0])
+        self.assertTrue(fan._read_params("0001"))
+        self.assertFalse(fan.retained_control_params)
+        self.assertEqual(fan.state, "off")
+
+    def test_firmware_change_keeps_controls_from_the_same_response(self):
+        for firmware_first in (False, True):
+            with self.subTest(firmware_first=firmware_first):
+                fan = Fan("192.0.2.1")
+                fan.unit_type = "0e00"
+                fan.firmware = "00030101ea07"
+                fan._state = "off"
+                identity = [0xFE, 6, 0x86, 4, 0, 1, 1, 0xEA, 7]
+                controls = [1, 1, 0x25, 55]
+                payload = identity + controls if firmware_first else controls + identity
+                fan.send = lambda _data: True
+                fan.receive = lambda: packet_with_payload(payload)
+                self.assertTrue(fan._read_params("000100250086", required_params=frozenset()))
+                self.assertEqual(fan.firmware, "4.0 2026-01-01")
+                self.assertEqual(fan.state, "on")
+                self.assertFalse(fan.retained_control_params)
+
+    def test_public_targeted_read_reconciles_retention_and_capabilities(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0e00"
+        fan._state = "on"
+        fan._mark_param_unavailable(1)
+        fan._unsupported_optional_poll_params = {0x25}
+        fan._optional_read_backoff = {0x25: 10}
+        fan.send = lambda _data: True
+        fan.receive = lambda: packet_with_payload([1, 0, 0x25, 55])
+        self.assertTrue(fan.get_param("state"))
+        self.assertFalse(fan.retained_control_params)
+        self.assertTrue(fan.get_param("humidity"))
+        self.assertTrue(fan.supports_parameter("humidity"))
+        self.assertNotIn(0x25, fan._optional_read_backoff)
+
+    def test_failed_quick_poll_marks_unrequested_controls_retained(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0e00"
+        fan._state, fan._speed, fan._man_speed = "on", "manual", 30
+        fan.send_command = lambda *args, **kwargs: False
+        self.assertFalse(fan.quick_update())
+        self.assertEqual(fan.retained_control_params, {1, 2, 0x44})
+
     def test_builds_default_discovery_packet(self):
         fan = Fan("192.0.2.1")
         packet = fan.build_packet(
@@ -104,12 +284,22 @@ class PacketBuilderTest(unittest.TestCase):
 
     def test_schedule_read_learns_only_explicit_unsupported_response(self):
         fan = Fan("192.0.2.1")
-        fan.send = lambda _data: True
+        calls = []
+        fan.send = lambda data: calls.append(data) or True
         fan.receive = lambda: packet_with_payload([0xFD, 0x77])
 
         self.assertIsNone(fan.read_weekly_schedule_record(1, 1))
         self.assertFalse(fan.supports_parameter("weekly_schedule_setup"))
         self.assertIn(0x0077, fan.unsupported_optional_poll_parameter_ids())
+
+        fan.receive = lambda: packet_with_payload(
+            [0xFE, 0x06, 0x77, 0x01, 0x01, 0x01, 0x00, 0x00, 0x06]
+        )
+        record = fan.read_weekly_schedule_record(1, 1)
+        self.assertIsNotNone(record)
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(fan.supports_parameter("weekly_schedule_setup"))
+        self.assertNotIn(0x0077, fan.unsupported_optional_poll_parameter_ids())
 
         retryable = Fan("192.0.2.1")
         retryable.send = lambda _data: True
@@ -1601,6 +1791,31 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertFalse(fan.set_param("filter_timer_setpoint", "4700"))
         self.assertEqual(calls, [])
 
+    def test_write_rejects_unknown_enum_value_before_transport(self):
+        fan = Fan("192.0.2.1")
+        calls = []
+        fan.send = lambda data: calls.append(data) or True
+
+        self.assertFalse(fan.set_param("state", "03"))
+        self.assertFalse(fan.set_param("speed", "99"))
+        self.assertFalse(fan.set_param("airflow", "04"))
+        self.assertFalse(fan.set_param("timer_mode", "ff"))
+        self.assertFalse(fan.set_parameters({"state": "03"}))
+        self.assertEqual(calls, [])
+
+    def test_successful_targeted_read_restores_learned_unsupported_parameter(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        fan._unsupported_optional_poll_params = {0x0025}
+        fan.send = lambda _data: True
+        fan.receive = lambda: packet_with_payload([0x25, 0x37])
+
+        self.assertFalse(fan.supports_parameter("humidity"))
+        self.assertTrue(fan._read_params("0025"))
+        self.assertEqual(fan.humidity, "55")
+        self.assertEqual(fan.unsupported_optional_poll_parameter_ids(), frozenset())
+        self.assertTrue(fan.supports_parameter("humidity"))
+
     def test_freshbox_filter_timer_write_accepts_disabled_value(self):
         fan = Fan("192.0.2.1")
         fan.unit_type = "0200"
@@ -1627,6 +1842,19 @@ class PacketBuilderTest(unittest.TestCase):
         calls = []
         results = []
         fan.extra_write_parameters_callback = lambda: {"rtc_time": "ff3b17"}
+        fan.extra_write_parameters_result_callback = results.append
+        fan.send = lambda data: calls.append(data) or True
+        fan.receive = lambda: packet_for_write_command(calls[-1])
+
+        self.assertTrue(fan.set_param("state", "on"))
+        self.assertEqual(calls, ["030101"])
+        self.assertEqual(results, [False])
+
+    def test_duplicate_opportunistic_row_is_not_sent_twice(self):
+        fan = Fan("192.0.2.1")
+        calls = []
+        results = []
+        fan.extra_write_parameters_callback = lambda: {"state": "on"}
         fan.extra_write_parameters_result_callback = results.append
         fan.send = lambda data: calls.append(data) or True
         fan.receive = lambda: packet_for_write_command(calls[-1])

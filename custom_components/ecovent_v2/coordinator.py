@@ -234,7 +234,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
 
     def _should_refresh_schedule_week(self) -> bool:
         """Return whether full weekly schedule reads are useful right now."""
-        if not self._fan.supports_parameter("weekly_schedule_setup"):
+        if not self._fan.profile_supports_parameter("weekly_schedule_setup"):
             return False
 
         state = self._fan.weekly_schedule_state
@@ -245,6 +245,9 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                 self._fan.name,
             )
             return False
+
+        if not self._fan.supports_parameter("weekly_schedule_setup"):
+            return self.updateCounter % 10 == 0
 
         return not self._weekly_schedule or (
             state == "on" and self.updateCounter % 10 == 0
@@ -601,7 +604,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
 
         if (
             weekly_schedule_enabled is not None or days
-        ) and not self._fan.supports_parameter("weekly_schedule_setup"):
+        ) and not self._fan.profile_supports_parameter("weekly_schedule_setup"):
             raise RuntimeError(
                 f"Weekly schedules are not supported by {self._fan.name}"
             )
@@ -638,6 +641,12 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                 expected_records = dict(current_records)
                 for record in records_to_write:
                     expected_records[record.period] = record
+                if getattr(self._fan, "transport", None) == "bgcp_udp":
+                    final_period = expected_records[4]
+                    if (final_period.end_hour, final_period.end_minute) != (0, 0):
+                        raise ValueError(
+                            "BGCP schedule period 4 must end at midnight"
+                        )
                 working_records_by_day[day] = expected_records
                 prepared.append((day_label, day, records_to_write, expected_records))
             return prepared
@@ -649,7 +658,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                 day_payloads.append((day_label, day, day_payload))
 
             requested_days = {day for _, day, _ in day_payloads}
-            if self._fan.supports_parameter("weekly_schedule_setup"):
+            if self._fan.profile_supports_parameter("weekly_schedule_setup"):
                 refreshed_days = await self.hass.async_add_executor_job(
                     self._load_schedule_days,
                     requested_days,

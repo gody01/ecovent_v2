@@ -10,7 +10,7 @@ import sys
 import types
 import unittest
 
-from ecovent_test_helpers import Fan, packet_for_write_command
+from ecovent_test_helpers import Fan, packet_for_write_command, packet_with_payload
 
 
 COMPONENT_PATH = (
@@ -126,6 +126,181 @@ def _silent_entity(*, speed="manual", man_speed=63):
 
 
 class SilentFanEntityTest(unittest.TestCase):
+    def test_retained_controls_cannot_confirm_unchanged_commands(self):
+        for method, args in (
+            ("async_turn_on", ()),
+            ("async_turn_off", ()),
+            ("async_set_percentage", (63,)),
+            ("async_set_preset_mode", ("high",)),
+        ):
+            with self.subTest(method=method):
+                entity, fan, calls = _silent_entity()
+                fan.unit_type = "0e00"
+                if method == "async_turn_off":
+                    fan._state = "off"
+                fan._mark_param_unavailable(1)
+                entity.async_write_ha_state = lambda: None
+
+                class Hass:
+                    async def async_add_executor_job(self, callback, *args):
+                        return callback(*args)
+
+                entity.hass = Hass()
+                fan.send_command = lambda *args, **kwargs: False
+                with self.assertRaisesRegex(RuntimeError, "retained control"):
+                    asyncio.run(getattr(entity, method)(*args))
+                self.assertEqual(calls, [])
+
+    def test_retained_control_readback_allows_a_verified_noop(self):
+        entity, fan, writes = _silent_entity()
+        fan.unit_type = "0e00"
+        fan._mark_param_unavailable(1)
+        reads = []
+
+        class Hass:
+            async def async_add_executor_job(self, callback, *args):
+                return callback(*args)
+
+        def read(command, param, **kwargs):
+            self.assertEqual(command, fan.func["read"])
+            reads.append(param)
+            return fan.parse_response(packet_with_payload([1, 1]))
+
+        fan.send_command = read
+        entity.hass = Hass()
+        entity.async_write_ha_state = lambda: None
+        asyncio.run(entity.async_turn_on())
+        self.assertEqual(reads, ["0001"])
+        self.assertEqual(writes, [])
+
+    def test_post_write_soft_miss_requires_fresh_control_readback(self):
+        entity, fan, writes = _silent_entity()
+        fan.unit_type = "0e00"
+        fan._state = "off"
+        entity.coordinator.silent_mode_enabled = False
+
+        class Hass:
+            async def async_add_executor_job(self, callback, *args):
+                return callback(*args)
+
+        async def refresh():
+            # The write was acknowledged, but the subsequent poll omitted power.
+            fan._mark_param_unavailable(1)
+            fan.send_command = lambda *args, **kwargs: False
+
+        entity.hass = Hass()
+        entity.coordinator.async_refresh_confirmed = refresh
+        with self.assertRaisesRegex(RuntimeError, "retained control"):
+            asyncio.run(entity.async_turn_on())
+        self.assertTrue(writes)
+
+    def test_turn_off_does_not_require_missing_manual_speed(self):
+        entity, fan, writes = _silent_entity()
+        fan.unit_type = "0e00"
+        fan._mark_param_unavailable(0x44)
+        entity.coordinator.silent_mode_enabled = False
+
+        class Hass:
+            async def async_add_executor_job(self, callback, *args):
+                return callback(*args)
+
+        async def refresh():
+            pass
+
+        original = fan.send_command
+        def command(func, param, *args, **kwargs):
+            if func == fan.func["read"]:
+                return False
+            return original(func, param, *args, **kwargs)
+
+        fan.send_command = command
+        entity.hass = Hass()
+        entity.coordinator.async_refresh_confirmed = refresh
+        asyncio.run(entity.async_turn_off())
+        self.assertEqual(fan.state, "off")
+        self.assertTrue(writes)
+
+    def test_unknown_power_enum_is_not_off(self):
+        entity, fan, _writes = _silent_entity()
+        fan.state = "99"
+        self.assertIsNone(entity.is_on)
+        self.assertIsNone(entity.percentage)
+
+    def test_combined_preset_and_percentage_is_rejected_before_writing(self):
+        async def run_test():
+            entity, _fan, calls = _silent_entity(speed="high", man_speed=30)
+
+            with self.assertRaisesRegex(ValueError, "cannot be set together"):
+                await entity.async_turn_on(preset_mode="high", percentage=50)
+
+            self.assertEqual(calls, [])
+
+        asyncio.run(run_test())
+
+    def test_operating_mode_percentage_confirmation_uses_device_clamp(self):
+        entity, fan, _calls = _silent_entity(speed="high", man_speed=30)
+        fan.unit_type = "0600"
+
+        self.assertTrue(fan.uses_operating_mode_presets)
+        self.assertEqual(entity._confirmed_percentage_target(0), 0)
+        self.assertEqual(entity._confirmed_percentage_target(5), 30)
+        self.assertEqual(entity._confirmed_percentage_target(30), 30)
+        self.assertEqual(entity._confirmed_percentage_target(80), 80)
+
+    def test_operating_mode_zero_percentage_confirms_power_off(self):
+        async def run_test():
+            entity, fan, _calls = _silent_entity(speed="high", man_speed=30)
+            fan.unit_type = "0600"
+            writes = []
+
+            class Hass:
+                async def async_add_executor_job(self, callback, *args):
+                    return callback(*args)
+
+            async def confirmed_refresh():
+                return None
+
+            def apply_percentage(percentage, turn_on):
+                writes.append((percentage, turn_on))
+                fan._state = "off"
+
+            entity.hass = Hass()
+            entity.coordinator.async_refresh_confirmed = confirmed_refresh
+            entity.set_percentage = apply_percentage
+
+            await entity.async_set_percentage(0)
+
+            self.assertEqual(writes, [(0, True)])
+            self.assertEqual(fan.state, "off")
+            self.assertEqual(entity.percentage, 0)
+
+        asyncio.run(run_test())
+
+    def test_turn_on_rejects_successful_refresh_that_does_not_confirm_power(self):
+        async def run_test():
+            entity, fan, calls = _silent_entity(speed="high", man_speed=30)
+            fan._state = "off"
+
+            class Hass:
+                async def async_add_executor_job(self, callback, *args):
+                    return callback(*args)
+
+            async def ignored_write_readback():
+                fan._state = "off"
+                fan._speed = "high"
+
+            entity.hass = Hass()
+            entity.async_write_ha_state = lambda: None
+            entity.coordinator.async_refresh_confirmed = ignored_write_readback
+
+            with self.assertRaisesRegex(RuntimeError, "did not confirm power on"):
+                await entity.async_turn_on()
+
+            self.assertGreaterEqual(len(calls), 1)
+            self.assertEqual(fan.state, "off")
+
+        asyncio.run(run_test())
+
     def test_unchanged_turn_on_skips_write_and_confirmation_refresh(self):
         async def run_test():
             entity, fan, calls = _silent_entity(speed="manual", man_speed=63)

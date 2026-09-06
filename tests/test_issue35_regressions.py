@@ -24,6 +24,7 @@ SWITCH_PATH = COMPONENT_PATH / "switch.py"
 SELECT_PATH = COMPONENT_PATH / "select.py"
 BINARY_SENSOR_PATH = COMPONENT_PATH / "binary_sensor.py"
 SENSOR_SPECS_PATH = COMPONENT_PATH / "sensor_specs.py"
+DIAGNOSTICS_PATH = COMPONENT_PATH / "diagnostics.py"
 STRINGS_PATH = COMPONENT_PATH / "strings.json"
 TRANSLATIONS_PATH = COMPONENT_PATH / "translations"
 FRONTEND_TEST_PACKAGE = "ecovent_v2_frontend_test"
@@ -143,6 +144,68 @@ class _FakeFrontendHass:
 
 
 class Issue35RegressionTest(unittest.TestCase):
+    def test_diagnostics_link_uses_reportable_not_raw_unsupported_rows(self):
+        method = _module_function(
+            _tree(DIAGNOSTICS_PATH), "async_get_config_entry_diagnostics"
+        )
+        reportable = frozenset()
+        url_calls = []
+        namespace = {
+            "Any": object,
+            "HomeAssistant": object,
+            "ConfigEntry": object,
+            "DOMAIN": "ecovent_v2",
+            "_report_version": lambda: "test",
+            "unsupported_optional_poll_parameter_details": lambda _fan: (
+                {"id": "0x003A", "name": "supply_speed_low"},
+            ),
+            "reportable_hardware_profile_mismatch_param_ids": (
+                lambda _fan: reportable
+            ),
+            "hardware_profile_mismatch_issue_url": lambda _fan, rows: (
+                url_calls.append(rows) or "https://example.invalid/report"
+            ),
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+                str(DIAGNOSTICS_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+        get_diagnostics = namespace["async_get_config_entry_diagnostics"]
+
+        fan = types.SimpleNamespace(
+            name="Test fan",
+            profile_key="vento",
+            unit_type="Vento",
+            _unit_type_id=0x0500,
+            firmware="0.5 2021-10-04",
+            id="known-device",
+            transport="bgcp_udp",
+            last_missing_required_params=frozenset(),
+            last_missing_optional_params=frozenset(),
+            last_unsupported_params=frozenset({0x003A}),
+            _bulk_read_supported=True,
+        )
+        hass = types.SimpleNamespace(
+            data={"ecovent_v2": {"entry": types.SimpleNamespace(_fan=fan)}}
+        )
+        entry = types.SimpleNamespace(entry_id="entry", title="Test")
+
+        diagnostics = asyncio.run(get_diagnostics(hass, entry))
+        self.assertNotIn("hardware_profile_mismatch_issue_url", diagnostics)
+        self.assertEqual(url_calls, [])
+
+        reportable = frozenset({0x003A})
+        diagnostics = asyncio.run(get_diagnostics(hass, entry))
+        self.assertEqual(
+            diagnostics["hardware_profile_mismatch_issue_url"],
+            "https://example.invalid/report",
+        )
+        self.assertEqual(url_calls, [frozenset({0x003A})])
+
     def test_frontend_digest_file_io_runs_in_executor(self):
         tree = _tree(FRONTEND_PATH)
         register = _module_function(tree, "async_register_frontend")
@@ -755,17 +818,22 @@ class Issue35RegressionTest(unittest.TestCase):
                 return None
 
         class ConfigEntries:
+            def __init__(self, unload_result=True):
+                self.unload_result = unload_result
+
             async def async_forward_entry_setups(self, _entry, platforms):
                 events.append(("forward", tuple(platforms)))
 
             async def async_unload_platforms(self, _entry, platforms):
                 events.append(("unload", tuple(platforms)))
-                return True
+                if isinstance(self.unload_result, Exception):
+                    raise self.unload_result
+                return self.unload_result
 
         class Hass:
-            def __init__(self):
+            def __init__(self, unload_result=True):
                 self.data = {}
-                self.config_entries = ConfigEntries()
+                self.config_entries = ConfigEntries(unload_result)
 
             async def async_add_executor_job(self, callback):
                 return callback()
@@ -809,6 +877,59 @@ class Issue35RegressionTest(unittest.TestCase):
             ],
         )
         self.assertNotIn("entry-1", hass.data["ecovent_v2"])
+
+        for unload_result in (False, RuntimeError("unload failed")):
+            with self.subTest(unload_result=unload_result):
+                events.clear()
+                hass = Hass(unload_result)
+                with self.assertRaisesRegex(RuntimeError, "registry sync failed"):
+                    asyncio.run(namespace["async_setup_entry"](hass, entry))
+
+                self.assertEqual(
+                    events,
+                    [
+                        ("forward", ("sensor", "fan")),
+                        ("unload", ("sensor", "fan")),
+                    ],
+                )
+                self.assertIn("entry-1", hass.data["ecovent_v2"])
+
+    def test_binary_sensor_preserves_unknown_diagnostic_state(self):
+        method = _class_method(_tree(BINARY_SENSOR_PATH), "VentoBinarySensor", "is_on")
+        binary_class = ast.ClassDef(
+            name="ExecutableBinarySensor",
+            bases=[],
+            keywords=[],
+            body=[method],
+            decorator_list=[],
+        )
+        namespace = {}
+        exec(
+            compile(
+                ast.fix_missing_locations(
+                    ast.Module(body=[binary_class], type_ignores=[])
+                ),
+                str(BINARY_SENSOR_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+        sensor = namespace["ExecutableBinarySensor"]()
+        sensor._method = "alarm_status"
+        sensor._on_values = ("alarm", "warning")
+        sensor._state = None
+
+        for value, expected in (
+            ("alarm", True),
+            ("warning", True),
+            ("no", False),
+            ("unknown_3", None),
+            ("Unknown alarm_status 3", None),
+            (None, None),
+        ):
+            with self.subTest(value=value):
+                sensor._fan = types.SimpleNamespace(alarm_status=value)
+                self.assertIs(sensor.is_on, expected)
 
     def test_switch_none_state_remains_unknown(self):
         switch_source = SWITCH_PATH.read_text()
@@ -1230,6 +1351,32 @@ class Issue35RegressionTest(unittest.TestCase):
                 method_source = ast.get_source_segment(source, method)
                 self.assertIn(f'"{parameter}", "01"', method_source)
 
+    def test_manual_speed_number_rejects_retained_post_write_value(self):
+        from ecovent_test_helpers import Fan
+
+        method = _class_method(_tree(NUMBER_PATH), "VentoNumber", "async_set_native_value")
+        namespace = {}
+        exec(compile(ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])), str(NUMBER_PATH), "exec"), namespace)
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0e00"
+        fan._man_speed = 55
+        fan.set_man_speed_percent = lambda _value: True
+        fan.send_command = lambda *args, **kwargs: False
+
+        class Hass:
+            async def async_add_executor_job(self, callback, *args):
+                return callback(*args)
+
+        async def refresh():
+            fan._mark_param_unavailable(0x44)
+
+        number = types.SimpleNamespace(
+            hass=Hass(), coordinator=types.SimpleNamespace(async_refresh_confirmed=refresh),
+            _fan=fan, _func="man_speed", _write_mode="manual_speed_percent", native_value=55.0,
+        )
+        with self.assertRaisesRegex(RuntimeError, "retained control"):
+            asyncio.run(namespace["async_set_native_value"](number, 55.0))
+
     def test_fan_entity_service_callables_accept_home_assistant_service_call(self):
         """Callable entity services receive the entity and ServiceCall object."""
         tree = _tree(FAN_PATH)
@@ -1311,6 +1458,110 @@ class Issue35RegressionTest(unittest.TestCase):
         coordinator.last_update_success = True
         asyncio.run(namespace["async_refresh_confirmed"](coordinator))
         self.assertEqual(events, ["refresh", "refresh"])
+
+    def test_entity_writes_reject_refresh_that_does_not_match_target(self):
+        async def executor(callback, *args):
+            return callback(*args)
+
+        async def refresh():
+            return None
+
+        hass = types.SimpleNamespace(async_add_executor_job=executor)
+        coordinator = types.SimpleNamespace(async_refresh_confirmed=refresh)
+
+        switch_method = _class_method(
+            _tree(SWITCH_PATH), "VentoSwitch", "async_turn_on"
+        )
+        switch_namespace = {}
+        exec(
+            compile(
+                ast.fix_missing_locations(
+                    ast.Module(body=[switch_method], type_ignores=[])
+                ),
+                str(SWITCH_PATH),
+                "exec",
+            ),
+            switch_namespace,
+        )
+        switch = types.SimpleNamespace(
+            hass=hass,
+            coordinator=coordinator,
+            _fan=types.SimpleNamespace(
+                name="Test fan", set_param=lambda *_args: True
+            ),
+            _func="humidity_sensor_state",
+            is_on=False,
+        )
+        with self.assertRaisesRegex(RuntimeError, "did not confirm"):
+            asyncio.run(switch_namespace["async_turn_on"](switch))
+        switch.is_on = True
+        asyncio.run(switch_namespace["async_turn_on"](switch))
+
+        select_method = _class_method(
+            _tree(SELECT_PATH), "VentoSelect", "async_select_option"
+        )
+        select_namespace = {}
+        exec(
+            compile(
+                ast.fix_missing_locations(
+                    ast.Module(body=[select_method], type_ignores=[])
+                ),
+                str(SELECT_PATH),
+                "exec",
+            ),
+            select_namespace,
+        )
+        select = types.SimpleNamespace(
+            hass=hass,
+            coordinator=coordinator,
+            _fan=types.SimpleNamespace(
+                name="Test fan", set_param=lambda *_args: True
+            ),
+            _method="airflow",
+            options=["air_supply", "ventilation"],
+            current_option="ventilation",
+        )
+        with self.assertRaisesRegex(RuntimeError, "did not confirm"):
+            asyncio.run(
+                select_namespace["async_select_option"](select, "air_supply")
+            )
+        select.current_option = "air_supply"
+        asyncio.run(select_namespace["async_select_option"](select, "air_supply"))
+
+        number_method = _class_method(
+            _tree(NUMBER_PATH), "VentoNumber", "async_set_native_value"
+        )
+        number_namespace = {
+            "encode_number_write_value": lambda value, *_args, **_kwargs: int(value),
+            "encode_speed_percent": lambda value, *_args: str(int(value)),
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(
+                    ast.Module(body=[number_method], type_ignores=[])
+                ),
+                str(NUMBER_PATH),
+                "exec",
+            ),
+            number_namespace,
+        )
+        number = types.SimpleNamespace(
+            hass=hass,
+            coordinator=coordinator,
+            _fan=types.SimpleNamespace(
+                name="Test fan",
+                set_param=lambda *_args: True,
+                supports_capability=lambda *_args: False,
+            ),
+            _func="humidity_treshold",
+            _write_mode="raw",
+            _value_bytes=1,
+            native_value=45.0,
+        )
+        with self.assertRaisesRegex(RuntimeError, "did not confirm"):
+            asyncio.run(number_namespace["async_set_native_value"](number, 55.0))
+        number.native_value = 55.0
+        asyncio.run(number_namespace["async_set_native_value"](number, 55.0))
 
 
 if __name__ == "__main__":

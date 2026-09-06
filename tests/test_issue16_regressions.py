@@ -7,6 +7,8 @@ import logging
 import types
 import unittest
 
+from ecovent_test_helpers import Fan
+
 
 COORDINATOR_PATH = (
     Path(__file__).resolve().parents[1]
@@ -41,6 +43,7 @@ class Issue16RegressionTest(unittest.TestCase):
         self.assertIn('state not in ("on", "off")', should_refresh_source)
         self.assertIn('state == "on"', should_refresh_source)
         self.assertIn("self.updateCounter % 10 == 0", should_refresh_source)
+        self.assertIn("profile_supports_parameter", should_refresh_source)
         self.assertTrue(
             any(
                 isinstance(node, ast.Attribute)
@@ -54,6 +57,42 @@ class Issue16RegressionTest(unittest.TestCase):
                 for node in ast.walk(should_refresh)
             )
         )
+
+    def test_schedule_poll_reprobes_a_profile_row_learned_unsupported(self):
+        should_refresh = _class_method(
+            ast.parse(COORDINATOR_PATH.read_text()),
+            "EcoVentCoordinator",
+            "_should_refresh_schedule_week",
+        )
+        namespace = {"_LOGGER": logging.getLogger(__name__)}
+        exec(
+            compile(
+                ast.fix_missing_locations(
+                    ast.Module(body=[should_refresh], type_ignores=[])
+                ),
+                str(COORDINATOR_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        fan.weekly_schedule_state = "00"
+        fan._unsupported_optional_poll_params.add(0x0077)
+        coordinator = types.SimpleNamespace(
+            _fan=fan,
+            _weekly_schedule={},
+            updateCounter=10,
+        )
+
+        self.assertFalse(fan.supports_parameter("weekly_schedule_setup"))
+        self.assertTrue(fan.profile_supports_parameter("weekly_schedule_setup"))
+        self.assertTrue(namespace["_should_refresh_schedule_week"](coordinator))
+        coordinator.updateCounter = 1
+        self.assertFalse(namespace["_should_refresh_schedule_week"](coordinator))
+
+    def test_bgcp_fan_declares_transport_used_by_schedule_preflight(self):
+        self.assertEqual(Fan("192.0.2.1").transport, "bgcp_udp")
 
     def test_schedule_save_refreshes_edited_days_before_diffing(self):
         tree = ast.parse(COORDINATOR_PATH.read_text())
@@ -168,6 +207,8 @@ class Issue16RegressionTest(unittest.TestCase):
             def supports_parameter(self, _name):
                 return True
 
+            profile_supports_parameter = supports_parameter
+
             def set_param(self, *_args):
                 events.append("write")
                 return True
@@ -243,6 +284,8 @@ class Issue16RegressionTest(unittest.TestCase):
             def supports_parameter(self, _name):
                 return True
 
+            profile_supports_parameter = supports_parameter
+
             def set_param(self, *_args):
                 events.append("write-state")
                 return True
@@ -284,6 +327,90 @@ class Issue16RegressionTest(unittest.TestCase):
         self.assertEqual(coordinator._schedule_day, 2)
         self.assertEqual(events, ["validate", "listeners"])
 
+    def test_bgcp_final_period_is_validated_before_any_schedule_write(self):
+        method = _class_method(
+            ast.parse(COORDINATOR_PATH.read_text()),
+            "EcoVentCoordinator",
+            "async_write_schedule",
+        )
+        events = []
+        current = {
+            period: types.SimpleNamespace(
+                period=period,
+                speed="low",
+                end_hour=0 if period == 4 else period * 4,
+                end_minute=0,
+            )
+            for period in range(1, 5)
+        }
+        changed = [
+            types.SimpleNamespace(
+                period=1, speed="low", end_hour=5, end_minute=0
+            ),
+            types.SimpleNamespace(
+                period=4, speed="low", end_hour=1, end_minute=0
+            ),
+        ]
+        namespace = {
+            "SCHEDULE_DAY_TO_INDEX": {"Monday": 1},
+            "changed_schedule_records": lambda *_args: changed,
+        }
+        exec(
+            compile(
+                ast.fix_missing_locations(ast.Module(body=[method], type_ignores=[])),
+                str(COORDINATOR_PATH),
+                "exec",
+            ),
+            namespace,
+        )
+
+        class Hass:
+            async def async_add_executor_job(self, callback, *args):
+                return callback(*args)
+
+        class Fan:
+            name = "Vento"
+            transport = "bgcp_udp"
+            weekly_schedule_state = "off"
+            device_profile = types.SimpleNamespace(schedule_speed_modes=("low",))
+
+            def supports_parameter(self, _name):
+                return True
+
+            profile_supports_parameter = supports_parameter
+
+            def write_weekly_schedule_record(self, _record):
+                events.append("write")
+                return True
+
+        coordinator = types.SimpleNamespace(
+            hass=Hass(),
+            _fan=Fan(),
+            _schedule_day=1,
+            _weekly_schedule={1: current},
+            _load_schedule_days=lambda days: set(days),
+            schedule_day_records=lambda _day: current,
+            async_update_listeners=lambda: events.append("listeners"),
+        )
+
+        with self.assertRaisesRegex(ValueError, "must end at midnight"):
+            asyncio.run(
+                namespace["async_write_schedule"](
+                    coordinator,
+                    days=[
+                        {
+                            "day": "Monday",
+                            "periods": [
+                                {"period": 1, "end": "05:00"},
+                                {"period": 4, "end": "01:00"},
+                            ],
+                        }
+                    ],
+                )
+            )
+
+        self.assertEqual(events, [])
+
     def test_schedule_write_stops_after_device_rejects_schedule_rows(self):
         method = _class_method(
             ast.parse(COORDINATOR_PATH.read_text()),
@@ -310,6 +437,8 @@ class Issue16RegressionTest(unittest.TestCase):
 
             def supports_parameter(self, _name):
                 return False
+
+            profile_supports_parameter = supports_parameter
 
             def set_param(self, *_args):
                 events.append("write-state")
@@ -378,6 +507,8 @@ class Issue16RegressionTest(unittest.TestCase):
 
             def supports_parameter(self, _name):
                 return True
+
+            profile_supports_parameter = supports_parameter
 
             def set_param(self, *_args):
                 writes.append("state")
@@ -475,6 +606,8 @@ class Issue16RegressionTest(unittest.TestCase):
             def supports_parameter(self, _name):
                 return True
 
+            profile_supports_parameter = supports_parameter
+
             def set_param(self, name, value):
                 events.append(("write", name, value))
                 return True
@@ -534,6 +667,8 @@ class Issue16RegressionTest(unittest.TestCase):
 
             def supports_parameter(self, _name):
                 return True
+
+            profile_supports_parameter = supports_parameter
 
             def set_param(self, _name, _value):
                 events.append("write")
@@ -595,6 +730,8 @@ class Issue16RegressionTest(unittest.TestCase):
 
             def supports_parameter(self, _name):
                 return True
+
+            profile_supports_parameter = supports_parameter
 
             def write_weekly_schedule_record(self, _record):
                 return True
@@ -669,6 +806,8 @@ class Issue16RegressionTest(unittest.TestCase):
 
             def supports_parameter(self, _name):
                 return True
+
+            profile_supports_parameter = supports_parameter
 
             def write_weekly_schedule_record(self, record):
                 events.append(("write", record.period))

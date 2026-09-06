@@ -228,3 +228,8 @@ class VentoSelect(StableObjectIdMixin, CoordinatorEntity, SelectEntity):
             raise RuntimeError(
                 f"Failed to write {self._method}={option!r} for {self._fan.name}"
             )
+        if self.current_option != option:
+            raise RuntimeError(
+                f"Device did not confirm {self._method}={option!r} "
+                f"for {self._fan.name}"
+            )

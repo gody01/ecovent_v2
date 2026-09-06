@@ -87,6 +87,8 @@ class WeeklyScheduleRecord:
 
     def to_hex_payload(self) -> str:
         """Encode the schedule record to the 0x0077 payload bytes."""
+        if self.period == 4 and (self.end_hour, self.end_minute) != (0, 0):
+            raise ValueError("BGCP schedule period 4 must end at midnight")
         speed_value = SCHEDULE_SPEED_TO_VALUE[self.speed]
         payload = bytes(
             [

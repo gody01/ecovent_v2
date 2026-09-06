@@ -177,6 +177,46 @@ class DiscoveryTest(unittest.TestCase):
 
 
 class TransportTest(unittest.TestCase):
+    def test_poll_result_cannot_be_replaced_by_a_concurrent_write(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0e00"
+        response_ready = threading.Event()
+        writer_started = threading.Event()
+        writer_done = threading.Event()
+        results = []
+        sent = []
+        fan.send = lambda data: sent.append(data) or True
+        fan.receive = lambda: packet_with_payload([0x25, 55] if sent[-1].startswith("01") else [1, 1])
+        original = fan.send_command
+
+        def send_command(command, *args, **kwargs):
+            result = original(command, *args, **kwargs)
+            if command == fan.func["read"]:
+                response_ready.set()
+                self.assertTrue(writer_started.wait(1))
+                writer_done.wait(0.05)
+            return result
+
+        fan.send_command = send_command
+        def write():
+            response_ready.wait(1)
+            writer_started.set()
+            try:
+                results.append(fan.set_param("state", "on"))
+            finally:
+                writer_done.set()
+
+        thread = threading.Thread(target=write)
+        thread.start()
+        try:
+            poll_ok = fan._read_params("0025", required_params=frozenset())
+        finally:
+            thread.join(1)
+        self.assertFalse(thread.is_alive())
+        self.assertTrue(poll_ok)
+        self.assertEqual(results, [True])
+        self.assertEqual(sum(data.startswith("01") for data in sent), 1)
+
     def test_receive_before_send_returns_false(self):
         fan = Fan("192.0.2.1")
         self.assertFalse(fan.receive())

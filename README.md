@@ -560,6 +560,15 @@ Version 1.2.24
   and add the reporter-confirmed Flexit/Romventilator Roomie One V2 relabel plus
   related Flexit search-index candidates.
 
+Version 1.2.28
+* Preserve the last known Vento control state across silent poll omissions and
+  retry the omitted control on the next poll without treating retained data as
+  confirmation of a command.
+* Confirm control writes and schedule changes from fresh targeted device reads,
+  while clearing malformed, rejected, or identity-stale control values.
+* Keep related protocol capability caches, lifecycle cleanup, and unknown alarm
+  state consistent across partial, malformed, and identity-changing responses.
+
 Version 1.2.25
 * Expose Freshpoint/Breezy protocol airflow enum value `3` as `extract` and
   keep other unknown airflow values as `Unknown airflow <value>`.

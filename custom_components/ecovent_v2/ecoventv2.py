@@ -3,7 +3,7 @@
 import logging
 from threading import RLock
 
-__version__ = "loc_1.2.27"
+__version__ = "loc_1.2.28"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -300,6 +300,7 @@ class Fan(
         name="ecofanv2",
         port=4000,
     ):
+        self.transport = "bgcp_udp"
         self._name = name
         self._host = host
         self._port = port
@@ -328,5 +329,6 @@ class Fan(
         if not self._id:
             return False
         self.get_param("unit_type")
+        self.get_param("firmware")
         self._apply_device_profile()
         return self.update()

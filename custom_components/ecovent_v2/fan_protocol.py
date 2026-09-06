@@ -14,6 +14,7 @@ _LOGGER = logging.getLogger(__name__)
 MAX_BULK_READ_PARAMS = 12
 OPTIONAL_PARAM_RETRY_BACKOFF_READS = 10
 BULK_READ_REPROBE_READS = 10
+VENTO_SOFT_MISS_CONTROL_PARAMS = frozenset({0x0001, 0x0002, 0x0044})
 PRESERVE_ON_SOFT_MISS_PARAMS = frozenset(
     {
         0x007C,  # device_search
@@ -247,6 +248,7 @@ class FanProtocolMixin:
                 for i in param[1]:
                     if param[1][i] == value:
                         return [index, i]
+                raise ValueError(f"Invalid {idx} value: {value!r}")
             return [index, None]
         else:
             return [None, None]
@@ -398,7 +400,15 @@ class FanProtocolMixin:
                         extra_write_parameters, False
                     )
                     return False
-                if not self._parameter_values_are_decodable(
+                if expected_write_values is not None and set(
+                    expected_extra_write_values
+                ) & set(expected_write_values):
+                    self._notify_extra_write_parameters_result(
+                        extra_write_parameters, False
+                    )
+                    extra_write_parameters = ""
+                    expected_extra_write_values = None
+                elif not self._parameter_values_are_decodable(
                     expected_extra_write_values
                 ):
                     self._notify_extra_write_parameters_result(
@@ -447,6 +457,14 @@ class FanProtocolMixin:
                         decoded_read_ids = self._store_staged_response_params(
                             requested_read_ids, record_unknown=False
                         )
+                        # An answered but undecodable control row is not silence.
+                        invalid_read_ids = (
+                            requested_read_ids
+                            & set(self._last_raw_response_param_ids or ())
+                        ) - decoded_read_ids
+                        for param_id in invalid_read_ids:
+                            if self._is_vento_soft_miss_control(param_id):
+                                self._mark_param_unavailable(param_id, invalid=True)
                         read_confirmed = bool(
                             requested_read_ids
                             & (decoded_read_ids | set(unsupported_ids))
@@ -575,10 +593,32 @@ class FanProtocolMixin:
             read_name="preset speed settings",
         )
 
-    def _mark_param_unavailable(self, param_id):
-        """Clear a missing soft-poll value so Home Assistant does not keep stale data."""
+    def _is_vento_soft_miss_control(self, param_id):
+        return self.profile_key == "vento" and param_id in VENTO_SOFT_MISS_CONTROL_PARAMS
+
+    @property
+    def retained_control_params(self):
+        """Control values kept for display that still need a fresh read."""
+        return frozenset(getattr(self, "_retained_control_params", ()))
+
+    def confirm_retained_controls(self, parameters):
+        """Read only retained controls needed by the caller, requiring every row."""
+        param_ids = {self.get_params_index(name) for name in parameters}
+        retained = self.retained_control_params & param_ids
+        if not retained:
+            return True
+        return self._read_params("".join(f"{param_id:04x}" for param_id in sorted(retained)))
+
+    def _mark_param_unavailable(self, param_id, *, unsupported=False, invalid=False):
+        """Retain soft-missing controls/identity, but clear explicitly rejected data."""
         if param_id in PRESERVE_ON_SOFT_MISS_PARAMS:
             return
+        if not (unsupported or invalid) and self._is_vento_soft_miss_control(param_id):
+            definition = self.params[param_id]
+            if getattr(self, f"_{definition[0]}", None) is not None:
+                self._retained_control_params = set(self.retained_control_params) | {param_id}
+            return
+        self._retained_control_params = set(self.retained_control_params) - {param_id}
 
         definition = self.params.get(param_id)
         if definition is None:
@@ -594,7 +634,9 @@ class FanProtocolMixin:
         return backoff
 
     def _mark_param_available_for_retry(self, param_id):
+        self._retained_control_params = set(self.retained_control_params) - {param_id}
         self._optional_param_backoff().pop(param_id, None)
+        self._unsupported_optional_poll_param_ids().discard(param_id)
 
     def _delay_optional_param_retry(self, param_id):
         self._optional_param_backoff()[param_id] = OPTIONAL_PARAM_RETRY_BACKOFF_READS
@@ -620,6 +662,24 @@ class FanProtocolMixin:
         return unsupported
 
     def _read_params(
+        self,
+        request,
+        *,
+        required_params=None,
+        require_all_requested=False,
+        read_name="custom read",
+    ):
+        # Response ids and poll bookkeeping share the transaction lock. A write
+        # must not replace them between send_command and the poll's accounting.
+        with self._command_lock:
+            return self._read_params_locked(
+                request,
+                required_params=required_params,
+                require_all_requested=require_all_requested,
+                read_name=read_name,
+            )
+
+    def _read_params_locked(
         self,
         request,
         *,
@@ -678,16 +738,18 @@ class FanProtocolMixin:
             )
             try_bulk_read = self._bulk_read_reprobe_countdown == 0
 
-        def mark_unavailable(param_id, *, delay_optional_retry=False):
+        def mark_unavailable(param_id, *, unsupported=False):
             nonlocal complete
             if param_id in required_param_ids:
+                if unsupported or self._is_vento_soft_miss_control(param_id):
+                    self._mark_param_unavailable(param_id, unsupported=unsupported)
                 complete = False
                 missing_required_params.add(param_id)
                 return
 
             missing_optional_params.add(param_id)
-            self._mark_param_unavailable(param_id)
-            if delay_optional_retry:
+            self._mark_param_unavailable(param_id, unsupported=unsupported)
+            if unsupported or not self._is_vento_soft_miss_control(param_id):
                 self._delay_optional_param_retry(param_id)
 
         for start in range(0, len(request), chunk_size):
@@ -716,7 +778,7 @@ class FanProtocolMixin:
                         unsupported_params.add(param_id)
                         if param_id not in required_param_ids:
                             self._unsupported_optional_poll_param_ids().add(param_id)
-                        mark_unavailable(param_id, delay_optional_retry=True)
+                        mark_unavailable(param_id, unsupported=True)
                     missing = [
                         param
                         for param in missing
@@ -770,7 +832,7 @@ class FanProtocolMixin:
                     unsupported_params.add(param_id)
                     if param_id not in required_param_ids:
                         self._unsupported_optional_poll_param_ids().add(param_id)
-                    mark_unavailable(param_id, delay_optional_retry=True)
+                    mark_unavailable(param_id, unsupported=True)
                     continue
                 if param_complete and response_ids is not None:
                     param_complete = param_id in response_ids
@@ -780,7 +842,9 @@ class FanProtocolMixin:
                     self._mark_param_available_for_retry(param_id)
                 if not param_complete:
                     no_response_params.add(param_id)
-                    mark_unavailable(param_id, delay_optional_retry=True)
+                    # Vento can transiently omit its control rows. Keep their
+                    # values and retry next poll; other probes retain backoff.
+                    mark_unavailable(param_id)
                     if param_id not in required_param_ids:
                         _LOGGER.debug(
                             "EcoVent optional parameter 0x%04X did not respond "
@@ -803,6 +867,11 @@ class FanProtocolMixin:
         ):
             complete = False
         available = complete and received_response
+        if required_params is not None and not available and self.profile_key == "vento":
+            # Failed quick polls also invalidate confidence in controls they did
+            # not request. Keep display values, but never use them for a no-op.
+            for param_id in VENTO_SOFT_MISS_CONTROL_PARAMS - received_params:
+                self._mark_param_unavailable(param_id)
         if missing_required_params or missing_optional_params or unsupported_params:
             log_level = logging.WARNING if missing_required_params else logging.DEBUG
             _LOGGER.log(
@@ -835,7 +904,10 @@ class FanProtocolMixin:
     def set_param(self, param, value):
         if not self.supports_parameter(param):
             return False
-        valpar = self.get_params_values(param, value)
+        try:
+            valpar = self.get_params_values(param, value)
+        except ValueError:
+            return False
         # print ( "EcoventV2: " + " " + param + "/" + value , file = sys.stderr )
         if valpar[0] is not None:
             if valpar[1] is not None:
@@ -908,15 +980,21 @@ class FanProtocolMixin:
     def get_param(self, param):
         idx = self.get_params_index(param)
         if idx is not None:
-            response = self.send_command(
-                self.func["read"], hex(idx).replace("0x", "").zfill(4)
-            )
-            return response and idx in set(self._last_response_param_ids or ())
+            with self._command_lock:
+                response = self.send_command(self.func["read"], f"{idx:04x}")
+                confirmed = response and idx in set(self._last_response_param_ids or ())
+                if confirmed:
+                    self._mark_param_available_for_retry(idx)
+                elif idx in set(self._last_unsupported_param_ids or ()):
+                    self._mark_param_unavailable(idx, unsupported=True)
+                elif self._is_vento_soft_miss_control(idx):
+                    self._mark_param_unavailable(idx)
+                return confirmed
         return False
 
     def read_weekly_schedule_record(self, day, period):
         """Read one weekly schedule period via the special 0x0077 request."""
-        if not self.supports_parameter("weekly_schedule_setup"):
+        if not self.profile_supports_parameter("weekly_schedule_setup"):
             return None
 
         if day < 1 or day > 7 or period < 1 or period > 4:
@@ -940,6 +1018,7 @@ class FanProtocolMixin:
             self._weekly_schedule_setup = None
             self._weekly_schedule_setup_record = None
             return None
+        self._mark_param_available_for_retry(0x0077)
         return record
 
     def read_weekly_schedule_day(self, day):

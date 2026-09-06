@@ -55,7 +55,7 @@ reports and earlier compatibility fixes show these differences:
 
 | Area | PDF / implementation expectation | Observed device behavior | Integration policy |
 | -- | -- | -- | -- |
-| Vento/TwinFresh availability rows | The Vento-family map documents `0x0001` (`state`), `0x0002` (`speed`), and, in the B133 Vento guide, `0x0044` (`man_speed`). | Issue #76 shows `0x0001`/`0x0002` can be absent; Issue #85 shows `0x0044` can also be absent while other requested rows are tracked. | Do not treat one row as universally stable. A Vento full/quick poll is available when the device returns at least one tracked requested row; omitted rows are logged, cleared, and retried with the existing backoff path. An empty or untracked response still fails the poll. |
+| Vento/TwinFresh availability rows | The Vento-family map documents `0x0001` (`state`), `0x0002` (`speed`), and, in the B133 Vento guide, `0x0044` (`man_speed`). | Issue #76 shows `0x0001`/`0x0002` can be absent; Issue #85 shows `0x0044` can also be absent while other requested rows are tracked. | Do not treat one row as universally stable. A Vento full/quick poll is available when the device returns at least one tracked requested row; soft-missing control rows retain their last known values and are retried on the next poll (gody01/ecovent_v2#100). Explicitly unsupported rows are still cleared and suppressed. An empty or untracked response still fails the poll. |
 | Vento Expert A30 / A50-1 / DUO A30 option rows | The Vento-family maps include analog-voltage, preset-speed, secondary-fan, and filter-timer rows such as `0x0016`, `0x002D`, `0x003A` through `0x003F`, `0x004B`, `0x0063`, `0x00B8`, and `0x0305`. | The observation table above shows old A30, A50, and DUO A30 firmware can reject some or all of those rows, but newer A50 firmware may still support the filter timer. | Keep the rows in the Vento entity map because other Vento-family devices and newer firmware may support them, but treat their `0xFD` replies as unsupported optional data for known firmware-specific `0x0300`/`0x0400`/`0x0500` variants. Do not use those optional rows as proof that the device itself is unavailable or as a repeated hardware/profile report by themselves. |
 | TwinFresh manual-speed row | The B133 Vento guide explicitly lists parameter `0x0044`; the TwinFresh Style PDFs reference manual speed mode `255` using parameter 68 but omit a separate `0x0044` table row. | TwinFresh-family devices and the Home Assistant silent manual-speed path use the manual-speed row successfully. | Keep `0x0044` in the shared `vento` profile because both document the manual-speed mode path, even though one PDF omits the row from its table. |
 | Breezy/Freshpoint standard sensor rows | Freshpoint product documents describe relative humidity and four built-in temperature sensors on standard and Pro units; only the Pro package adds tVOC/CO2eq air-quality sensing. | Issue #74 reports a Freshpoint 160 whose humidity, built-in temperature, CO2, VOC, recovery-efficiency, and schedule entities stay unknown while the fan still works. Earlier reports also showed optional rows omitted or explicitly rejected. | Keep `0x0001`, `0x0002`, and `0x0044` as Breezy/Freshpoint availability rows. Missing or unsupported non-critical sensor/feature rows are retried, backed off, cleared, and hidden when permanently unsupported instead of flickering the fan entity unavailable. |
@@ -307,27 +307,66 @@ read parameters per bulk request, records returned parameters separately from
 explicitly unsupported (`0xFD`) parameters, and retries only omitted parameters
 individually. `0xFD` means the controller answered but did not provide fresh
 data for that row: unsupported required rows fail the read, and unsupported
-optional rows are cleared just like omitted optional rows.
+optional rows are cleared and excluded from subsequent optional polls.
 
 The standard and Pro variants share one unit type, and real Freshpoint 160-E
 reports before 1.2.17 showed the fan/control rows working while humidity,
 temperature, CO2, VOC, alarm, schedule, or airflow rows could stay absent. The
 Breezy/Freshpoint poll therefore treats only `0x0001` (`state`), `0x0002`
 (`speed`), and `0x0044` (`man_speed`) as fatal for coordinator availability.
-Quick polling includes those same control proof rows. Missing or unsupported
-non-critical rows are retried once, then put into a ten-poll retry backoff;
-their HA entities report `unknown`/`unavailable` instead of stale or false
+Quick polling includes those same control proof rows. Missing or unsupported non-critical rows are retried once, then put into a
+ten-poll retry backoff; their HA entities report `unknown`/`unavailable` instead of stale or false
 states. Automatic weekly-schedule cache loading waits until `0x0072`
 (`weekly_schedule_state`) reports `on` or `off`; if that row is unavailable,
 setup/reload avoids probing all 28 `0x0077` schedule records. Identity rows such
 as `0x00B9` (`unit_type`) are preserved on soft misses so the active profile is
-not lost during a degraded poll. Targeted reads remain all-required and bypass
+not lost during a degraded poll. For the Vento profile, soft-missing control rows `0x0001`, `0x0002`,
+and `0x0044` retain their last known values and retry next poll without backoff.
+Other optional rows and other profiles keep their existing clearing/backoff policy.
+Retained control values are display-only evidence: fan commands require a
+successful targeted read before accepting them as unchanged or confirmed.
+This requirement survives quick polls that do not request the retained row,
+and failed polls mark cached controls unconfirmed. Confirmation reads only the
+parameters used by a command: power-off does not depend on manual speed.
+The manual-speed number entity uses the same targeted-confirmation policy.
+Malformed control values and explicit rejections clear the cache; a changed
+unit type or firmware also clears controls inherited from the previous identity.
+Both identity rows are decoded before controls in the same response. Poll
+accounting and transport commands share the lock so concurrent writes cannot
+replace a poll response before its parameter IDs are consumed.
+
+A captured TwinFresh Style Wi-Fi (`0x0E00`, firmware `0.3 2021-10-04`) returns
+a four-byte `0x0064`: minute, hour, then little-endian 16-bit days. This exact
+variant uses the existing four-byte decoder with minute/hour bounds and a
+365-day limit; other Vento variants retain their three-byte requirement.
+Initialization reads firmware before the first full poll. The captured full/quick
+cycle is replayed by `tests/test_twinfresh_capture.py`; identity/IP values are
+redacted, and operational payload bytes are preserved.
+For the HA-visible regression, run `python tests/ha_issue100_smoke.py` in an
+environment with Home Assistant installed (validated with `2026.6.0.dev0`).
+The harness uses real coordinator updates, entity listeners, and the HA state
+machine with captured values and controlled omissions. Each of the three control
+rows is checked across 26 accelerated cycles with bulk and individual recovery.
+It also checks failed command confirmation, offline recovery, empty/unrelated
+replies, wrong device IDs, invalid checksums, malformed controls, and explicit
+rejections. No network traffic is sent. Schedule and Repairs side effects are
+excluded from this focused test.
+
+`python tests/ha_issue100_smoke.py --baseline b72970a` substitutes the old polling
+handlers for comparison. With state/speed absent from bulk replies, the old
+handlers produce 22 blank cycles (11 minutes at the default interval); the current
+handlers preserve the displayed value and accept the changed value on the next
+full poll. This is deterministic fault injection, not a measurement of natural
+packet-loss frequency or a 13-minute wall-clock soak.
+
+Retaining a control value does not satisfy poll liveness: at least one requested row must be received,
+and an explicit rejection still clears the value. Targeted reads remain all-required and bypass
 optional poll backoff. The response parser keeps the current `0xFF` high-byte
 page until another page marker changes it, as required by the guide's packet
 example. Fixed-width rows, including one-byte enums/scalars, identity fields,
 and structured multi-byte values, are decoded only when their response value
-has the documented byte count. Malformed rows remain reportable as unknown and
-cannot overwrite the last valid decoded state. Explicitly variable-width rows,
+has the documented byte count. Malformed rows remain reportable as unknown and cannot install invalid decoded
+values; malformed Vento control rows additionally clear the cached control value. Explicitly variable-width rows,
 such as the alarm list and observed filter countdown variants, retain their own
 format validation. The extract-fan three-byte BOOST/SILENT counters are
 little-endian totals in seconds, not the component-byte time format used by

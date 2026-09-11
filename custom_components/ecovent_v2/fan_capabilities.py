@@ -45,7 +45,8 @@ _PARAMETER_RANGES = {
     },
     "breezy": {
         "battery_voltage": (0, 5000),
-        "co2": (0, 2000),
+        # CO2 measurements can exceed the PDF's 2000 ppm range (issue #104).
+        # Keep the writable threshold bounded independently.
         "co2_treshold": (400, 2000),
         "fan1_speed": (0, 5000),
         "fan2_speed": (0, 5000),

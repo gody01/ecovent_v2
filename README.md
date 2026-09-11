@@ -623,3 +623,14 @@ Version 1.2.25
   explicit manual clock synchronization remains available and may be audible.
 * Reject malformed Breezy/Freshbox alarm lists with an unpaired trailing byte
   instead of silently dropping the tail.
+
+Version 1.2.30
+* Accept Freshpoint/Breezy two-byte CO2 measurements above the PDF's 2000 ppm
+  reading range without widening the 400-2000 ppm writable CO2 threshold.
+* Recognize the optional registers rejected by Breezy/Freshpoint unit type
+  `0x1100`, firmware `0.8 2024-03-15`. Rejected rows stay hidden without
+  opening a Repair; unknown firmware and extra rejected rows remain reportable.
+* Accept BGCP `0x0077` final schedule rows ending at `23:59` instead of
+  rejecting them and leaving each day incomplete. Preserve either `00:00` or
+  `23:59` and the device-reserved byte through reads and period-speed updates.
+  Invalid terminal times remain rejected before any schedule record is written.

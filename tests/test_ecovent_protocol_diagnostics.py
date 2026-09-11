@@ -279,6 +279,38 @@ class ProtocolDiagnosticsTest(unittest.TestCase):
             reportable_hardware_profile_mismatch_param_ids(fan), frozenset()
         )
 
+    def test_issue107_freshpoint_160e_standard_rows_do_not_request_report(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        fan.firmware = "00080f03e807"
+        fan._unsupported_optional_poll_params = {
+            0x0011,
+            0x001A,
+            0x0025,
+            0x0027,
+            0x0129,
+            0x0315,
+            0x031F,
+            0x0320,
+            0x0403,
+            0x0404,
+            0x0405,
+        }
+
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan), frozenset()
+        )
+
+    def test_issue107_freshpoint_extra_rejection_still_requests_report(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        fan.firmware = "00080f03e807"
+        fan._unsupported_optional_poll_params = {0x0011, 0x0083}
+
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan), frozenset({0x0083})
+        )
+
     def test_freshpoint_160e_unknown_firmware_still_requests_report(self):
         fan = Fan("192.0.2.1")
         fan.unit_type = "1100"

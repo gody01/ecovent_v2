@@ -1056,6 +1056,11 @@ def test_semantic_writes_schedule_and_rtc_preserve_a21_encoding():
     assert client.holding_registers[128:130] == [0x0518, 0x0A1E]
     assert ("write_registers", 128, [0x0518, 0x0A1E], 7) in client.calls
 
+    # The BGCP terminal-period restriction is not an A21 schedule rule.
+    assert fan.write_weekly_schedule_record(
+        WeeklyScheduleRecord(1, 4, "speed_5", 23, 58, reserved=24)
+    )
+
     assert fan.set_rtc_datetime(datetime(2026, 7, 16, 12, 34, 56))
     assert client.holding_registers[61:65] == [0x2238, 12, 0x1004, 0x071A]
     assert ("write_registers", 61, [0x2238, 12, 0x1004, 0x071A], 7) in client.calls

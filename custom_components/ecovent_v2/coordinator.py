@@ -11,6 +11,7 @@ from .schedule_helpers import (
     SCHEDULE_DAY_TO_INDEX,
     WeeklyScheduleRecord,
     changed_schedule_records,
+    validate_bgcp_schedule_day,
     validate_schedule_day,
 )
 
@@ -293,7 +294,11 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                 )
                 continue
             try:
-                validate_schedule_day([records[period] for period in range(1, 5)])
+                day_records = [records[period] for period in range(1, 5)]
+                if getattr(self._fan, "transport", None) == "bgcp_udp":
+                    validate_bgcp_schedule_day(day_records)
+                else:
+                    validate_schedule_day(day_records)
             except ValueError as err:
                 _LOGGER.debug(
                     "EcoVentCoordinator: invalid schedule readback for %s day %s "
@@ -592,9 +597,11 @@ class EcoVentCoordinator(DataUpdateCoordinator):
             self._weekly_schedule.pop(day, None)
             return None
         try:
-            validate_schedule_day(
-                [confirmed_records[period] for period in range(1, 5)]
-            )
+            day_records = [confirmed_records[period] for period in range(1, 5)]
+            if getattr(self._fan, "transport", None) == "bgcp_udp":
+                validate_bgcp_schedule_day(day_records)
+            else:
+                validate_schedule_day(day_records)
         except ValueError:
             self._weekly_schedule.pop(day, None)
             return None
@@ -653,11 +660,9 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                 for record in records_to_write:
                     expected_records[record.period] = record
                 if getattr(self._fan, "transport", None) == "bgcp_udp":
-                    final_period = expected_records[4]
-                    if (final_period.end_hour, final_period.end_minute) != (0, 0):
-                        raise ValueError(
-                            "BGCP schedule period 4 must end at midnight"
-                        )
+                    validate_bgcp_schedule_day(
+                        [expected_records[period] for period in range(1, 5)]
+                    )
                 working_records_by_day[day] = expected_records
                 prepared.append((day_label, day, records_to_write, expected_records))
             return prepared

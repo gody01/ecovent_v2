@@ -13,6 +13,31 @@ from ecovent_test_helpers import Fan, packet_with_payload
 
 
 class TwinFreshCaptureTest(unittest.TestCase):
+    def test_reported_schedule_final_frames_are_accepted_for_both_identities(self):
+        """Replay #102's posted 0x0077 frames; this is not device-I/O proof."""
+        frames = (
+            ("fe06770101020f0006", 1, 6, 0),
+            ("fe06770102020f0008", 2, 8, 0),
+            ("fe06770103000f0015", 3, 21, 0),
+            ("fe06770104020f3b17", 4, 23, 59),
+            ("fe06770104020f0000", 4, 0, 0),
+        )
+        for firmware in ("00050a07e807", "0003040ae507"):
+            for payload, period, hour, minute in frames:
+                with self.subTest(firmware=firmware, payload=payload):
+                    fan = Fan("192.0.2.1")
+                    fan.unit_type = "0e00"
+                    fan.firmware = firmware
+                    self.assertTrue(
+                        fan.parse_response(packet_with_payload(bytes.fromhex(payload)))
+                    )
+                    record = fan._weekly_schedule_setup_record
+                    self.assertIsNotNone(record)
+                    self.assertEqual(
+                        (record.period, record.end_hour, record.end_minute, record.reserved),
+                        (period, hour, minute, 15),
+                    )
+
     def test_reported_firmware_05_accepts_the_captured_filter_frame(self):
         """Apply the #101 identity to the physical 0.3 frame format replay."""
         capture = json.loads(

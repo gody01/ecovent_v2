@@ -202,6 +202,36 @@ class ProfileParseTest(unittest.TestCase):
         self.assertEqual(fan.screen_off_start_time, "22:30")
         self.assertEqual(fan.screen_off_end_time, "07:00")
 
+    def test_breezy_freshpoint_co2_measurement_accepts_unsigned_two_byte_value(self):
+        """Current CO2 is a measurement, not the writable threshold setting."""
+        fan = Fan("192.0.2.1")
+
+        for ppm in (1999, 2000, 2001, 2014, 2272, 4096, 999):
+            with self.subTest(ppm=ppm):
+                self.assertTrue(
+                    fan.parse_response(
+                        packet_with_payload(
+                            [
+                                0xFE, 0x02, 0xB9, 0x11, 0x00,
+                                0xFE, 0x02, 0x27, *ppm.to_bytes(2, "little"),
+                            ]
+                        )
+                    )
+                )
+                self.assertEqual(fan.profile_key, "breezy")
+                self.assertEqual(fan.co2, ppm)
+                self.assertIn(0x0027, fan._last_response_param_ids)
+
+        self.assertTrue(
+            fan.parse_response(packet_with_payload([0xFE, 0x02, 0x1A, 0xD0, 0x07]))
+        )
+        self.assertEqual(fan.co2_treshold, 2000)
+        self.assertTrue(
+            fan.parse_response(packet_with_payload([0xFE, 0x02, 0x1A, 0xD1, 0x07]))
+        )
+        self.assertEqual(fan.co2_treshold, 2000)
+        self.assertEqual(fan.unknown_params, {0x001A: "d107"})
+
     def test_breezy_freshpoint_profile_exposes_weekly_schedule_state(self):
         fan = Fan("192.0.2.1")
         self.assertTrue(

@@ -3,7 +3,11 @@
 import unittest
 
 from ecovent_test_helpers import COMPONENT_PATH  # noqa: F401  Ensures sys.path setup.
-from schedule_helpers import WeeklyScheduleRecord, changed_schedule_records
+from schedule_helpers import (
+    WeeklyScheduleRecord,
+    changed_schedule_records,
+    validate_bgcp_schedule_day,
+)
 
 
 def schedule_records(day=1):
@@ -96,14 +100,57 @@ class WeeklyScheduleWritePlanTest(unittest.TestCase):
                 [{"period": 5, "speed": "Low"}],
             )
 
-    def test_bgcp_final_period_encoder_requires_midnight(self):
-        with self.assertRaisesRegex(ValueError, "must end at midnight"):
-            WeeklyScheduleRecord(1, 4, "low", 1, 0).to_hex_payload()
+    def test_bgcp_final_period_encoder_preserves_reported_2359(self):
+        final = WeeklyScheduleRecord(1, 4, "medium", 23, 59, reserved=15)
+        self.assertEqual(final.to_hex_payload(), "0104020f3b17")
 
         self.assertEqual(
             WeeklyScheduleRecord(1, 4, "low", 0, 0).to_hex_payload(),
             "010401000000",
         )
+
+    def test_final_period_serializer_exposes_exact_read_only_end(self):
+        for hour, minute in ((0, 0), (23, 59)):
+            with self.subTest(end=(hour, minute)):
+                self.assertEqual(
+                    WeeklyScheduleRecord(1, 4, "low", hour, minute).as_dict(),
+                    {
+                        "period": 4,
+                        "speed": "Low",
+                        "editable_end": False,
+                        "end": f"{hour:02d}:{minute:02d}",
+                    },
+                )
+
+    def test_period_four_speed_change_retains_reported_2359_and_reserved_byte(self):
+        records = schedule_records()
+        records[4] = WeeklyScheduleRecord(1, 4, "low", 23, 59, reserved=15)
+
+        self.assertEqual(
+            changed_schedule_records(1, records, [{"period": 4, "speed": "High"}]),
+            [WeeklyScheduleRecord(1, 4, "high", 23, 59, reserved=15)],
+        )
+
+    def test_bgcp_final_period_rejects_other_end_times_before_write(self):
+        records = schedule_records()
+        records[4] = WeeklyScheduleRecord(1, 4, "low", 23, 58)
+
+        with self.assertRaisesRegex(ValueError, "00:00 or 23:59"):
+            validate_bgcp_schedule_day(list(records.values()))
+
+        with self.assertRaisesRegex(ValueError, "00:00 or 23:59"):
+            WeeklyScheduleRecord(1, 4, "low", 1, 0).to_hex_payload()
+
+    def test_malformed_schedule_payload_is_rejected_before_write_plan(self):
+        for payload in (
+            {"period": 1, "speed": "No such speed"},
+            {"period": 1, "end": "not-a-time"},
+            {"period": 1, "end": "24:00"},
+            {"period": 1, "end": "06:000"},
+        ):
+            with self.subTest(payload=payload):
+                with self.assertRaises(ValueError):
+                    changed_schedule_records(1, schedule_records(), [payload])
 
 
 if __name__ == "__main__":

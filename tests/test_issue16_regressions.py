@@ -398,9 +398,15 @@ class Issue16RegressionTest(unittest.TestCase):
                 period=4, speed="low", end_hour=1, end_minute=0
             ),
         ]
+        def validate_bgcp_schedule_day(records):
+            final = records[3]
+            if (final.end_hour, final.end_minute) not in {(0, 0), (23, 59)}:
+                raise ValueError("BGCP schedule period 4 must end at 00:00 or 23:59")
+
         namespace = {
             "SCHEDULE_DAY_TO_INDEX": {"Monday": 1},
             "changed_schedule_records": lambda *_args: changed,
+            "validate_bgcp_schedule_day": validate_bgcp_schedule_day,
         }
         exec(
             compile(
@@ -440,7 +446,7 @@ class Issue16RegressionTest(unittest.TestCase):
             async_update_listeners=lambda: events.append("listeners"),
         )
 
-        with self.assertRaisesRegex(ValueError, "must end at midnight"):
+        with self.assertRaisesRegex(ValueError, "00:00 or 23:59"):
             asyncio.run(
                 namespace["async_write_schedule"](
                     coordinator,

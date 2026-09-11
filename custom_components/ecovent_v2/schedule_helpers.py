@@ -58,6 +58,8 @@ SCHEDULE_SPEED_TO_VALUE = {
     "speed_5": 5,
 }
 
+BGCP_FINAL_PERIOD_ENDS = frozenset({(0, 0), (23, 59)})
+
 
 @dataclass(frozen=True)
 class WeeklyScheduleRecord:
@@ -87,8 +89,7 @@ class WeeklyScheduleRecord:
 
     def to_hex_payload(self) -> str:
         """Encode the schedule record to the 0x0077 payload bytes."""
-        if self.period == 4 and (self.end_hour, self.end_minute) != (0, 0):
-            raise ValueError("BGCP schedule period 4 must end at midnight")
+        validate_bgcp_schedule_record(self)
         speed_value = SCHEDULE_SPEED_TO_VALUE[self.speed]
         payload = bytes(
             [
@@ -115,9 +116,8 @@ class WeeklyScheduleRecord:
             "period": self.period,
             "speed": self.speed_option,
             "editable_end": self.period < 4,
+            "end": f"{self.end_hour:02d}:{self.end_minute:02d}",
         }
-        if self.period < 4:
-            data["end"] = f"{self.end_hour:02d}:{self.end_minute:02d}"
         return data
 
 
@@ -127,7 +127,10 @@ def build_schedule_record(
     current: WeeklyScheduleRecord | None,
 ) -> WeeklyScheduleRecord:
     """Build one validated schedule record from a partial service payload."""
-    period = int(period_data["period"])
+    try:
+        period = int(period_data["period"])
+    except (KeyError, TypeError, ValueError) as err:
+        raise ValueError("Schedule payload period must be an integer") from err
     if period not in range(1, 5):
         raise ValueError(f"Invalid schedule period: {period}")
 
@@ -138,21 +141,56 @@ def build_schedule_record(
     end_value = period_data.get("end")
     end_time_value = current.end_time
     if end_value is not None:
-        hour_str, minute_str = str(end_value).split(":", 1)
-        end_time_value = time(int(hour_str), int(minute_str))
+        try:
+            end_text = str(end_value)
+            if (
+                len(end_text) != 5
+                or end_text[2] != ":"
+                or not end_text[:2].isdigit()
+                or not end_text[3:].isdigit()
+            ):
+                raise ValueError
+            hour_str, minute_str = end_text.split(":", 1)
+            end_time_value = time(int(hour_str), int(minute_str))
+        except (TypeError, ValueError) as err:
+            raise ValueError("Schedule end must be a valid HH:MM time") from err
 
-    return WeeklyScheduleRecord(
+    try:
+        speed = SCHEDULE_OPTION_TO_SPEED[speed_option]
+    except KeyError as err:
+        raise ValueError(f"Invalid schedule speed: {speed_option}") from err
+
+    record = WeeklyScheduleRecord(
         day=day,
         period=period,
-        speed=SCHEDULE_OPTION_TO_SPEED[speed_option],
+        speed=speed,
         end_hour=end_time_value.hour,
         end_minute=end_time_value.minute,
         reserved=current.reserved,
     )
+    validate_schedule_record(record)
+    return record
+
+
+def validate_schedule_record(record: WeeklyScheduleRecord) -> None:
+    """Validate one schedule record without transport-specific end rules."""
+    if record.day not in range(1, 8):
+        raise ValueError(f"Invalid schedule day: {record.day}")
+    if record.period not in range(1, 5):
+        raise ValueError(f"Invalid schedule period: {record.period}")
+    if record.speed not in SCHEDULE_SPEED_TO_OPTION:
+        raise ValueError(f"Invalid schedule speed: {record.speed}")
+    if not 0 <= record.reserved <= 0xFF:
+        raise ValueError(f"Invalid schedule reserved byte: {record.reserved}")
+    if not 0 <= record.end_hour <= 23 or not 0 <= record.end_minute <= 59:
+        raise ValueError(
+            "Invalid schedule end time: "
+            f"{record.end_hour:02d}:{record.end_minute:02d}"
+        )
 
 
 def validate_schedule_day(records: list[WeeklyScheduleRecord]) -> None:
-    """Validate that one day remains chronological and ends at midnight."""
+    """Validate that one day remains chronological across all transports."""
     expected_periods = [1, 2, 3, 4]
     periods = [record.period for record in records]
     if periods != expected_periods:
@@ -160,10 +198,27 @@ def validate_schedule_day(records: list[WeeklyScheduleRecord]) -> None:
 
     previous_end = 0
     for record in records:
+        validate_schedule_record(record)
         current_end = record.end_hour * 60 + record.end_minute
         if record.period < 4 and current_end <= previous_end:
             raise ValueError("Schedule period end times must stay in chronological order")
         previous_end = current_end
+
+
+def validate_bgcp_schedule_record(record: WeeklyScheduleRecord) -> None:
+    """Validate one 0x0077/BGCP record, including its terminal-period rule."""
+    validate_schedule_record(record)
+    if record.speed not in SCHEDULE_SPEED_TO_VALUE:
+        raise ValueError(f"Invalid BGCP schedule speed: {record.speed}")
+    if record.period == 4 and (record.end_hour, record.end_minute) not in BGCP_FINAL_PERIOD_ENDS:
+        raise ValueError("BGCP schedule period 4 must end at 00:00 or 23:59")
+
+
+def validate_bgcp_schedule_day(records: list[WeeklyScheduleRecord]) -> None:
+    """Validate a complete BGCP day without changing A21 schedule semantics."""
+    validate_schedule_day(records)
+    for record in records:
+        validate_bgcp_schedule_record(record)
 
 
 def changed_schedule_records(

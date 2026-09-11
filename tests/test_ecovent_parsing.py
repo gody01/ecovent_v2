@@ -242,6 +242,7 @@ class ParseRobustnessTest(unittest.TestCase):
     def test_profile_scalars_reject_noncanonical_value_width(self):
         cases = (
             ("1100", 0x001A, "co2_treshold", [0x20, 0x03], 800),
+            ("1100", 0x0027, "co2", [0xE7, 0x03], 999),
             ("1100", 0x0129, "recovery_efficiency", [0x58], 88),
             ("0d00", 0x031F, "air_quality_treshold", [0xC8, 0x00], 200),
         )
@@ -552,7 +553,6 @@ class ParseRobustnessTest(unittest.TestCase):
                 [0xD1, 0x07],
                 2000,
             ),
-            ("1100", 0x0027, "co2", [0xD0, 0x07], [0xD1, 0x07], 2000),
             ("1100", 0x003A, "supply_speed_low", [10], [9], 10),
             ("1100", 0x0044, "man_speed", [10], [9], 10),
             (

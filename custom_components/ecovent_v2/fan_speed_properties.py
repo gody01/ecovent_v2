@@ -3,9 +3,17 @@
 from datetime import date
 
 try:
-    from .schedule_helpers import SCHEDULE_SPEED_TO_VALUE, WeeklyScheduleRecord
+    from .schedule_helpers import (
+        SCHEDULE_SPEED_TO_VALUE,
+        WeeklyScheduleRecord,
+        validate_bgcp_schedule_record,
+    )
 except ImportError:
-    from schedule_helpers import SCHEDULE_SPEED_TO_VALUE, WeeklyScheduleRecord
+    from schedule_helpers import (
+        SCHEDULE_SPEED_TO_VALUE,
+        WeeklyScheduleRecord,
+        validate_bgcp_schedule_record,
+    )
 
 
 _EXTRACT_BOOST_MINUTES_BY_CODE = {0: 0, 2: 5, 3: 15, 4: 30, 6: 60}
@@ -446,11 +454,6 @@ class FanSpeedPropertiesMixin:
             or speed not in self.device_profile.schedule_speed_modes
         ):
             raise ValueError(f"Invalid schedule response speed: {val[2]}")
-        if val[1] == 4 and (val[4] != 0 or val[5] != 0):
-            raise ValueError(
-                "Invalid final schedule period end time: "
-                f"{val[5]:02d}:{val[4]:02d}"
-            )
         record = WeeklyScheduleRecord(
             day=val[0],
             period=val[1],
@@ -459,6 +462,7 @@ class FanSpeedPropertiesMixin:
             end_minute=val[4],
             reserved=val[3],
         )
+        validate_bgcp_schedule_record(record)
         self._weekly_schedule_setup_record = record
         self._weekly_schedule_setup = (
             f"{record.day_label}/{record.period}: "

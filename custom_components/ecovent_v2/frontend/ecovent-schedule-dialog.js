@@ -580,7 +580,7 @@ class EcoventScheduleDialog extends HTMLElement {
       };
     }
 
-    const fallbackEnd = period.editable_end ? period.end ?? "00:00" : "00:00";
+    const fallbackEnd = period.end ?? "00:00";
     return {
       start: "00:00",
       end: fallbackEnd,
@@ -592,7 +592,7 @@ class EcoventScheduleDialog extends HTMLElement {
     let start = "00:00";
 
     for (const period of day.periods || []) {
-      const end = period.editable_end ? this._normalizeTimeValue(period.end) : "00:00";
+      const end = this._normalizeTimeValue(period.end);
       const speed = period.speed ?? "Unknown";
       period.summary = `${start}-${end} ${speed}`;
       if (period.editable_end) {
@@ -874,7 +874,10 @@ class EcoventScheduleDialog extends HTMLElement {
                     />
                     ${error ? `<span class="field-error">${error}</span>` : ""}
                   `
-                  : `<div class="end-of-day">${this._t("end_of_day", "End of day")}</div>`
+                  : `<div class="end-of-day">${this._t(
+                      "end_of_day",
+                      "End of day"
+                    )} (${this._formatDisplayTime(bounds.end)})</div>`
               }
             </label>
             <label class="field speed-field">

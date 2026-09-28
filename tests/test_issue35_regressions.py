@@ -485,6 +485,10 @@ class Issue35RegressionTest(unittest.TestCase):
             _unit_type_id = 0x0500
             firmware = "0.5 2021-10-04"
             unsupported = frozenset()
+            temperature_probes = False
+
+            def profile_supports_capability(self, capability):
+                return capability == "temperature_probes" and self.temperature_probes
 
             def unsupported_optional_poll_parameter_ids(self):
                 return self.unsupported

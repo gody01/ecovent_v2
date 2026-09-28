@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 import tempfile
 import types
+from unittest.mock import patch
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry, entity_registry
@@ -57,9 +58,11 @@ sys.modules[_package.__name__] = _package
 Coordinator = importlib.import_module(_package.__name__ + ".coordinator").EcoVentCoordinator
 Sensors = importlib.import_module(_package.__name__ + ".sensor")
 Diagnostics = importlib.import_module(_package.__name__ + ".protocol_diagnostics")
+FanProtocol = importlib.import_module(_package.__name__ + ".fan_protocol")
+Integration = importlib.import_module(_package.__name__ + ".__init__")
 
 
-async def _run_issue_fixture(*, temperature_answers):
+async def _run_issue_fixture(*, temperature_answers, late_temperature_answers=False):
     with tempfile.TemporaryDirectory(prefix="ecovent-ha-issue109-") as tmp:
         hass = HomeAssistant(tmp)
         entry = types.SimpleNamespace(
@@ -70,7 +73,7 @@ async def _run_issue_fixture(*, temperature_answers):
                 "auto_clock_sync": False,
             },
             unique_id=None,
-            entry_id=f"issue109-{temperature_answers}",
+            entry_id=f"issue109-{temperature_answers}-{late_temperature_answers}",
             async_on_unload=lambda _: None,
             pref_disable_polling=True,
         )
@@ -103,8 +106,35 @@ async def _run_issue_fixture(*, temperature_answers):
                     required_capabilities=spec.required_capabilities,
                 )
             }
+            initial_available = available
+            initial_temperature_probes = fan.profile_supports_capability("temperature_probes")
+            reloads = []
+            if late_temperature_answers:
+                with patch.object(
+                    hass,
+                    "config_entries",
+                    types.SimpleNamespace(async_schedule_reload=reloads.append),
+                ):
+                    Integration._async_register_optional_poll_entity_sync(
+                        hass, entry, coordinator
+                    )
+                    wire.values.update(ISSUE_109_DUMP_VALUES)
+                    for _ in range(2 * FanProtocol.OPTIONAL_PARAM_RETRY_BACKOFF_READS + 4):
+                        await coordinator.async_refresh()
+                        if fan.profile_supports_capability("temperature_probes"):
+                            break
+                    await hass.async_block_till_done()
+
+                available = {
+                    spec.method
+                    for spec in Sensors.SENSOR_SPECS
+                    if fan.profile_has_entity_requirements(
+                        required_params=spec.required_params or (spec.method,),
+                        required_capabilities=spec.required_capabilities,
+                    )
+                }
             states = {}
-            if temperature_answers:
+            if temperature_answers or (late_temperature_answers and reloads):
                 entities = [
                     sensor_for_method(Sensors, hass, entry, method)
                     for method in TEMPERATURE_METHODS
@@ -124,6 +154,11 @@ async def _run_issue_fixture(*, temperature_answers):
 
             result = {
                 "available_methods": available,
+                "initial_available_methods": initial_available,
+                "initial_temperature_probes": initial_temperature_probes,
+                "temperature_probes": fan.profile_supports_capability("temperature_probes"),
+                "reloads": reloads,
+                "entry_id": entry.entry_id,
                 "unsupported_rows": unsupported,
                 "states": states,
                 "writes": fan.audible_write_command_count,
@@ -136,6 +171,9 @@ async def _run_issue_fixture(*, temperature_answers):
 
 def test_recom_4_sr_dump_exposes_temperatures_and_no_known_variant_repair():
     result = asyncio.run(_run_issue_fixture(temperature_answers=True))
+    late_result = asyncio.run(
+        _run_issue_fixture(temperature_answers=False, late_temperature_answers=True)
+    )
     assert set(TEMPERATURE_METHODS) <= result["available_methods"], (
         "missing RECOM sensors",
         sorted(set(TEMPERATURE_METHODS) - result["available_methods"]),
@@ -145,6 +183,13 @@ def test_recom_4_sr_dump_exposes_temperatures_and_no_known_variant_repair():
     assert result["states"] == ISSUE_109_EXPECTED_STATES
     assert result["unsupported_rows"] == frozenset()
     assert result["writes"] == 0
+
+    assert not late_result["initial_temperature_probes"]
+    assert late_result["temperature_probes"]
+    assert not set(TEMPERATURE_METHODS) & late_result["initial_available_methods"]
+    assert set(TEMPERATURE_METHODS) <= late_result["available_methods"]
+    assert late_result["reloads"] == [late_result["entry_id"]]
+    assert late_result["states"] == ISSUE_109_EXPECTED_STATES
 
 
 def test_df270_shaped_0100_without_temperature_answers_keeps_existing_behavior():

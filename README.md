@@ -120,6 +120,7 @@ silent-mode, airflow, and clock-sync caveats; capabilities depend on the device 
 ## Version 1.2.31
 * Keep Freshpoint/Breezy CO2 and fan RPM through three missed reads; clear on the fourth or invalid data (#104, #111).
 * Add RECOM 4 SR air temperatures and a read-only setpoint; recognize its optional-row variant (fixture-verified, #109).
+* Reload the config entry when RECOM 4 SR temperature probes appear after setup.
 * Recognize VENTO inHome old / TwinFresh Atmo old optional-row rejections without a false Repair (#110).
 
 ## Version 1.2.30

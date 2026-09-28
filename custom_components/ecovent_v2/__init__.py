@@ -505,6 +505,9 @@ def _async_register_optional_poll_entity_sync(
         getattr(coordinator._fan, "_unit_type_id", None),
         coordinator._fan.firmware,
     )
+    loaded_temperature_probes = coordinator._fan.profile_supports_capability(
+        "temperature_probes"
+    )
     last_capability_state = None
     reload_requested = False
 
@@ -531,9 +534,25 @@ def _async_register_optional_poll_entity_sync(
                 hass.config_entries.async_schedule_reload(entry.entry_id)
                 reload_requested = True
             return
+        temperature_probes = coordinator._fan.profile_supports_capability(
+            "temperature_probes"
+        )
+        if (
+            temperature_probes
+            and not loaded_temperature_probes
+            and not reload_requested
+        ):
+            _LOGGER.info(
+                "Reloading EcoVent V2 config entry %s after temperature probes "
+                "became available",
+                entry.entry_id,
+            )
+            hass.config_entries.async_schedule_reload(entry.entry_id)
+            reload_requested = True
 
         capability_state = (
             *current_identity,
+            temperature_probes,
             coordinator._fan.unsupported_optional_poll_parameter_ids(),
         )
         if capability_state == last_capability_state:

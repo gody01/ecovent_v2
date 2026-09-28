@@ -71,6 +71,7 @@ reports and earlier compatibility fixes show these differences:
 | Weekly schedule rows | Vento/TwinFresh and Breezy/Freshpoint tables document `0x0072` (`weekly_schedule_state`) and `0x0077` (`weekly_schedule_setup`). | Some variants do not answer schedule rows during setup/reload, and probing all schedule records can cause delays. The `0x0077` table describes a final 24:00 period, while [gody01/ecovent_v2#102](https://github.com/gody01/ecovent_v2/issues/102#issuecomment-5624612590) supplied valid final `23:59` frames for both reported TwinFresh firmware identities; only posted payload templates are available, not a full 8x28 capture. | Load the full schedule cache only after `0x0072` reports a known `on`/`off` state. If `0x0072` is unavailable, keep the fan available and leave schedule entities unavailable. For BGCP, retain and write an exact final `00:00` or `23:59` and its reserved byte; reject other terminal ends before any write. This rule does not apply to A21 Modbus scheduling. |
 | Packet completeness | The guides impose a 256-byte packet limit, while older integration versions could accept a valid but partial response as a complete refresh. | Firmware can return a valid response that omits requested rows without using `0xFD`. | Split full polls into protocol-safe chunks, verify returned parameter ids, retry omitted rows individually, and distinguish required rows from optional rows. |
 | Response validation | Protocol type is `0x02`, controller IDs are 16 bytes, passwords are at most 8 bytes, and a controller reply uses response function `0x06`. For write-with-response function `0x03`, the reply reports the status of the requested parameters. Marker `0xFF` changes the active parameter-id high-byte page until another page marker changes it. | A checksum-valid packet from another controller, with another envelope value, nested/reserved markers, duplicate/conflicting status for one row, a malformed payload tail, an empty/different-row reply, an `0xFD` rejection, or a different echoed value is not proof that the requested command succeeded. A stale packet received after the current UDP send failed is not a reply to that command. Omitting `0xFF 0x00` after a high-page row also turns following low-page rows into different parameters. Applying a valid prefix before rejecting the tail would corrupt cached state. | Outside explicit discovery, require the response controller ID to match the configured controller. Do not call receive after a failed send. Validate the complete envelope and payload first, then apply decoded values atomically. Report a read successful only when it contains a requested row or explicit requested-row status; callers that need a fresh value reject `0xFD`. Report a write successful only when every requested row, including opportunistically batched rows, is echoed with the requested raw value and none is rejected, and reject main or opportunistic semantic batches before transport if any requested key is unmapped. Emit an explicit page change whenever a batch crosses parameter pages, including a return to page `0x00`. |
+| Alarm list validation | Breezy/Freshbox alarm lists contain two-byte records. | An unpaired trailing byte cannot describe a complete alarm. | Reject the malformed list rather than silently dropping the trailing byte. |
 | Shared parameter numbers across families | Several manuals reuse the same parameter ids for different device families. | `0x0002`, `0x0014`, `0x0068`, `0x0401`, and other rows do not always have the same semantics between Vento, extract-fan, Breezy/Freshpoint, Freshbox, and Arc profiles. | Keep profile-specific parameter maps instead of treating one PDF as a universal superset. |
 | A21 / Modbus controllers | VENTS A21 documents Modbus TCP/RTU and a controller identity at input register `37`. | A21 does not publish a BGCP `0x00B9` unit type and does not use the UDP BGCP parameter map. | Implement A21 as a separate Modbus transport. Do not infer BGCP compatibility from physical/OEM similarity alone. |
 | Unit-type parsing | The PDFs list unit-type values read from BGCP parameter `0x00B9`. | This parser stores those two response bytes as parser keys such as `0x0300`, and no reviewed PDF documents device type `7` / parser key `0x0700`. | Keep the byte-swapped parser keys documented next to the PDF values. Rows such as `0x0007` are parameters, not unit-type values. |
@@ -176,11 +177,18 @@ with `ECONOPRIME` in the product path. Most are filters, ducts, plenums,
 controllers, or other accessories. The public README indexes the distinct
 parent ventilation-unit names while keeping their protocol status separate.
 
-Issue #64 remains the only BGCP proof for the DF series: the reported
+Issue #64 provides BGCP proof for the DF series: the reported
 `ECONOPRIME DF270 Connect` returned parameter `0x00B9` as integer `256`
 (`0x0100` in this parser), and the existing `vento` profile controlled fixed
 presets and manual speed with matching RPM feedback. That observation is enough
 to map `0x0100`; it does not automatically map other ECONOPRIME devices.
+
+Issue #109 also reports RECOM 4 SR as parser unit type `0x0100` (firmware
+`0.43`). Keep its existing DF270 Vento controls. Expose air temperatures and a
+read-only temperature setpoint only after all four probes reply; recognize the
+seven reported unsupported optional rows without another Repair. This is
+verified against the issue dump fixture, not a live RECOM device, and does not
+establish that RECOM and DF270 are the same physical model.
 
 The direct [DF 270 Connect product page](https://www.econology.fr/df-270-connect-econoprime-vmc-double-flux.html)
 and manual materially strengthen the physical OEM research. A cross-document
@@ -293,6 +301,44 @@ The schedule speed byte uses the same base speed values as the schedule setup
 row (`0` standby, `1` low, `2` medium, `3` high). A Vento-family response at
 `0x0306=03` is therefore treated as `schedule_speed=high`, not as a beeper
 state. The Vento/TwinFresh table does not document a beeper row at `0x0306`.
+
+### Home Assistant control and clock behavior
+
+Capabilities are profile-dependent. A21 setup checks input register `37 == 1`;
+A21 Modbus is not interchangeable with BGCP. Timer selection needs `0x0007`,
+raw airflow selection needs `0x00B7`, and weekly schedules need `0x0072`/`0x0077`.
+
+Silent manual-speed mode is an optional VENTO/TwinFresh configuration setting.
+It maps HA presets to manual percentages while preserving device-side humidity,
+relay, and analog-voltage auto-boost triggers, including configured thresholds.
+Already-on manual-speed changes use only the quiet manual speed register;
+entering manual mode can beep once. Airflow/direction changes still require the
+airflow command and batch the current manual speed into the same write. They
+may beep and do not add opportunistic RTC rows while already in manual mode.
+After HA restarts, an already-active silent preset restores the HA facade without
+sending a duplicate write. Zero percentage keeps the unit on at zero manual
+speed; silent presets use deterministic low/medium/high fallback percentages
+when the device does not report configurable setpoints.
+
+Freshpoint/Breezy airflow value `3` is `extract`. HA's built-in direction has
+only forward/reverse, so extract is exposed through the airflow Select instead.
+For balanced modes with separate supply/extract setpoints, HA percentage
+averages both setpoints as a single-value UI compromise, not measured fan speed.
+Other unknown airflow values remain `Unknown airflow <value>`.
+
+Automatic clock sync is enabled by default and can be disabled in reconfigure.
+Checks run every five minutes and write only for drift exceeding one minute from
+HA local time. On OS/Supervised installs, Supervisor must report the host clock
+as NTP synchronized; Core/container installs have no Supervisor quality signal.
+Startup discovery stays read-only and defers standalone RTC correction. Periodic
+standalone correction rereads RTC immediately before writing and skips unavailable
+fresh state. Silent manual mode suppresses standalone automatic correction;
+explicit `sync_device_clock` remains available and may beep. Already-audible
+writes may batch drifted RTC rows; failed RTC writes do not suppress retries.
+
+Entries migrated by 1.2.16/1.2.17 use config-entry version 2. Before downgrading
+to 1.2.15, delete and re-add integration entries or restore a full HA backup:
+older code cannot load migrated entries.
 
 ### Breezy / Freshpoint Eco notes
 

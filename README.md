@@ -33,9 +33,14 @@ Official Blauberg / VENTS platform families and names:
 * Blauberg VENTO Expert A30 W V.2, VENTO Expert A30 S10 W V.2,
   VENTS TwinFresh Expert RW-30 V.2
 * Blauberg VENTO inHome, VENTO inHome W, VENTO inHome mini,
-  VENTO inHome mini W, VENTO inHome 100, VENTO inHome 160
+  VENTO inHome mini W, VENTO inHome 100, VENTO inHome 160,
+  VENTO inHome old
 * VENTS TwinFresh Atmo, TwinFresh Atmo 100, TwinFresh Atmo 160,
-  TwinFresh Atmo mini, TwinFresh Atmo Wi-Fi, TwinFresh Atmo mini Wi-Fi
+  TwinFresh Atmo mini, TwinFresh Atmo Wi-Fi, TwinFresh Atmo mini Wi-Fi,
+  TwinFresh Atmo old (`0x1A00`, firmware 1.0 2023-12-03)
+* Blauberg RECOM 4 SR (heat recovery AHU; shown as “AHU” in the Blauberg Home
+  app; reports unit type `0x0100` and firmware 0.43; four air temperatures
+  and a read-only setpoint verified only from the issue #109 dump fixture)
 * VENTS TwinFresh Style Wi-Fi, TwinFresh Style Frost Wi-Fi,
   TwinFresh Style Wi-Fi mini
 * Blauberg Smart Wi-Fi, Smart IR Wi-Fi, VENTS iFan Wi-Fi,
@@ -71,10 +76,10 @@ External relabels and OEM names tracked as evidence or candidates:
   Blauberg Winzel Expert WiFi RW1-50 P
 * NIBE DVC 10, NIBE DVC 10-50W, NIBE DVC 10-D30W
 * ECONOPRIME DF270, ECONOPRIME DF270 Connect, and the reported seller spelling
-  Econology DF270 Connect (`0x0100`, mapped to the tested VENTO protocol
-  profile). VENTS VUT 270 V5B EC A21 is supported through the separate A21
-  Modbus transport; this does not make it a confirmed DF270 relabel or prove
-  BGCP compatibility.
+  Econology DF270 Connect (`0x0100`, also reported by RECOM 4 SR; mapped to
+  the tested VENTO protocol profile). VENTS VUT 270 V5B EC A21 is supported
+  through the separate A21 Modbus transport; this does not make it a confirmed
+  DF270 relabel or prove BGCP compatibility.
 * ECONOPRIME Bora documentary candidates: Bora 160, Bora 160 L440,
   Bora 160 L550, Bora 160 L700, Bora 160 L1000, Bora 160 Prime L440,
   Bora 160 Prime L550, Bora 160 Prime L700, Bora 160 Prime L1000,

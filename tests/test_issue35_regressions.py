@@ -458,14 +458,10 @@ class Issue35RegressionTest(unittest.TestCase):
             init_tree, "_async_register_optional_poll_entity_sync"
         )
         identity_helper = _module_function(init_tree, "_fan_identity")
-        clear_helper = _module_function(
-            init_tree, "_clear_latched_temperature_probes"
-        )
         namespace = {
             "HomeAssistant": object,
             "ConfigEntry": object,
             "EcoVentCoordinator": object,
-            "_TEMPERATURE_PROBE_LATCHES": "temperature_probe_latches",
         }
         registry = object()
         namespace["er"] = types.SimpleNamespace(async_get=lambda _hass: registry)
@@ -480,7 +476,7 @@ class Issue35RegressionTest(unittest.TestCase):
             compile(
                 ast.fix_missing_locations(
                     ast.Module(
-                        body=[identity_helper, clear_helper, function],
+                        body=[identity_helper, function],
                         type_ignores=[],
                     )
                 ),
@@ -497,10 +493,6 @@ class Issue35RegressionTest(unittest.TestCase):
             firmware = "0.5 2021-10-04"
             device_search = "serial-1"
             unsupported = frozenset()
-            temperature_probes = False
-
-            def profile_supports_capability(self, capability):
-                return capability == "temperature_probes" and self.temperature_probes
 
             def unsupported_optional_poll_parameter_ids(self):
                 return self.unsupported
@@ -711,14 +703,6 @@ class Issue35RegressionTest(unittest.TestCase):
             init_tree, "_delete_hardware_profile_mismatch_issue"
         )
         setup_entry = _module_function(init_tree, "async_setup_entry")
-        probe_helpers = [
-            _module_function(init_tree, name)
-            for name in (
-                "_fan_identity",
-                "_clear_latched_temperature_probes",
-                "_restore_latched_temperature_probes",
-            )
-        ]
         deleted = []
         namespace = {
             "HomeAssistant": object,
@@ -733,7 +717,6 @@ class Issue35RegressionTest(unittest.TestCase):
             "CONF_TRANSPORT": "transport",
             "TRANSPORT_BGCP_UDP": "bgcp_udp",
             "DOMAIN": "ecovent_v2",
-            "_TEMPERATURE_PROBE_LATCHES": "temperature_probe_latches",
             "async_delete_hardware_profile_mismatch_issue": (
                 lambda _hass, entry_id: deleted.append(entry_id)
             ),
@@ -746,13 +729,7 @@ class Issue35RegressionTest(unittest.TestCase):
             compile(
                 ast.fix_missing_locations(
                     ast.Module(
-                        body=[
-                            *probe_helpers,
-                            close_coordinator,
-                            delete_issue,
-                            setup_entry,
-                        ],
-                        type_ignores=[],
+                        body=[close_coordinator, delete_issue, setup_entry],
                     )
                 ),
                 str(INIT_PATH),
@@ -801,9 +778,6 @@ class Issue35RegressionTest(unittest.TestCase):
         methods = [
             _module_function(init_tree, name)
             for name in (
-                "_fan_identity",
-                "_clear_latched_temperature_probes",
-                "_restore_latched_temperature_probes",
                 "_async_close_coordinator",
                 "_delete_hardware_profile_mismatch_issue",
                 "async_setup_entry",
@@ -824,7 +798,6 @@ class Issue35RegressionTest(unittest.TestCase):
             "TRANSPORT_BGCP_UDP": "bgcp_udp",
             "DOMAIN": "ecovent_v2",
             "_PLATFORMS": ["sensor", "fan"],
-            "_TEMPERATURE_PROBE_LATCHES": "temperature_probe_latches",
             "async_delete_hardware_profile_mismatch_issue": (
                 lambda _hass, _entry_id: events.append("delete")
             ),

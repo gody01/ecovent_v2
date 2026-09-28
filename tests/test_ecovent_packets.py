@@ -193,6 +193,41 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertEqual(fan.fan2_speed, "2340")
         self.assertFalse(fan._optional_read_backoff)
 
+    def test_preserved_parameter_soft_miss_retention_is_bounded_and_resets(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        fan._co2 = 1500
+        fan._fan1_speed = fan._fan2_speed = "1800"
+        request = "000100020027004A004B"
+        missing = packet_with_payload([0x01, 1, 0x02, 3])
+        fan.send = lambda _data: True
+
+        def poll():
+            self.assertTrue(
+                fan._read_params(request, required_params=frozenset({1, 2}))
+            )
+
+        for initial, fresh in ((1500, 2014), (2014, 2272)):
+            fan.receive = lambda: missing
+            for _ in range(3):
+                poll()
+                self.assertEqual(fan.co2, initial)
+                self.assertEqual(fan.fan1_speed, "1800")
+                self.assertEqual(fan.fan2_speed, "1800")
+            poll()
+            self.assertIsNone(fan.co2)
+            self.assertIsNone(fan.fan1_speed)
+            self.assertIsNone(fan.fan2_speed)
+
+            recovered = [0x01, 1, 0x02, 3]
+            for param, value in ((0x27, fresh), (0x4A, 1800), (0x4B, 1800)):
+                recovered.extend([0xFE, 2, param, *value.to_bytes(2, "little")])
+            fan.receive = lambda: packet_with_payload(recovered)
+            poll()
+            self.assertEqual(fan.co2, fresh)
+            self.assertEqual(fan.fan1_speed, "1800")
+            self.assertEqual(fan.fan2_speed, "1800")
+
     def test_freshpoint_measurement_invalid_or_unsupported_rows_clear_values(self):
         for param_id, attr, value in (
             (0x0027, "co2", 1500),

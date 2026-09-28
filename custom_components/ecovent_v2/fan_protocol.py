@@ -13,6 +13,7 @@ except ImportError:
 _LOGGER = logging.getLogger(__name__)
 MAX_BULK_READ_PARAMS = 12
 OPTIONAL_PARAM_RETRY_BACKOFF_READS = 10
+PRESERVED_PARAM_SOFT_MISS_LIMIT = 3
 BULK_READ_REPROBE_READS = 10
 VENTO_SOFT_MISS_CONTROL_PARAMS = frozenset({0x0001, 0x0002, 0x0044})
 PRESERVE_ON_SOFT_MISS_PARAMS = frozenset(
@@ -627,9 +628,19 @@ class FanProtocolMixin:
         return self._read_params("".join(f"{param_id:04x}" for param_id in sorted(retained)))
 
     def _mark_param_unavailable(self, param_id, *, unsupported=False, invalid=False):
-        """Retain selected soft-missing state, but clear rejected or invalid data."""
-        if param_id in PRESERVE_ON_SOFT_MISS_PARAMS and not (unsupported or invalid):
-            return
+        """Retain three soft misses, but clear rejected or invalid data immediately."""
+        if param_id in PRESERVE_ON_SOFT_MISS_PARAMS:
+            misses = getattr(self, "_preserved_param_soft_misses", None)
+            if misses is None:
+                misses = self._preserved_param_soft_misses = {}
+            if unsupported or invalid:
+                misses.pop(param_id, None)
+            else:
+                misses[param_id] = min(
+                    misses.get(param_id, 0) + 1, PRESERVED_PARAM_SOFT_MISS_LIMIT + 1
+                )
+                if misses[param_id] <= PRESERVED_PARAM_SOFT_MISS_LIMIT:
+                    return
         if not (unsupported or invalid) and self._is_vento_soft_miss_control(param_id):
             definition = self.params[param_id]
             if getattr(self, f"_{definition[0]}", None) is not None:
@@ -652,6 +663,7 @@ class FanProtocolMixin:
 
     def _mark_param_available_for_retry(self, param_id):
         self._retained_control_params = set(self.retained_control_params) - {param_id}
+        getattr(self, "_preserved_param_soft_misses", {}).pop(param_id, None)
         self._optional_param_backoff().pop(param_id, None)
         self._unsupported_optional_poll_param_ids().discard(param_id)
 
@@ -758,18 +770,24 @@ class FanProtocolMixin:
         def mark_unavailable(param_id, *, unsupported=False, invalid=False):
             nonlocal complete
             if param_id in required_param_ids:
-                if unsupported or self._is_vento_soft_miss_control(param_id):
+                if (
+                    unsupported
+                    or param_id in PRESERVE_ON_SOFT_MISS_PARAMS
+                    or self._is_vento_soft_miss_control(param_id)
+                ):
                     self._mark_param_unavailable(
                         param_id, unsupported=unsupported, invalid=invalid
                     )
+            else:
+                self._mark_param_unavailable(
+                    param_id, unsupported=unsupported, invalid=invalid
+                )
+            if param_id in required_param_ids:
                 complete = False
                 missing_required_params.add(param_id)
                 return
 
             missing_optional_params.add(param_id)
-            self._mark_param_unavailable(
-                param_id, unsupported=unsupported, invalid=invalid
-            )
             if unsupported or not self._is_vento_soft_miss_control(param_id):
                 self._delay_optional_param_retry(param_id)
 

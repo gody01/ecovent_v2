@@ -631,10 +631,11 @@ Version 1.2.25
   instead of silently dropping the tail.
 
 Version 1.2.31
-* Retain the last valid Freshpoint/Breezy CO2 and fan RPM measurements when an
-  automatic poll temporarily omits those optional rows. Explicit unsupported or
-  malformed replies still clear the measurement; writable thresholds remain
-  independently bounded.
+* Soft misses previously cleared known Freshpoint/Breezy CO2 and fan RPM
+  measurements. Keep them for three consecutive requested-read misses, clearing
+  them on the fourth even during retry backoff. A successful read resets the
+  count; explicit unsupported or malformed replies still clear immediately.
+  RPM ranges and writable thresholds are unchanged.
 
 Version 1.2.30
 * Accept Freshpoint/Breezy two-byte CO2 measurements above the PDF's 2000 ppm

@@ -62,7 +62,7 @@ reports and earlier compatibility fixes show these differences:
 | VENTO inHome old / TwinFresh Atmo old option rows | The shared Vento map includes the six preset-speed rows and filter-timer setpoint. | Issue #110 identifies `0x1A00`, firmware `1.0 2023-12-03`, explicitly rejecting those seven optional rows. | Keep the shared map for variants that support them; treat only this exact firmware tuple's seven rejections as known. Other rejected rows remain reportable. |
 | TwinFresh manual-speed row | The B133 Vento guide explicitly lists parameter `0x0044`; the TwinFresh Style PDFs reference manual speed mode `255` using parameter 68 but omit a separate `0x0044` table row. | TwinFresh-family devices and the Home Assistant silent manual-speed path use the manual-speed row successfully. | Keep `0x0044` in the shared `vento` profile because both document the manual-speed mode path, even though one PDF omits the row from its table. |
 | Breezy/Freshpoint standard sensor rows | Freshpoint product documents describe relative humidity and four built-in temperature sensors on standard and Pro units; only the Pro package adds tVOC/CO2eq air-quality sensing. | Issue #74 reports a Freshpoint 160 whose humidity, built-in temperature, CO2, VOC, recovery-efficiency, and schedule entities stay unknown while the fan still works. Earlier reports also showed optional rows omitted or explicitly rejected. | Keep `0x0001`, `0x0002`, and `0x0044` as Breezy/Freshpoint availability rows. Missing non-critical rows are retried/backed off without affecting coordinator availability; known-value retention for intermittent CO2/RPM misses is specified below. Explicitly unsupported feature rows remain unavailable. |
-| Freshpoint/Breezy soft-missing measurements | RPM rows `0x004A`/`0x004B` and CO2 row `0x0027` are optional measurements in automatic polling. | Issue #104 reports intermittent CO2 gaps and #111 reports fan2 becoming unknown after Party/Turbo; no raw device capture was supplied. Fixture-driven polls confirm that a valid partial reply can omit these rows. | Preserve a previously decoded measurement on a soft omission so isolated packet loss does not flicker the HA sensor to unknown; continue retry/backoff. Explicit `0xFD` unsupported or malformed rows still clear stale values. Cold-start missing rows remain unknown. This policy does not change RPM or writable-threshold bounds. |
+| Freshpoint/Breezy soft-missing measurements | RPM rows `0x004A`/`0x004B` and CO2 row `0x0027` are optional measurements in automatic polling. | Issue #104 reports intermittent CO2 gaps and #111 reports fan2 becoming unknown after Party/Turbo; no raw device capture was supplied. Fixture-driven polls confirm that a valid partial reply can omit these rows. | Soft misses previously cleared known values. Keep a previously decoded measurement for three consecutive requested-read misses, clearing it on the fourth; backoff polls count too. Successful reads reset the count. Explicit `0xFD` unsupported or malformed rows still clear immediately. Cold-start missing rows remain unknown. This policy does not change RPM or writable-threshold bounds. |
 | Freshpoint CO2 measurement | The [Freshpoint connection guide](https://blaubergventilatoren.net/download/freshpoint-manual-16999.pdf) lists `0x0027` as a two-byte measurement with a 0-2000 ppm range. | [gody01/ecovent_v2#104](https://github.com/gody01/ecovent_v2/issues/104) shows vendor-app readings of 2014 ppm (current) and 2272 ppm (maximum), while HA shows unknown. Its chart also shows unknown current state with plotted values mostly below 2000 ppm; no packet capture was supplied. | Accept the unsigned two-byte measurement without the contradicted range cap. Keep malformed-width rejection and the independent 400-2000 ppm writable `0x001A` threshold bound. The report does not establish a physical maximum or sentinel values; the chart is consistent with intermittent omissions as well as the reported high readings. |
 | Freshpoint standard optional hardware | Profiles include optional CO2/VOC/display rows. | [gody01/ecovent_v2#107](https://github.com/gody01/ecovent_v2/issues/107): `0x1100`, firmware `0.8 2024-03-15`, rejects the same 11 optional rows as the known `0.12 2025-09-01` variant. | Keep explicitly rejected rows unavailable, but suppress the Repair for this exact known tuple. Unknown firmware and additional rejected rows remain reportable. |
 | Smart Wi-Fi / iFan motion rows | The Smart Wi-Fi PDF documents motion status `0x000B` and motion sensor permission `0x0012` in the extract-fan map. | Issue #92 shows firmware `2.2 2022-06-16` can explicitly reject those motion rows on Smart Wi-Fi/iFan devices without affecting fan state, RPM/speed data, or HA control. | Keep the rows in the extract-fan entity map because other Smart Wi-Fi/iFan hardware may support motion features, but use only `0x0001` state and `0x0004` fan speed as extract-fan automatic-poll availability rows. Treat `0x000B`/`0x0012` as a known unsupported optional pair for the reported firmware so it does not repeatedly request another hardware/profile mismatch report by itself. |
@@ -327,15 +327,21 @@ Breezy/Freshpoint poll therefore treats only `0x0001` (`state`), `0x0002`
 (`speed`), and `0x0044` (`man_speed`) as fatal for coordinator availability.
 Quick polling includes those same control proof rows. Missing optional rows are
 retried once and then put into a ten-poll retry backoff. A soft omission of CO2
-(`0x0027`) or RPM (`0x004A`/`0x004B`) retains its last valid value so packet
-loss does not turn an established HA measurement unknown; cold-start misses
-remain unknown. Explicit unsupported (`0xFD`) or malformed measurements clear
-stale values, and permanently unsupported optional rows remain hidden. Automatic
+(`0x0027`) or RPM (`0x004A`/`0x004B`) retains its last valid value for three
+consecutive requested-read misses, then clears it on the fourth. Each poll
+requesting an omitted row counts once, including polls that skip the individual
+retry during backoff; bulk and individual attempts are not separate misses.
+A successful read resets that row's count. Cold-start misses remain unknown.
+The shared bound also applies to filter countdown (`0x0064`), device search
+(`0x007C`), firmware (`0x0086`), assigned/current Wi-Fi IP (`0x009C`/`0x00A3`),
+and unit type (`0x00B9`), which previously shared unbounded retention.
+Explicit unsupported (`0xFD`) or malformed rows clear immediately, and
+permanently unsupported optional rows remain hidden. Automatic
 weekly-schedule cache loading waits until `0x0072`
 (`weekly_schedule_state`) reports `on` or `off`; if that row is unavailable,
 setup/reload avoids probing all 28 `0x0077` schedule records. Identity rows such
-as `0x00B9` (`unit_type`) are preserved on soft misses so the active profile is
-not lost during a degraded poll. For the Vento profile, soft-missing control rows `0x0001`, `0x0002`,
+as `0x00B9` (`unit_type`) survive three consecutive requested-read soft misses,
+but expire on the fourth like other preserved rows. For the Vento profile, soft-missing control rows `0x0001`, `0x0002`,
 and `0x0044` retain their last known values and retry next poll without backoff.
 Other optional rows and other profiles keep their existing clearing/backoff policy.
 Retained control values are display-only evidence: fan commands require a
@@ -356,9 +362,10 @@ reports the same model's firmware `0.5 2024-07-10` responding with that row;
 until its raw capture arrives, accepting it is an evidence-backed format
 inference rather than a second physical capture. This model variant uses the
 four-byte decoder with minute/hour bounds and a 365-day limit; other Vento
-variants retain their three-byte requirement. A soft omission preserves a
-previously decoded filter countdown, but an explicit unsupported or malformed
-row clears it.
+variants retain their three-byte requirement. Soft omissions preserve a
+previously decoded filter countdown for three consecutive requested-read
+misses, clearing it on the fourth; an explicit unsupported or malformed row
+clears it immediately.
 Initialization reads firmware before the first full poll. The captured full/quick
 cycle is replayed by `tests/test_twinfresh_capture.py`; identity/IP values are
 redacted, and operational payload bytes are preserved.

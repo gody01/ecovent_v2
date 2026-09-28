@@ -124,7 +124,6 @@ async def _run_issue_fixture(*, temperature_answers, late_temperature_answers=Fa
                         if fan.profile_supports_capability("temperature_probes"):
                             break
                     await hass.async_block_till_done()
-
                 available = {
                     spec.method
                     for spec in Sensors.SENSOR_SPECS
@@ -133,6 +132,19 @@ async def _run_issue_fixture(*, temperature_answers, late_temperature_answers=Fa
                         required_capabilities=spec.required_capabilities,
                     )
                 }
+
+            elif not temperature_answers:
+                with patch.object(
+                    hass,
+                    "config_entries",
+                    types.SimpleNamespace(async_schedule_reload=reloads.append),
+                ):
+                    Integration._async_register_optional_poll_entity_sync(
+                        hass, entry, coordinator
+                    )
+                    await coordinator.async_refresh()
+                    await hass.async_block_till_done()
+
             states = {}
             if temperature_answers or (late_temperature_answers and reloads):
                 entities = [
@@ -288,6 +300,7 @@ def test_recom_4_sr_dump_exposes_temperatures_and_no_known_variant_repair():
 def test_df270_shaped_0100_without_temperature_answers_keeps_existing_behavior():
     result = asyncio.run(_run_issue_fixture(temperature_answers=False))
     assert not set(TEMPERATURE_METHODS) & result["available_methods"]
+    assert result["reloads"] == []
     assert result["unsupported_rows"] == REJECTED_PARAMS
     assert result["writes"] == 0
 

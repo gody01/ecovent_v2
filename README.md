@@ -561,6 +561,12 @@ Version 1.2.24
   and add the reporter-confirmed Flexit/Romventilator Roomie One V2 relabel plus
   related Flexit search-index candidates.
 
+Version 1.2.31
+* Treat VENTO inHome old / TwinFresh Atmo old (`0x1A00`) firmware
+  `1.0 2023-12-03` as a known optional-row variant when it rejects the six
+  three-speed setpoints and filter-timer setpoint. Those generated entities are
+  hidden, while unrelated rejected rows still raise a hardware/profile Repair.
+
 Version 1.2.28
 * Preserve the last known Vento control state across silent poll omissions and
   retry the omitted control on the next poll without treating retained data as

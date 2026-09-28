@@ -68,6 +68,9 @@ _KNOWN_VARIANT_UNSUPPORTED_OPTIONAL_PARAMS = {
 }
 
 _KNOWN_VARIANT_FIRMWARE_UNSUPPORTED_OPTIONAL_PARAMS = {
+    # TwinFresh Atmo old / VENTO inHome old explicitly reject the same optional
+    # preset-speed and filter-timer rows on firmware 1.0 2023-12-03.
+    ("vento", 0x1A00, "1.0 2023-12-03"): _VENTO_EXPERT_SPEED_FILTER_OPTION_ROWS,
     ("vento", 0x0300, "0.4 2019-12-20"): _VENTO_EXPERT_SPEED_FILTER_OPTION_ROWS,
     ("vento", 0x0300, "0.6 2021-05-17"): frozenset({0x0063}),
     ("vento", 0x0300, "0.7 2021-10-04"): _VENTO_EXPERT_SPEED_FILTER_OPTION_ROWS,

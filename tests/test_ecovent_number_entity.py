@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import asyncio
 import importlib.util
 import sys
 import types
@@ -156,6 +157,36 @@ class NumberEntityMetadataTest(unittest.TestCase):
         temperature = _entity(fan, "temperature_treshold")
         self.assertEqual(temperature._attr_native_min_value, 18)
         self.assertEqual(temperature._attr_native_max_value, 36)
+
+    def test_three_speed_numbers_are_not_created_without_profile_capability(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0d00"
+        fan._id = "DEVICE-000000001"
+        fan._name = "EcoVent"
+        hass = types.SimpleNamespace(
+            data={DOMAIN: {_Config.entry_id: _Coordinator(fan)}}
+        )
+        entities = []
+        number_module = sys.modules[f"{PACKAGE_NAME}.number"]
+
+        asyncio.run(
+            number_module.async_setup_entry(
+                hass, _Config(), entities.extend
+            )
+        )
+
+        speed_parameters = {
+            "supply_speed_low",
+            "exhaust_speed_low",
+            "supply_speed_medium",
+            "exhaust_speed_medium",
+            "supply_speed_high",
+            "exhaust_speed_high",
+        }
+        self.assertFalse(fan.profile_supports_capability("three_speed_setpoints"))
+        self.assertFalse(
+            speed_parameters & {entity._func for entity in entities}
+        )
 
 
 if __name__ == "__main__":

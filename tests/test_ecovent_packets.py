@@ -1531,6 +1531,43 @@ class PacketBuilderTest(unittest.TestCase):
                 )
                 self.assertLessEqual(unsupported_optional, fan.last_unsupported_params)
 
+    def test_issue110_rejected_option_rows_are_not_retried(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1A00"
+        fan.firmware = "0100030CE707"
+        rejected_rows = {
+            0x003A,
+            0x003B,
+            0x003C,
+            0x003D,
+            0x003E,
+            0x003F,
+            0x0063,
+        }
+        requested_by_poll = []
+
+        def send_command(func, param, value="", retries=10):
+            requested = {
+                int(param[i : i + 4], 16) for i in range(0, len(param), 4)
+            }
+            requested_by_poll.append(requested)
+            fan._last_response_param_ids = requested - rejected_rows
+            fan._last_unsupported_param_ids = requested & rejected_rows
+            return True
+
+        fan.send_command = send_command
+        self.assertTrue(fan.update())
+        self.assertTrue(
+            rejected_rows <= set().union(*requested_by_poll)
+        )
+        self.assertTrue(rejected_rows <= fan.unsupported_optional_poll_parameter_ids())
+
+        requested_by_poll.clear()
+        self.assertTrue(fan.update())
+        self.assertFalse(
+            any(rejected_rows & requested for requested in requested_by_poll)
+        )
+
     def test_vento_update_allows_issue90_a30_optional_rows(self):
         unsupported_optional = {
             0x0016,

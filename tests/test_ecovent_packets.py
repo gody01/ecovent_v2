@@ -5,6 +5,7 @@ import unittest
 
 from ecovent_test_helpers import Fan, packet_for_write_command, packet_with_payload
 from fan_protocol import BULK_READ_REPROBE_READS, MAX_BULK_READ_PARAMS
+from protocol_diagnostics import reportable_hardware_profile_mismatch_param_ids
 from schedule_helpers import WeeklyScheduleRecord
 
 
@@ -227,6 +228,24 @@ class PacketBuilderTest(unittest.TestCase):
             self.assertEqual(fan.co2, fresh)
             self.assertEqual(fan.fan1_speed, "1800")
             self.assertEqual(fan.fan2_speed, "1800")
+
+    def test_firmware_soft_misses_do_not_expire_known_profile_identity(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        fan.firmware = "00080f03e807"
+        fan._unsupported_optional_poll_params = {0x0027}
+        fan.send = lambda _data: True
+        fan.receive = lambda: packet_with_payload([0x01, 1])
+
+        for _ in range(4):
+            self.assertTrue(
+                fan._read_params("00010086", required_params=frozenset({0x0001}))
+            )
+
+        self.assertEqual(fan.firmware, "0.8 2024-03-15")
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan), frozenset()
+        )
 
     def test_freshpoint_measurement_invalid_or_unsupported_rows_clear_values(self):
         for param_id, attr, value in (

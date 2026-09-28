@@ -16,6 +16,7 @@ OPTIONAL_PARAM_RETRY_BACKOFF_READS = 10
 PRESERVED_PARAM_SOFT_MISS_LIMIT = 3
 BULK_READ_REPROBE_READS = 10
 VENTO_SOFT_MISS_CONTROL_PARAMS = frozenset({0x0001, 0x0002, 0x0044})
+SOFT_MISS_IDENTITY_PARAMS = frozenset({0x0086, 0x00B9})
 PRESERVE_ON_SOFT_MISS_PARAMS = frozenset(
     {
         0x0027,  # Breezy/Freshpoint CO2 measurement
@@ -639,7 +640,10 @@ class FanProtocolMixin:
                 misses[param_id] = min(
                     misses.get(param_id, 0) + 1, PRESERVED_PARAM_SOFT_MISS_LIMIT + 1
                 )
-                if misses[param_id] <= PRESERVED_PARAM_SOFT_MISS_LIMIT:
+                if (
+                    misses[param_id] <= PRESERVED_PARAM_SOFT_MISS_LIMIT
+                    or param_id in SOFT_MISS_IDENTITY_PARAMS
+                ):
                     return
         if not (unsupported or invalid) and self._is_vento_soft_miss_control(param_id):
             definition = self.params[param_id]

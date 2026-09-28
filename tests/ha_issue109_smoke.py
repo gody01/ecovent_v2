@@ -235,6 +235,7 @@ async def _run_reload_loop_fixture():
                 await coordinators[1].async_refresh()
                 if fan.profile_supports_capability("temperature_probes"):
                     break
+            assert reloads == [entry.entry_id]
             available = {
                 spec.method
                 for spec in Sensors.SENSOR_SPECS

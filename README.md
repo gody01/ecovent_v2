@@ -647,3 +647,10 @@ Version 1.2.30
   rejecting them and leaving each day incomplete. Preserve either `00:00` or
   `23:59` and the device-reserved byte through reads and period-speed updates.
   Invalid terminal times remain rejected before any schedule record is written.
+
+Version 1.2.31
+* Expose RECOM 4 SR (`0x0100`) air temperatures and a read-only temperature
+  setpoint after all four probes reply, preserving the existing DF270 Vento
+  controls. Recognize its seven reported unsupported optional rows without
+  opening another Repair. Verification uses the issue #109 dump fixture, not
+  a live RECOM device.

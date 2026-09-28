@@ -27,6 +27,7 @@ DEVICE_PROFILES = {
                 "night_party_timers",
                 "sensor_switches",
                 "three_speed_setpoints",
+                "temperature_probes",
                 "timer_mode",
             }
         ),

@@ -15,6 +15,13 @@ _CAPABILITY_PROBE_PARAMETERS = {
     "voc": ("voc",),
 }
 
+_TEMPERATURE_PROBE_PARAMETERS = (
+    "outdoor_temperature",
+    "supply_temperature",
+    "exhaust_in_temperature",
+    "exhaust_out_temperature",
+)
+
 _PARAMETER_RANGES = {
     "vento": {
         "analogV": (0, 100),
@@ -157,8 +164,21 @@ class FanCapabilitiesMixin:
         return index not in self.unsupported_optional_poll_parameter_ids()
 
     def profile_supports_capability(self, capability):
-        """Return whether the stable hardware profile declares a capability."""
+        """Return whether the current profile has learned a capability."""
+        if capability == "temperature_probes" and self.profile_key == "vento":
+            return getattr(self, "_temperature_probes_detected", False)
         return capability in self.device_profile.capabilities
+
+    def _observe_received_parameters(self, received_param_ids):
+        """Learn Vento temperature probes only after all four rows reply."""
+        if self.profile_key != "vento":
+            return
+        probe_ids = {
+            self.get_params_index(parameter)
+            for parameter in _TEMPERATURE_PROBE_PARAMETERS
+        }
+        if None not in probe_ids and probe_ids <= set(received_param_ids):
+            self._temperature_probes_detected = True
 
     def profile_supports_parameter(self, parameter):
         """Return whether the stable hardware profile declares a parameter."""
@@ -214,6 +234,7 @@ class FanCapabilitiesMixin:
         self._bulk_read_reprobe_countdown = 0
         self._optional_read_backoff = {}
         self._unsupported_optional_poll_params = set()
+        self._temperature_probes_detected = False
 
     def unsupported_optional_poll_parameters(self):
         """Return parameter names explicitly unsupported by this hardware."""
@@ -375,6 +396,11 @@ class FanCapabilitiesMixin:
 
         self._profile_key = profile_key
         self.params = getattr(type(self), profile.params_name).copy()
+        model = self.device_models.get(getattr(self, "_unit_type_id", None))
+        if model is not None and model.profile_key == profile_key:
+            extension_name = model.params_extension_name
+            if extension_name is not None:
+                self.params.update(getattr(type(self), extension_name))
         self.write_params = getattr(type(self), profile.write_params_name).copy()
         self._write_only_params = set(self.write_params)
         if previous_profile != profile_key:

@@ -146,6 +146,7 @@ class Fan(
     wifi_enc_types = protocol_maps.wifi_enc_types
     wifi_dhcps = protocol_maps.wifi_dhcps
     params = protocol_maps.params
+    recom_0100_params = protocol_maps.recom_0100_params
     extract_fan_params = protocol_maps.extract_fan_params
     breezy_params = protocol_maps.breezy_params
     freshbox_params = protocol_maps.freshbox_params

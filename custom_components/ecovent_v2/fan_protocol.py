@@ -906,6 +906,7 @@ class FanProtocolMixin:
         self._last_missing_required_params = frozenset(missing_required_params)
         self._last_missing_optional_params = frozenset(missing_optional_params)
         self._last_unsupported_params = frozenset(unsupported_params)
+        self._observe_received_parameters(received_params)
         # Profiles with no universally stable availability row (currently
         # Vento) still need evidence that the controller returned at least one
         # requested parameter. A transport-level success alone can be an empty

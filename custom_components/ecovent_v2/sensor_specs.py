@@ -107,6 +107,14 @@ SENSOR_SPECS = (
         required_capabilities=("temperature_probes",),
     ),
     SensorSpec(
+        "_temperature_setpoint",
+        "Temperature setpoint",
+        "temperature_setpoint",
+        UnitOfTemperature.CELSIUS,
+        icon="mdi:thermometer",
+        required_capabilities=("temperature_probes",),
+    ),
+    SensorSpec(
         "_co2",
         "CO2",
         "co2",

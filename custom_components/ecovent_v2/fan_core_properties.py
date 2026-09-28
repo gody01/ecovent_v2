@@ -364,6 +364,16 @@ class FanCorePropertiesMixin:
         self._temperature = str(val)
 
     @property
+    def temperature_setpoint(self):
+        return getattr(self, "_temperature_setpoint", None)
+
+    @temperature_setpoint.setter
+    def temperature_setpoint(self, input):
+        self._temperature_setpoint = int.from_bytes(
+            self._decode_exact_bytes(input, 1, "temperature_setpoint"), "little"
+        )
+
+    @property
     def room_temperature(self):
         return self._room_temperature
 

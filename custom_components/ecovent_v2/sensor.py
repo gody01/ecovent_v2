@@ -209,6 +209,10 @@ class VentoSensor(StableObjectIdMixin, CoordinatorEntity, SensorEntity):
         """Get temperature sensor value."""
         return self._fan.temperature
 
+    def temperature_setpoint(self):
+        """Get the read-only temperature setpoint."""
+        return self._fan.temperature_setpoint
+
     def room_temperature(self):
         """Get room temperature value."""
         return self._fan.room_temperature

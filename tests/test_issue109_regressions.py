@@ -23,6 +23,10 @@ def test_recom_4_sr_dump_exposes_temperatures_and_no_known_variant_repair():
     subprocess.run([sys.executable, str(HARNESS)], check=True)
 
 
+
+def test_recom_late_probes_reload_at_most_once_across_setups():
+    _skip_without_homeassistant()
+    subprocess.run([sys.executable, str(HARNESS), "reload-loop"], check=True)
 def test_df270_shaped_0100_without_temperature_answers_keeps_existing_behavior():
     _skip_without_homeassistant()
     subprocess.run([sys.executable, str(HARNESS), "df270"], check=True)

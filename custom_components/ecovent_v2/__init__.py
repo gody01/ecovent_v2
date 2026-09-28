@@ -493,6 +493,27 @@ def _async_update_unsupported_optional_poll_entities(registry, fan) -> None:
             )
 
 
+_TEMPERATURE_PROBE_LATCHES = f"{DOMAIN}_temperature_probe_latches"
+
+
+def _fan_identity(coordinator: EcoVentCoordinator) -> tuple:
+    return (
+        coordinator._fan.profile_key,
+        getattr(coordinator._fan, "_unit_type_id", None),
+        coordinator._fan.firmware,
+    )
+
+
+def _restore_latched_temperature_probes(
+    hass: HomeAssistant, entry: ConfigEntry, fan
+) -> None:
+    """Restore positive probe detection learned before a config-entry reload."""
+    latches = hass.data.get(_TEMPERATURE_PROBE_LATCHES, {})
+    identity = (fan.profile_key, getattr(fan, "_unit_type_id", None), fan.firmware)
+    if latches.get(entry.entry_id) == identity and fan.profile_key == "vento":
+        fan._temperature_probes_detected = True
+
+
 def _async_register_optional_poll_entity_sync(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -500,11 +521,7 @@ def _async_register_optional_poll_entity_sync(
 ) -> None:
     """Keep generated entity visibility aligned with learned capabilities."""
     registry = er.async_get(hass)
-    loaded_identity = (
-        coordinator._fan.profile_key,
-        getattr(coordinator._fan, "_unit_type_id", None),
-        coordinator._fan.firmware,
-    )
+    loaded_identity = _fan_identity(coordinator)
     loaded_temperature_probes = coordinator._fan.profile_supports_capability(
         "temperature_probes"
     )
@@ -547,6 +564,9 @@ def _async_register_optional_poll_entity_sync(
                 "became available",
                 entry.entry_id,
             )
+            hass.data.setdefault(_TEMPERATURE_PROBE_LATCHES, {})[
+                entry.entry_id
+            ] = loaded_identity
             hass.config_entries.async_schedule_reload(entry.entry_id)
             reload_requested = True
 
@@ -685,6 +705,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     platform_setup_started = False
     try:
         await coordinator.async_config_entry_first_refresh()
+        _restore_latched_temperature_probes(hass, entry, coordinator._fan)
 
         hass.data.setdefault(DOMAIN, {})
         hass.data[DOMAIN][entry.entry_id] = coordinator

@@ -496,12 +496,24 @@ def _async_update_unsupported_optional_poll_entities(registry, fan) -> None:
 _TEMPERATURE_PROBE_LATCHES = f"{DOMAIN}_temperature_probe_latches"
 
 
-def _fan_identity(coordinator: EcoVentCoordinator) -> tuple:
+def _fan_identity(fan) -> tuple:
+    """Return the identity fields that distinguish learned fan capabilities."""
     return (
-        coordinator._fan.profile_key,
-        getattr(coordinator._fan, "_unit_type_id", None),
-        coordinator._fan.firmware,
+        fan.profile_key,
+        getattr(fan, "_unit_type_id", None),
+        fan.firmware,
+        fan.device_search,
     )
+
+
+def _clear_latched_temperature_probes(hass: HomeAssistant, entry_id: str) -> None:
+    """Forget learned probe support for a removed or changed device."""
+    latches = hass.data.get(_TEMPERATURE_PROBE_LATCHES)
+    if latches is None:
+        return
+    latches.pop(entry_id, None)
+    if not latches:
+        hass.data.pop(_TEMPERATURE_PROBE_LATCHES, None)
 
 
 def _restore_latched_temperature_probes(
@@ -509,8 +521,13 @@ def _restore_latched_temperature_probes(
 ) -> None:
     """Restore positive probe detection learned before a config-entry reload."""
     latches = hass.data.get(_TEMPERATURE_PROBE_LATCHES, {})
-    identity = (fan.profile_key, getattr(fan, "_unit_type_id", None), fan.firmware)
-    if latches.get(entry.entry_id) == identity and fan.profile_key == "vento":
+    latched_identity = latches.get(entry.entry_id)
+    if latched_identity is None:
+        return
+    identity = _fan_identity(fan)
+    if latched_identity != identity:
+        _clear_latched_temperature_probes(hass, entry.entry_id)
+    elif fan.profile_key == "vento":
         fan._temperature_probes_detected = True
 
 
@@ -521,7 +538,7 @@ def _async_register_optional_poll_entity_sync(
 ) -> None:
     """Keep generated entity visibility aligned with learned capabilities."""
     registry = er.async_get(hass)
-    loaded_identity = _fan_identity(coordinator)
+    loaded_identity = _fan_identity(coordinator._fan)
     loaded_temperature_probes = coordinator._fan.profile_supports_capability(
         "temperature_probes"
     )
@@ -538,8 +555,10 @@ def _async_register_optional_poll_entity_sync(
             coordinator._fan.profile_key,
             getattr(coordinator._fan, "_unit_type_id", None),
             current_firmware if current_firmware is not None else loaded_identity[2],
+            coordinator._fan.device_search,
         )
         if current_identity != loaded_identity:
+            _clear_latched_temperature_probes(hass, entry.entry_id)
             if not reload_requested:
                 _LOGGER.info(
                     "Reloading EcoVent V2 config entry %s after device identity "
@@ -750,6 +769,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         coordinator = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
         await _async_close_coordinator(hass, coordinator)
     return unload_ok
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Discard learned probe support when a config entry is removed."""
+    _clear_latched_temperature_probes(hass, entry.entry_id)
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

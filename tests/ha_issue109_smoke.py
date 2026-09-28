@@ -181,7 +181,7 @@ async def _run_issue_fixture(*, temperature_answers, late_temperature_answers=Fa
             await hass.async_stop()
 
 
-async def _run_reload_loop_fixture():
+async def _run_reload_loop_fixture(*, serial_swap=False):
     with tempfile.TemporaryDirectory(prefix="ecovent-ha-reload-loop-") as tmp:
         hass = HomeAssistant(tmp)
         entry = types.SimpleNamespace(
@@ -210,6 +210,11 @@ async def _run_reload_loop_fixture():
             for cycle in range(2):
                 coordinator = Coordinator(hass, entry)
                 fan = coordinator._fan
+                if serial_swap and cycle == 0:
+                    fan._device_search = "serial-1"
+                if serial_swap and cycle == 1:
+                    fan._device_search = "serial-2"
+                    reloads.clear()
                 fan.id = "0123456789ABCDEF"
                 wire = ScheduleWire(fan)
                 wire.values = dict(ISSUE_109_DUMP_VALUES)
@@ -220,6 +225,18 @@ async def _run_reload_loop_fixture():
                 coordinator._should_refresh_schedule_week = lambda: False
                 await coordinator.async_refresh()
                 assert coordinator.last_update_success
+                if serial_swap and cycle == 1:
+                    previous = coordinators[0]._fan
+                    assert (
+                        fan.profile_key,
+                        fan._unit_type_id,
+                        fan.firmware,
+                    ) == (
+                        previous.profile_key,
+                        previous._unit_type_id,
+                        previous.firmware,
+                    )
+                    assert fan.device_search != previous.device_search
                 assert not fan.profile_supports_capability("temperature_probes")
                 if cycle:
                     restore = getattr(
@@ -227,6 +244,16 @@ async def _run_reload_loop_fixture():
                     )
                     if restore is not None:
                         restore(hass, entry, fan)
+                    if serial_swap:
+                        assert not fan.profile_supports_capability("temperature_probes")
+                        assert not set(TEMPERATURE_METHODS) & {
+                            spec.method
+                            for spec in Sensors.SENSOR_SPECS
+                            if fan.profile_has_entity_requirements(
+                                required_params=spec.required_params or (spec.method,),
+                                required_capabilities=spec.required_capabilities,
+                            )
+                        }
                 hass.data.setdefault("ecovent_v2", {})[entry.entry_id] = coordinator
                 Integration._async_register_optional_poll_entity_sync(
                     hass, entry, coordinator
@@ -241,6 +268,12 @@ async def _run_reload_loop_fixture():
                             break
                     assert fan.profile_supports_capability("temperature_probes")
 
+            if serial_swap:
+                assert reloads == []
+                for coordinator in coordinators:
+                    await coordinator.async_shutdown()
+                await hass.async_stop()
+                return
             fan = coordinators[1]._fan
             wires[1].values.update(ISSUE_109_DUMP_VALUES)
             for _ in range(2 * FanProtocol.OPTIONAL_PARAM_RETRY_BACKOFF_READS + 4):
@@ -268,6 +301,26 @@ async def _run_reload_loop_fixture():
         for coordinator in coordinators:
             await coordinator.async_shutdown()
         await hass.async_stop()
+
+
+async def _run_probe_latch_removal_fixture():
+    with tempfile.TemporaryDirectory(prefix="ecovent-ha-latch-removal-") as tmp:
+        hass = HomeAssistant(tmp)
+        entry = types.SimpleNamespace(entry_id="issue109-removed")
+        hass.data[Integration._TEMPERATURE_PROBE_LATCHES] = {
+            entry.entry_id: ("vento", 0x0100, "1.0", "serial-1")
+        }
+        await Integration.async_remove_entry(hass, entry)
+        assert Integration._TEMPERATURE_PROBE_LATCHES not in hass.data
+        await hass.async_stop()
+
+
+def test_recom_probe_latch_clears_when_entry_is_removed():
+    asyncio.run(_run_probe_latch_removal_fixture())
+
+
+def test_recom_probe_latch_is_not_reused_for_a_different_serial():
+    asyncio.run(_run_reload_loop_fixture(serial_swap=True))
 
 
 def test_recom_late_probe_reload_loop_fixture():
@@ -305,7 +358,11 @@ def test_df270_shaped_0100_without_temperature_answers_keeps_existing_behavior()
     assert result["writes"] == 0
 
 if __name__ == "__main__":
-    if sys.argv[1:] == ["reload-loop"]:
+    if sys.argv[1:] == ["remove-latch"]:
+        test_recom_probe_latch_clears_when_entry_is_removed()
+    elif sys.argv[1:] == ["serial-swap"]:
+        test_recom_probe_latch_is_not_reused_for_a_different_serial()
+    elif sys.argv[1:] == ["reload-loop"]:
         test_recom_late_probe_reload_loop_fixture()
     elif sys.argv[1:] == ["df270"]:
         test_df270_shaped_0100_without_temperature_answers_keeps_existing_behavior()

@@ -624,6 +624,12 @@ Version 1.2.25
 * Reject malformed Breezy/Freshbox alarm lists with an unpaired trailing byte
   instead of silently dropping the tail.
 
+Version 1.2.31
+* Retain the last valid Freshpoint/Breezy CO2 and fan RPM measurements when an
+  automatic poll temporarily omits those optional rows. Explicit unsupported or
+  malformed replies still clear the measurement; writable thresholds remain
+  independently bounded.
+
 Version 1.2.30
 * Accept Freshpoint/Breezy two-byte CO2 measurements above the PDF's 2000 ppm
   reading range without widening the 400-2000 ppm writable CO2 threshold.

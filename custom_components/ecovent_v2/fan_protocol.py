@@ -17,6 +17,9 @@ BULK_READ_REPROBE_READS = 10
 VENTO_SOFT_MISS_CONTROL_PARAMS = frozenset({0x0001, 0x0002, 0x0044})
 PRESERVE_ON_SOFT_MISS_PARAMS = frozenset(
     {
+        0x0027,  # Breezy/Freshpoint CO2 measurement
+        0x004A,  # Vento/Breezy fan 1 RPM measurement
+        0x004B,  # Vento/Breezy fan 2 RPM measurement
         0x0064,  # filter_timer_countdown
         0x007C,  # device_search
         0x0086,  # firmware
@@ -624,7 +627,7 @@ class FanProtocolMixin:
         return self._read_params("".join(f"{param_id:04x}" for param_id in sorted(retained)))
 
     def _mark_param_unavailable(self, param_id, *, unsupported=False, invalid=False):
-        """Retain soft-missing controls/identity, but clear explicitly rejected data."""
+        """Retain selected soft-missing state, but clear rejected or invalid data."""
         if param_id in PRESERVE_ON_SOFT_MISS_PARAMS and not (unsupported or invalid):
             return
         if not (unsupported or invalid) and self._is_vento_soft_miss_control(param_id):

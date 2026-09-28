@@ -138,6 +138,78 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertTrue(absent._read_params("00640002", required_params=frozenset()))
         self.assertIsNone(absent.filter_timer_countdown)
 
+    def test_freshpoint_measurement_soft_misses_retain_known_values(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        fan._co2 = 1500
+        fan._fan1_speed = "1800"
+        fan._fan2_speed = "1800"
+        requested = "000100020027004A004B"
+        # A healthy core poll omits the optional measurements from bulk and
+        # individual replies, as happens when a controller drops sensor rows.
+        missing_measurements = packet_with_payload([0x01, 1, 0x02, 3])
+        fan.send = lambda _data: True
+        fan.receive = lambda: missing_measurements
+
+        self.assertTrue(
+            fan._read_params(requested, required_params=frozenset({0x0001, 0x0002}))
+        )
+        self.assertEqual(fan.co2, 1500)
+        self.assertEqual(fan.fan1_speed, "1800")
+        self.assertEqual(fan.fan2_speed, "1800")
+        self.assertEqual(
+            fan.last_missing_optional_params, {0x0027, 0x004A, 0x004B}
+        )
+
+        for param_id in (0x0027, 0x004A, 0x004B):
+            self.assertEqual(fan._optional_read_backoff[param_id], 10)
+
+        cold = Fan("192.0.2.2")
+        cold.unit_type = "1100"
+        cold.send = lambda _data: True
+        cold.receive = lambda: missing_measurements
+        self.assertTrue(
+            cold._read_params(requested, required_params=frozenset({0x0001, 0x0002}))
+        )
+        self.assertIsNone(cold.co2)
+        self.assertIsNone(cold.fan1_speed)
+        self.assertIsNone(cold.fan2_speed)
+
+        recovered = [0x01, 1, 0x02, 4]
+        for param_id, value in (
+            (0x0027, 2014),
+            (0x004A, 2340),
+            (0x004B, 2340),
+        ):
+            recovered.extend(
+                [0xFE, 0x02, param_id & 0xFF, *value.to_bytes(2, "little")]
+            )
+        fan.receive = lambda: packet_with_payload(recovered)
+        self.assertTrue(
+            fan._read_params(requested, required_params=frozenset({0x0001, 0x0002}))
+        )
+        self.assertEqual(fan.co2, 2014)
+        self.assertEqual(fan.fan1_speed, "2340")
+        self.assertEqual(fan.fan2_speed, "2340")
+        self.assertFalse(fan._optional_read_backoff)
+
+    def test_freshpoint_measurement_invalid_or_unsupported_rows_clear_values(self):
+        for param_id, attr, value in (
+            (0x0027, "co2", 1500),
+            (0x004A, "fan1_speed", "1800"),
+            (0x004B, "fan2_speed", "1800"),
+        ):
+            for payload in ([0xFD, param_id & 0xFF], [param_id & 0xFF, 0x01]):
+                with self.subTest(param=param_id, payload=payload):
+                    fan = Fan("192.0.2.1")
+                    fan.unit_type = "1100"
+                    setattr(fan, f"_{attr}", value)
+                    fan.send = lambda _data: True
+                    fan.receive = lambda payload=payload: packet_with_payload(payload)
+
+                    self.assertFalse(fan._read_params(f"{param_id:04x}"))
+                    self.assertIsNone(getattr(fan, attr))
+
     def test_filter_countdown_explicit_invalid_or_unsupported_rows_clear_stale_value(self):
         for payload in (
             [0xFE, 0x04, 0x64, 0x00, 0x00, 0x6E, 0x01],

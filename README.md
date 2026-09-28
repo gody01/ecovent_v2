@@ -46,9 +46,9 @@ Official Blauberg / VENTS platform families and names:
 * Blauberg Smart Wi-Fi, Smart IR Wi-Fi, VENTS iFan Wi-Fi,
   VENTS iFan Move Wi-Fi
 * Blauberg Freshbox 100 WiFi, Freshbox 100 ERV WiFi, Freshbox E-100 WiFi,
-  Freshbox E1-100 WiFi, Freshbox E2-100 ERV WiFi
+  Freshbox E1-100 WiFi, Freshbox E2-100 WiFi, Freshbox E2-100 ERV WiFi
 * VENTS Micra 100 WiFi, Micra 100 ERV WiFi, Micra 100 E WiFi,
-  Micra 100 E1 WiFi, Micra 100 E2 ERV WiFi
+  Micra 100 E1 WiFi, Micra 100 E2 WiFi, Micra 100 E2 ERV WiFi
 * VENTS Breezy, Breezy 160, Breezy 160-E, Breezy 160-E Smart,
   Breezy 200-E, Breezy 200-E Smart, Breezy Eco 160, Breezy Eco 200
 * Blauberg Freshpoint, Freshpoint 160, Freshpoint 160-E,

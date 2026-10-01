@@ -493,6 +493,16 @@ def _async_update_unsupported_optional_poll_entities(registry, fan) -> None:
             )
 
 
+def _fan_identity(fan) -> tuple:
+    """Return the identity fields that distinguish learned fan capabilities."""
+    return (
+        fan.profile_key,
+        getattr(fan, "_unit_type_id", None),
+        fan.firmware,
+        fan.device_search,
+    )
+
+
 def _async_register_optional_poll_entity_sync(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -500,11 +510,7 @@ def _async_register_optional_poll_entity_sync(
 ) -> None:
     """Keep generated entity visibility aligned with learned capabilities."""
     registry = er.async_get(hass)
-    loaded_identity = (
-        coordinator._fan.profile_key,
-        getattr(coordinator._fan, "_unit_type_id", None),
-        coordinator._fan.firmware,
-    )
+    loaded_identity = _fan_identity(coordinator._fan)
     last_capability_state = None
     reload_requested = False
 
@@ -518,6 +524,7 @@ def _async_register_optional_poll_entity_sync(
             coordinator._fan.profile_key,
             getattr(coordinator._fan, "_unit_type_id", None),
             current_firmware if current_firmware is not None else loaded_identity[2],
+            coordinator._fan.device_search,
         )
         if current_identity != loaded_identity:
             if not reload_requested:
@@ -531,7 +538,6 @@ def _async_register_optional_poll_entity_sync(
                 hass.config_entries.async_schedule_reload(entry.entry_id)
                 reload_requested = True
             return
-
         capability_state = (
             *current_identity,
             coordinator._fan.unsupported_optional_poll_parameter_ids(),
@@ -666,7 +672,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     platform_setup_started = False
     try:
         await coordinator.async_config_entry_first_refresh()
-
         hass.data.setdefault(DOMAIN, {})
         hass.data[DOMAIN][entry.entry_id] = coordinator
         await async_register_frontend(hass)

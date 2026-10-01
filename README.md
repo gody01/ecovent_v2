@@ -28,28 +28,34 @@ Official Blauberg / VENTS platform families and names:
   TwinFresh Expert RW1-85 V.2, TwinFresh Expert RW1-100 V.2,
   TwinFresh Expert RW1-50 V.3
 * Blauberg VENTO Expert DUO A30-1 W V.2,
-  VENTO Expert DUO A30-1 S10 W V.2,
+  VENTO Expert DUO A30-1 S10 W V.2, VENTO Expert DUO A30-1 S10 W V.2 BLK,
   VENTS TwinFresh Expert Duo RW1-30 V.2
 * Blauberg VENTO Expert A30 W V.2, VENTO Expert A30 S10 W V.2,
   VENTS TwinFresh Expert RW-30 V.2
 * Blauberg VENTO inHome, VENTO inHome W, VENTO inHome mini,
-  VENTO inHome mini W, VENTO inHome 100, VENTO inHome 160
+  VENTO inHome mini W, VENTO inHome 100, VENTO inHome 160,
+  VENTO inHome old
 * VENTS TwinFresh Atmo, TwinFresh Atmo 100, TwinFresh Atmo 160,
-  TwinFresh Atmo mini, TwinFresh Atmo Wi-Fi, TwinFresh Atmo mini Wi-Fi
+  TwinFresh Atmo mini, TwinFresh Atmo Wi-Fi, TwinFresh Atmo mini Wi-Fi,
+  TwinFresh Atmo old (`0x1A00`, firmware 1.0 2023-12-03)
+* Blauberg RECOM 4 SR (heat recovery AHU; shown as “AHU” in the Blauberg Home
+  app; reports unit type `0x0100` and firmware 0.43; four air temperatures
+  and a read-only setpoint verified only from the issue #109 dump fixture)
 * VENTS TwinFresh Style Wi-Fi, TwinFresh Style Frost Wi-Fi,
   TwinFresh Style Wi-Fi mini
 * Blauberg Smart Wi-Fi, Smart IR Wi-Fi, VENTS iFan Wi-Fi,
   VENTS iFan Move Wi-Fi
 * Blauberg Freshbox 100 WiFi, Freshbox 100 ERV WiFi, Freshbox E-100 WiFi,
-  Freshbox E1-100 WiFi, Freshbox E2-100 WiFi
+  Freshbox E1-100 WiFi, Freshbox E2-100 WiFi, Freshbox E2-100 ERV WiFi
 * VENTS Micra 100 WiFi, Micra 100 ERV WiFi, Micra 100 E WiFi,
-  Micra 100 E1 WiFi, Micra 100 E2 WiFi
+  Micra 100 E1 WiFi, Micra 100 E2 WiFi, Micra 100 E2 ERV WiFi
 * VENTS Breezy, Breezy 160, Breezy 160-E, Breezy 160-E Smart,
   Breezy 200-E, Breezy 200-E Smart, Breezy Eco 160, Breezy Eco 200
 * Blauberg Freshpoint, Freshpoint 160, Freshpoint 160-E,
   Freshpoint 160-E L055/L07/L1, Freshpoint 160-E Pro L055/L07/L1,
   Freshpoint 200, Freshpoint 200-E L055/L07/L1,
-  Freshpoint 200-E Pro L055/L07/L1, Freshpoint Eco 160, Freshpoint Eco 200
+  Freshpoint 200-E Pro L055/L07/L1, Freshpoint Eco 160, Freshpoint Eco 200,
+  Freshpoint Eco 160-E L07
 * VENTS Arc Smart, Arc Smart white, Arc Smart black,
   Blauberg O2 Supreme, O2 Supreme white, O2 Supreme black
 
@@ -71,10 +77,10 @@ External relabels and OEM names tracked as evidence or candidates:
   Blauberg Winzel Expert WiFi RW1-50 P
 * NIBE DVC 10, NIBE DVC 10-50W, NIBE DVC 10-D30W
 * ECONOPRIME DF270, ECONOPRIME DF270 Connect, and the reported seller spelling
-  Econology DF270 Connect (`0x0100`, mapped to the tested VENTO protocol
-  profile). VENTS VUT 270 V5B EC A21 is supported through the separate A21
-  Modbus transport; this does not make it a confirmed DF270 relabel or prove
-  BGCP compatibility.
+  Econology DF270 Connect (`0x0100`, also reported by RECOM 4 SR; mapped to
+  the tested VENTO protocol profile). VENTS VUT 270 V5B EC A21 is supported
+  through the separate A21 Modbus transport; this does not make it a confirmed
+  DF270 relabel or prove BGCP compatibility.
 * ECONOPRIME Bora documentary candidates: Bora 160, Bora 160 L440,
   Bora 160 L550, Bora 160 L700, Bora 160 L1000, Bora 160 Prime L440,
   Bora 160 Prime L550, Bora 160 Prime L700, Bora 160 Prime L1000,
@@ -96,203 +102,172 @@ External relabels and OEM names tracked as evidence or candidates:
 * Blauberg VENTO Expert A50-1 W V.2
 
 # Currently supported:
-* UI integration setup
-* VENTS A21 Modbus TCP/RTU with an input-register `37 == 1` identity check
-* turn_on/turn_off
-* Preset modes:
-  - low
-  - medium
-  - high
-  - manual
-* In manual mode speed percentage
-* Timer mode selection on devices exposing `0x0007`
-* Silent mode
-  - optional configuration checkbox for VENTO/TwinFresh-style devices
-  - keeps the device in manual speed mode and maps Home Assistant preset changes
-    to manual speed percentages to avoid unnecessary confirmation beeps
-  - preserves device-side humidity, relay, and analog-voltage auto-boost trigger
-    settings while manual preset control is used, since those triggers may be
-    intentionally configured
-    above the configured thresholds
-  - airflow/direction changes still use the device airflow command, but the
-    integration batches the current manual speed state into the same write
-* Oscillating
-  - When on, Fans are in 'heat_recovery' airflow
-* Direction
-  - "forward" means 'ventilation' airflow
-  - "reverse" means 'air_supply' airflow
-* Writable raw airflow selection on devices exposing `0x00B7`, including the
-  Freshpoint/Breezy `extract` value.
-  - reported `extract` airflow is exposed through this Select instead of the
-    built-in Home Assistant direction attribute, which only has forward/reverse
-    states.
-  - for balanced Freshpoint/Breezy modes with separate supply and extract fan
-    setpoints, the built-in Home Assistant percentage is only a single-value UI
-    compromise: it averages both setpoints until a richer two-fan control surface
-    exists.
-* Weekly schedule support on devices exposing `0x0072` / `0x0077`
-  - one visible schedule entity for the weekly schedule
-  - open the schedule entity's more-info dialog to edit the weekly schedule
-* Device clock synchronization
-  - automatic sync is enabled by default and can be disabled in reconfigure
-  - periodic sync checks every five minutes and writes only when the device
-    clock differs from Home Assistant local time by more than a minute
-  - on Home Assistant OS/Supervised installs, automatic clock writes require
-    Supervisor to report the host clock as NTP synchronized
-  - Home Assistant startup discovery stays read-only and defers standalone
-    clock correction, so restarting HA does not make every fan beep
-  - standalone periodic correction rereads the device RTC immediately before
-    writing, and skips the write if the fresh RTC state is unavailable
-  - silent manual-speed mode suppresses standalone automatic RTC correction,
-    because RTC writes can make BGCP devices acknowledge audibly
-  - device writes that would already beep also batch the RTC rows when the
-    cached clock has drifted, avoiding a separate clock-only beep
-  - the explicit `sync_device_clock` fan service remains available when a clock
-    write is more important than silence and may make the device acknowledge
+
+* Home Assistant UI setup and reconfiguration, including VENTS A21 Modbus TCP/RTU.
+* Power, low/medium/high/manual presets, and manual speed percentage.
+* Optional silent manual-speed control for VENTO/TwinFresh devices.
+* Heat recovery (oscillation), ventilation (forward), and air supply (reverse).
+* Profile-dependent airflow selection, including Freshpoint/Breezy extract mode.
+* Timer modes, device sensors, diagnostics, and supported configuration controls.
+* Weekly schedules: edit the schedule entity through its more-info dialog.
+* Configurable automatic clock synchronization and the `sync_device_clock` service.
+
+See [protocol notes](protocol.md#home-assistant-control-and-clock-behavior) for
+silent-mode, airflow, and clock-sync caveats; capabilities depend on the device profile.
 
 # Changelog
-version 0.0.5:
-* Added sensors:
-  - Humidity
-  - Fan1 speed
-  - Fan2 speed
-  - Airflow
 
-* Changed
-  - Update method to DataUpdateCoordinator for reduced request to FAN device
+## Version 1.2.31
+* Keep Freshpoint/Breezy CO2 and fan RPM through three missed reads; clear on the fourth or invalid data (#104, #111).
+* Add RECOM 4 SR air temperatures and a read-only setpoint; recognize its optional-row variant (fixture-verified, #109).
+* Register RECOM 4 SR temperature sensors as probes appear during polling without reloading the config entry.
+* Recognize VENTO inHome old / TwinFresh Atmo old optional-row rejections without a false Repair (#110).
 
-version 0.1.0:
-* Added sensors:
-  - battery_voltage
-  - timer_counter
-  - humidity_treshold
-  - filter_timer_countdown
-  - boost_time
-  - machine_hours
-  - analogV
-  - analogV_treshold
+## Version 1.2.30
+* Accept Freshpoint/Breezy CO2 readings above 2000 ppm without changing writable threshold limits (#104).
+* Recognize standard Freshpoint optional hardware without a false Repair (#107).
+* Preserve final schedule times of either 00:00 or 23:59 and reject invalid end times (#102).
 
-All sensors are categorised and some are disabled by default.
+## Version 1.2.28
+* Preserve Vento controls across partial polls and retry missing values (#100).
+* Confirm controls and schedule changes from fresh reads; clear invalid or identity-stale values.
+* Keep capability caches, lifecycle cleanup, and unknown alarms consistent after partial or malformed replies.
 
-version 0.2.0:
-* Added binary sensors:
-  - boost_status
-  - timer_mode
-  - humidity_sensor_state
-  - relay_sensor_state
-  - relay_status
-  - filter_replacement_status
-  - alarm_status
-  - cloud_server_state
-  - humidity_status
-  - analogV_status
+## Version 1.2.25
+* Expose Freshpoint/Breezy extract airflow and label unknown airflow values clearly.
+* Clarify that balanced two-fan percentage is a UI compromise, not measured speed.
+* Recognize standard Freshpoint and older VENTO Expert optional hardware without false Repairs (#90, #94, #95, #97).
+* Relearn capabilities and reload device metadata when firmware or unit type changes.
+* Report failed commands instead of publishing optimistic control, schedule, or clock states.
+* Preserve complete schedule days when reads return only some periods.
+* Close connections after failed setup so retries do not leak transports.
+* Reject invalid, duplicate, conflicting, or mismatched BGCP replies and write acknowledgments.
+* Preserve parameter pages across batched commands, including clock writes.
+* Restore Smart Wi-Fi / iFan availability when optional motion rows are rejected (#92).
+* Match replies to the configured device while keeping broadcast discovery open.
+* Retry bulk polling after temporary failures instead of permanently slowing polling.
+* Reject batch writes containing unknown controls and refresh switches after successful writes.
+* Report failed UDP sends and clock batches without accepting stale replies.
+* Suppress standalone automatic clock correction in silent mode; explicit sync remains available.
+* Reject malformed alarm lists rather than silently discarding trailing data.
 
-All sensors are categorised and some are disabled by default.
+## Version 1.2.24
+* Keep Vento/TwinFresh available when individual control rows are omitted (#85).
+* Include the integration version in hardware reports and add confirmed Flexit/Roomie discovery names (#86).
 
-* Changed:
-  - Removed default IP address from config input field Host
-  - Added some icon defintions to sensors
-  - Battery percent caluclation
+## Version 1.2.23
+* Recognize older Vento A50 and DUO A30 optional-row variants without false Repairs (#78, #80, #82, #84).
+* Make hardware Repair reports specific to each model, firmware, and rejected-register set.
 
-version 0.2.0:
-* Added services
-  - filter_timer_reset (Reset filter timer)
-  - reset_alarms (Reset alarms)
-* Changed:
-  - From binary sensor to switch:
-    - humidity_sensor_state
-    - relay_sensor_state
-    - analogV_sensor_state
+## Version 1.2.21
+* Stop polling explicitly unsupported optional Breezy/Freshpoint rows and hide their entities.
+* Add hardware/profile Repairs with prefilled issue links and device diagnostics.
 
-version 0.4.0
-* Added broadcast devices search
-  - hack, that searches on network, if string: <broadcast> is entered
-    instead of IP address
-  - this is not yer proper HomaAssistant Auto Discovery, but it seems to
-    work on my network
+## Version 1.2.19
+* Restore Freshpoint polling when optional sensor or feature rows remain unavailable (#74).
+* Clear unsupported optional data, back off retries, and defer unavailable schedule reads.
+* Log missing required and optional registers to make hardware reports actionable.
+* Document recovery before downgrading migrated entries to 1.2.15 (see protocol notes).
 
-version 0.5.0
-* Mainly fixes from autmated checks and hopefuly some latency improvements
-  - Removed await coordinator in turn_on/turn_off and other interactive
-    functions
-  - Some cleanup in config_flow
-  - Removed deprecated set_speed functions
-  - Fix error if _battery_voltage is None
+## Version 1.2.18
+* Restore standard Freshpoint 160-E setup when non-Pro CO2/VOC probes are absent.
 
-version 0.6.0
-* Timeout Loop bailout
+## Version 1.2.17
+* Add VENTS A21 Modbus TCP/RTU support, identity checks, clocks, schedules, and config-entry migration.
 
-version 0.7.0
-* Fix manifest, to require correct pyEcovent version (0.9.14)
+## Version 1.2.16
+* Respect packet limits and retry omitted registers instead of accepting incomplete reads.
+* Refresh Freshpoint humidity and built-in temperatures on quick polls.
+* Map reported ECONOPRIME DF270 Connect devices to the tested VENTO profile.
+* Add official Freshpoint variants and updated Freshpoint/A21 research sources.
 
-version 0.8.0
-* Removed calling blocking sleep in event loop
+## Version 1.2.15
+* Add writable Off/Night/Party timer selection on supported devices.
+* Prevent duplicate schedule frontend registration during concurrent setup.
 
-version 0.9.0
-* Cleanup some definitions for HA checks
+## Version 1.2.14
+* In silent mode, zero percentage keeps the unit on at zero manual speed instead of sending audible power-off.
+* Allow the manual speed number to reach 0%.
+* Keep silent presets effective when configurable preset setpoints are unavailable.
 
-version 0.9.1
-* replaced hass.config_entries.async_setup_platforms with await hass.config_entries.async_forward_entry_setups
-* thanks to @berndulum for issue report
+## Version 1.2.13
+* Require synchronized host time for automatic clock writes on OS/Supervised installs.
+* Avoid duplicate silent preset writes after Home Assistant restarts.
+* Keep steady-state silent speed changes quiet; explicit airflow changes may still beep.
 
-version 0.9.2
-* fix name of sensor leaking to device name (hopefuly)
+## Version 1.2.12
+* Skip unchanged fan service calls to avoid unnecessary commands and refreshes.
 
-version 0.9.3
-* bump requirements to pyEcoventV2==0.9.16 (fixed boost_status reading)
+## Version 1.2.11
+* Fix silent-mode `turn_on` calls without an explicit speed or preset.
 
-version 0.9.5
-* Merged pull request for file "protocol.md" by @Styx85.
+## Version 1.2.10
+* Preserve customized entity IDs and repair only integration-generated legacy names.
+* Keep IDs stable when labels become clearer, including analog-voltage entities.
 
-version 0.9.6
-* Fix: Humidy Threshold creates errors trouble in newest HA #21
-* humidity_treshold, analogV_treshold, boost_timer changed from sensor to number. Now they can be configured via HomeAssistant.
+## Version 1.2.9
+* Avoid full schedule polls while scheduling is off; refresh edited days before saving.
+* Add optional silent manual-speed control without changing auto-boost triggers.
+* Fix batched manual-speed and clock commands.
+* Make clock sync configurable and quieter, with explicit manual sync available.
+* Turn devices on before applying airflow or heat-recovery changes.
+* Group entity labels and clarify setup/reconfigure fields.
+* Replace separate clock diagnostics with one RTC timestamp and migrate legacy entries.
+* Label unknown airflow values instead of exposing a placeholder.
 
-Version 0.9.7
-* Updatet README.md
+## Version 1.2.8
+* Restore the weekly schedule switch and keep frontend hashing off the event loop.
+* Restore the Device problem binary sensor alongside detailed alarm states.
+* Expose manual speed and optional preset supply/exhaust configuration numbers.
+* Use each profile's speed scale for setpoints while retaining native HA percentage controls.
 
-Version 0.9.8
-* Fix number entities names.
+## Version 1.2.7
+* Add a localized weekly schedule editor and a single schedule summary entity.
+* Save only changed schedule records.
+* Correct VENTO schedule-speed diagnostics and keep unknown enum values stable.
+* Add clock synchronization and remove stale schedule helper entities.
 
-Version 0.9.9
-* more  entities names fixes.
+## Version 1.2.6
+* Improve transport handling, bulk-read fallback, missing-battery handling, and four-byte filter countdown decoding.
+* Add profile-aware Smart Wi-Fi/iFan, Breezy/Freshpoint, Freshbox/Micra, and Arc Smart/O2 Supreme support.
+* Expand documented model aliases and search keywords.
+* Expose only profile-supported entities and separate HA direction from protocol airflow.
 
-Version 1.0.0
-* some more name fixes
-* fix code to be more compliant with latest HA
-* some code cleanup
+## Version 1.2.5
+* Clean up Home Assistant entity names and categories
+* Move multi-state statuses from binary sensors to enum sensors
+* Expose observed beeper flag as a read-only diagnostic sensor
+* Add Airflow enum state translations for cleaner UI labels
+* Add fan attribute translations so the built-in direction/oscillation controls
+  read as Airflow and Heat recovery
+* Add Off as a Home Assistant pseudo preset mode that turns the fan off
+* Skip unchanged fan commands so automations can set desired final states
+  without re-sending already-active state, preset, direction, heat recovery, or
+  manual percentage writes
+* Switch to manual speed automatically when setting the fan percentage directly
+* Keep preset percentage synchronized from the device-reported low/medium/high
+  supply/exhaust setpoints instead of hiding it outside manual mode
+* Correct the VENTO/TwinFresh Expert `0x0306` interpretation from beeper state to
+  the PDF-documented current schedule speed; writable beeper control remains
+  exposed only for profiles with a documented sound-emitter parameter.
 
-Version 1.0.1
-* Values for humidity_threshold, analogV_threshold and boost ime read from device on initialization.
+## Version 1.2.4
+* Merge pull request #40 from AndyNew2
+  * added weekly_schedule_state on request
+  * Add weekly schedule state to VentoSwitch
 
-Version 1.0.2
-* Fix for issue #25 VentoExpertFan does not set FanEntityFeature.TURN_OFF but implements the thurn_off method
+## Version 1.2.3
+* Merge pull request #39 from AndyNew2/AndyNew2-Rework
+  * v1.2.3 bugfix and stability improvement
 
-Version 1.0.3
-* Merge pull request #28 from SantaFox/main: Amended some sensors for better automations
+## Version 1.2.2
+* Beeper status error/write value of val varable
+* fix for case, where HW returns unknown value for some statuses/states
 
-Version 1.0.4
+## Version 1.2.1
+* Merged @AndyNew2 pull request bugfix for initialization not using job executor and some config flow fixes #37
 
-Version 1.0.5
-* Bump pyEcoventV2 requirements to 0.9.19
-
-Version 1.0.6
-* Bump pyEcoventV2 requirements to 0.9.21, trying to resolve different lengths of returned value for filter_timer_counter
-
-Version 1.0.7 / 1.0.8
-* Bump pyyecoventv2 requirements to 0.9.22, still trying to fix 4 byte return of filter_timer_counter function
-
-Version 1.0.9
-* Bump pyyecoventv2 requirements to 0.9.23, remove beeper gueswork
-
-Version 1.1.0
-* Merged fixes from github contributors
-
-Version 1.1.1
-* Fix typos
-
-Version 1.2.0
-
+## Version 1.2.0
 * Merged @AndyNew2 pull request v1.2.0 Rework ecovent library #36
   * this is a massive rework of your integration:
   * moved your library into the integration to avoid confusions ;-)
@@ -316,321 +291,142 @@ Version 1.2.0
     before. This unindented fast update created together with the fix of retries
     many HA issues. HA is not prepared to be blocked around 5 - 10 seconds...
 
-Version 1.2.1
-* Merged @AndyNew2 pull request bugfix for initialization not using job executor and some config flow fixes #37
+## Version 1.1.1
+* Fix typos
 
-Version 1.2.2
-* Beeper status error/write value of val varable
-* fix for case, where HW returns unknown value for some statuses/states
+## Version 1.1.0
+* Merged fixes from github contributors
 
-Version 1.2.3
-* Merge pull request #39 from AndyNew2/AndyNew2-Rework
-  * v1.2.3 bugfix and stability improvement
+## Version 1.0.9
+* Bump pyyecoventv2 requirements to 0.9.23, remove beeper gueswork
 
-Version 1.2.4
-* Merge pull request #40 from AndyNew2
-  * added weekly_schedule_state on request
-  * Add weekly schedule state to VentoSwitch
+## Version 1.0.8 / 1.0.7
+* Bump pyyecoventv2 requirements to 0.9.22, still trying to fix 4 byte return of filter_timer_counter function
 
-Version 1.2.5
-* Clean up Home Assistant entity names and categories
-* Move multi-state statuses from binary sensors to enum sensors
-* Expose observed beeper flag as a read-only diagnostic sensor
-* Add Airflow enum state translations for cleaner UI labels
-* Add fan attribute translations so the built-in direction/oscillation controls
-  read as Airflow and Heat recovery
-* Add Off as a Home Assistant pseudo preset mode that turns the fan off
-* Skip unchanged fan commands so automations can set desired final states
-  without re-sending already-active state, preset, direction, heat recovery, or
-  manual percentage writes
-* Switch to manual speed automatically when setting the fan percentage directly
-* Keep preset percentage synchronized from the device-reported low/medium/high
-  supply/exhaust setpoints instead of hiding it outside manual mode
-* Correct the VENTO/TwinFresh Expert `0x0306` interpretation from beeper state to
-  the PDF-documented current schedule speed; writable beeper control remains
-  exposed only for profiles with a documented sound-emitter parameter.
+## Version 1.0.6
+* Bump pyEcoventV2 requirements to 0.9.21, trying to resolve different lengths of returned value for filter_timer_counter
 
-Version 1.2.6
-* Harden the vendored protocol client with better transport error handling,
-  bulk-read fallback, missing-battery tolerance, and four-byte filter countdown
-  parsing.
-* Split protocol maps, device profiles, model metadata, sensor specs, and tests
-  out of the monolithic client for easier review and maintenance.
-* Add profile-aware support for Smart Wi-Fi/iFan extract fans, Breezy/Freshpoint,
-  Freshbox/Micra, and Arc Smart/O2 Supreme devices.
-* Expand PDF-backed model aliases and README discovery keywords for Blauberg,
-  VENTS, OXXIFY, SIKU, Flexit, DUKA, RL, Winzel, and NIBE labels.
-* Keep Home Assistant fan direction values separate from EcoVent protocol airflow
-  values, and expose optional entities only when the active profile supports
-  them.
+## Version 1.0.5
+* Bump pyEcoventV2 requirements to 0.9.19
 
-Version 1.2.7
-* Add the built-in weekly schedule editor and expose the full weekly schedule
-  through a single schedule summary entity.
-* Register the custom schedule frontend with a content-hashed module URL and add
-  localized schedule editor strings.
-* Make schedule writes bounded by sending only changed days/periods and writing
-  only changed records to the device.
-* Correct VENTO/TwinFresh `0x0306` to schedule speed, remove false VENTO beeper
-  exposure, and keep unknown enum sensor values stable.
-* Add device clock sync support and clean stale helper entities from the previous
-  schedule editor approach.
+## Version 1.0.4
 
-Version 1.2.8
-* Restore the visible weekly schedule switch and keep the schedule frontend file
-  digest out of the Home Assistant event loop.
-* Restore `alarm_status` as a Home Assistant `Device problem` binary sensor
-  while keeping the enum alarm sensor for `no` / `warning` / `alarm` detail.
-* Expose manual speed as a visible configuration number so it can be adjusted
-  without using the live fan speed control.
-* Add disabled-by-default configuration numbers for preset supply/exhaust speed
-  setpoints on VENTO/TwinFresh, Breezy/Freshpoint, and Freshbox/Micra profiles.
-* Encode speed setpoint writes with the active protocol profile's percent scale,
-  while keeping live fan percentage control Home Assistant-native.
 
-Version 1.2.9
-* Stop polling the full weekly schedule setup while the schedule switch is off;
-  normal updates now read only the lightweight schedule enabled state.
-* Refresh edited schedule days from the device before diffing and saving.
-* Add optional silent manual-speed mode for VENTO/TwinFresh-style devices:
-  Home Assistant presets are mapped to manual speed writes, while humidity,
-  relay, and analog-voltage boost triggers are preserved.
-* Encode batched multi-parameter writes through the same protocol path as single
-  parameter writes, so silent/manual speed and RTC batches send the intended
-  rows.
-* Make device clock synchronization configurable and quieter: HA local time is
-  used, periodic correction only writes for drift over a minute, RTC rows are
-  reread before standalone correction, RTC rows are batched into already-noisy
-  writes when possible, startup discovery defers standalone clock correction,
-  and the manual
-  `sync_device_clock` service remains available.
-* Turn the unit on before applying Home Assistant airflow direction or heat
-  recovery changes, so Freshpoint/Breezy ventilation mode starts reliably from
-  an off state.
-* Relabel entities and preset translations into sort-friendly `Boost`, `Speed`,
-  `Mode`, `Trigger`, `Airflow`, and `Weekly schedule` groups.
-* Add human-readable labels for the setup and reconfigure form fields, including
-  update interval, automatic clock sync, and silent manual-speed mode.
-* Replace separate RTC date/time diagnostic entity specs with one
-  `RTC timestamp` sensor and remove stale legacy RTC date/time registry entries
-  during setup migration.
-* Stop exposing the old `Airflow: something` placeholder for protocol airflow
-  enum value `3`; unknown airflow values now use `Unknown airflow <value>`.
+## Version 1.0.3
+* Merge pull request #28 from SantaFox/main: Amended some sensors for better automations
 
-Version 1.2.10
-* Preserve user-customized entity ids during legacy entity id migration, while
-  still repairing known intermediate integration-generated names so regenerated
-  names survive integration reloads and Home Assistant restarts, including
-  analog voltage sensor/status variants.
-* Use the same stable object-id suffixes for newly created entities and legacy
-  migrations, keeping readable UI labels without changing entity ids just
-  because labels gained clearer prefixes.
+## Version 1.0.2
+* Fix for issue #25 VentoExpertFan does not set FanEntityFeature.TURN_OFF but implements the thurn_off method
 
-Version 1.2.11
-* Fix Home Assistant fan `turn_on` calls without an explicit speed or preset in
-  silent manual-speed mode, so `preset_mode` is not passed as an unsupported
-  executor keyword argument.
+## Version 1.0.1
+* Values for humidity_threshold, analogV_threshold and boost ime read from device on initialization.
 
-Version 1.2.12
-* Skip unchanged Home Assistant fan service calls before scheduling executor
-  work or refreshing the device, so repeated automations do not trigger extra
-  EcoVent commands when the fan is already off, already at the requested
-  preset, or already at the requested percentage.
+## Version 1.0.0
+* some more name fixes
+* fix code to be more compliant with latest HA
+* some code cleanup
 
-Version 1.2.13
-* On Home Assistant OS/Supervised installs, automatic device clock writes now
-  require Supervisor to report the host clock as NTP synchronized. Core and
-  container installs keep the previous behavior because no Supervisor clock
-  quality signal is available there.
-* In silent manual-speed mode, treat an already-on fan with the requested manual
-  speed as an unchanged preset even after Home Assistant restarts and loses the
-  in-memory preset facade. The facade is restored in HA state without sending a
-  duplicate device write.
-* Keep steady-state silent manual-speed changes to the only observed quiet
-  write: the manual speed register. Entering silent mode may still switch the
-  fan into manual mode once, and opportunistic RTC rows may be batched there
-  because that packet already writes an audible mode register.
-* Add an internal audible-write counter so tests can assert that silent-mode
-  paths do not leak device-acknowledged writes.
-* Guard the Home Assistant fan facade with behavior tests: silent preset and
-  percentage changes may only send the manual speed register while already in
-  manual mode. Explicit direction or heat-recovery/airflow commands still need
-  the device airflow register and are allowed as audible writes, without
-  opportunistic RTC rows while the fan is already in manual mode.
+## Version 0.9.9
+* more  entities names fixes.
 
-Version 1.2.14
-* In silent manual-speed mode, map Home Assistant `percentage: 0` to an on,
-  manual, zero-speed state instead of turning the EcoVent unit off. This lets
-  quiet-home automations reduce airflow with the quiet manual-speed register
-  rather than using audible power or preset writes.
-* Allow the visible manual speed number to be set to `0%`, matching the silent
-  zero-speed control path.
-* In silent manual-speed mode, keep preset changes effective even when a device
-  does not report configurable preset speed setpoints, by falling back to
-  deterministic low/medium/high manual-speed percentages instead of reusing the
-  current manual speed.
+## Version 0.9.8
+* Fix number entities names.
 
-Version 1.2.15
-* Expose `timer_mode` as a writable select on devices that support the
-  documented `0x0007` timer mode parameter, allowing Home Assistant to select
-  Off, Night, or Party mode.
-* Guard schedule frontend registration before the first await, preventing
-  duplicate static route registration when multiple EcoVent config entries are
-  set up concurrently.
+## Version 0.9.7
+* Updatet README.md
 
-Version 1.2.16
-* Keep protocol reads inside the documented 256-byte packet limit and verify
-  that every requested register was present in a valid bulk response. Registers
-  omitted by an otherwise valid reply are retried individually, and the parser
-  now preserves the protocol high-byte page across following parameters. A
-  refresh remains failed if an omitted register cannot be recovered, preventing
-  Home Assistant from accepting a stale cycle as complete.
-* Refresh Freshpoint humidity and all four built-in temperature registers on
-  quick updates. The non-Pro model has no VOC/CO2eq sensor, so those optional
-  readings may correctly remain unavailable.
-* Map reported device type `256` / parser key `0x0100` to ECONOPRIME DF270
-  Connect with the tested VENTO profile, while keeping the reported VENTS A21
-  OEM relationship explicitly unconfirmed.
-* Add official Freshpoint 160/200 standard and Pro length variants, current
-  Freshpoint specification/manual links, and the current VENTS VUT V5B EC A21
-  datasheet, product manual, Modbus table, and control manual as research
-  sources.
+## Version 0.9.6
+* Fix: Humidy Threshold creates errors trouble in newest HA #21
+* humidity_treshold, analogV_treshold, boost_timer changed from sensor to number. Now they can be configured via HomeAssistant.
 
-Version 1.2.17
-* Add separate VENTS A21 Modbus TCP and RTU transports with a read-only
-  controller identity check, the complete published register table, RTC and
-  weekly schedule support, and legacy BGCP config-entry migration.
+## Version 0.9.5
+* Merged pull request for file "protocol.md" by @Styx85.
 
-Version 1.2.18
-* Restore setup for standard Freshpoint 160-E devices whose non-Pro CO2/VOC
-  probes are legitimately absent. Missing optional variant registers are still
-  retried, while humidity and all four documented temperature registers remain
-  required for a successful Freshpoint refresh.
+## Version 0.9.3
+* bump requirements to pyEcoventV2==0.9.16 (fixed boost_status reading)
 
-Version 1.2.19
-* Restore Freshpoint 160-E polling when sensor/feature rows remain unavailable
-  after retry. Older 1.2.15 polling silently tolerated those omitted rows, while
-  1.2.16/1.2.17 made any omission fatal. Breezy/Freshpoint polls now require
-  only `0x0001` state, `0x0002` speed, and `0x0044` manual speed to prove the
-  device itself is reachable.
-* Treat explicit `0xFD` unsupported-register markers as unavailable data rather
-  than fresh values. Missing or unsupported optional rows are cleared, backed off
-  for ten poll cycles, and exposed as unknown/unavailable instead of stale or
-  false HA states.
-* Skip automatic full weekly-schedule cache reads while the lightweight
-  `0x0072` schedule-state row is unavailable, avoiding setup/reload delays on
-  Freshpoint variants that do not answer the optional schedule rows.
-* Add debug logging for incomplete BGCP/UDP refreshes after individual register
-  retries. The log now lists the missing required register addresses and any
-  non-critical poll registers that stayed unavailable or unsupported, making
-  Freshpoint hardware reports actionable without a local test device.
-* Note for HACS downgrades: entries migrated by 1.2.16/1.2.17 use config-entry
-  version 2. Home Assistant cannot load those entries with older 1.2.15 code;
-  delete and re-add the integration entries or restore a full Home Assistant
-  backup before downgrading to 1.2.15.
+## Version 0.9.2
+* fix name of sensor leaking to device name (hopefuly)
 
-Version 1.2.21
-* Remember optional Breezy/Freshpoint poll registers that the device explicitly
-  reports as unsupported and stop requesting them in later automatic polls.
-  Required fan availability rows still fail the update when absent or
-  unsupported, while generated entities for permanently unsupported optional
-  rows are hidden instead of staying as eternal unknown sensors.
-* Raise a Home Assistant Repairs warning for hardware/profile mismatches, with a
-  prefilled GitHub issue link and config-entry diagnostics carrying the detected
-  profile, unit type, firmware, and unsupported register details.
+## Version 0.9.1
+* replaced hass.config_entries.async_setup_platforms with await hass.config_entries.async_forward_entry_setups
+* thanks to @berndulum for issue report
 
-Version 1.2.23
-* Add regression coverage and protocol notes for Blauberg Vento Expert A50-1 W
-  V.2 firmware `0.4`, Vento Expert A50-1 S8/S10 firmware `0.7`, and Vento
-  Expert DUO A30-1 S10 W V.2 firmware `0.7` units that reject optional
-  preset-speed and filter-timer rows. The integration keeps the Vento/TwinFresh
-  profile map, hides the unsupported generated entities, and no longer opens a
-  hardware/profile mismatch Repair when these known unit-type variants reject
-  only those optional rows. Newer A50 firmware that only rejects preset-speed
-  rows keeps filter-timer rejections reportable.
-* Clarify hardware/profile mismatch Repairs and prefilled issue titles so mixed
-  installations report distinct model, firmware, and unsupported-register sets
-  separately instead of collapsing a device zoo into one ambiguous report.
+## Version 0.9.0
+* Cleanup some definitions for HA checks
 
-Version 1.2.24
-* Fix intermittent Vento/TwinFresh partial polls where the device omits
-  `0x0044` (or another individual row) despite returning other tracked rows.
-  Vento availability now requires a valid tracked response, not one row that
-  firmware variants may omit.
-* Record the EcoVent integration version in generated hardware-mismatch reports
-  and add the reporter-confirmed Flexit/Romventilator Roomie One V2 relabel plus
-  related Flexit search-index candidates.
+## Version 0.8.0
+* Removed calling blocking sleep in event loop
 
-Version 1.2.28
-* Preserve the last known Vento control state across silent poll omissions and
-  retry the omitted control on the next poll without treating retained data as
-  confirmation of a command.
-* Confirm control writes and schedule changes from fresh targeted device reads,
-  while clearing malformed, rejected, or identity-stale control values.
-* Keep related protocol capability caches, lifecycle cleanup, and unknown alarm
-  state consistent across partial, malformed, and identity-changing responses.
+## Version 0.7.0
+* Fix manifest, to require correct pyEcovent version (0.9.14)
 
-Version 1.2.25
-* Expose Freshpoint/Breezy protocol airflow enum value `3` as `extract` and
-  keep other unknown airflow values as `Unknown airflow <value>`.
-* Document the Freshpoint/Breezy two-fan percentage fallback as a Home Assistant
-  single-value compromise for balanced modes, not as a physical fan-speed
-  measurement.
-* Treat standard Freshpoint 160-E firmware `0.12 2025-09-01` CO2/VOC/display
-  rows as a known optional hardware variant instead of raising a Repair.
-* Treat Blauberg VENTO Expert A30 / VENTS TwinFresh Expert RW-30 firmware
-  `0.3 2020-08-26` and `0.5 2021-10-04` rejected option rows as known optional
-  Vento variants.
-* Treat Blauberg VENTO Expert / VENTS TwinFresh Expert firmware
-  `0.6 2021-05-17` preset-speed rows `0x003A` through `0x003F` and filter-timer
-  row `0x0063` as known optional Vento rows instead of raising a Repair.
-* Reset learned unsupported rows, optional-read backoff, and bulk-read support
-  when a device reports a different firmware or unit type, so capability state
-  from the previous identity cannot hide entities or raise a stale Repair.
-  Generated entities stay registered by hardware profile and are hidden or
-  restored only after successful refreshes as learned row support changes. A
-  confirmed identity change reloads the config entry so device metadata,
-  coordinator caches, and profile-specific entities are rebuilt together.
-* Report failed device writes back to Home Assistant instead of publishing an
-  optimistic switch, number, select, preset, schedule, or clock-sync state.
-  Opportunistic RTC writes suppress retries only after transport success.
-* Preserve the last complete weekly-schedule day when a transient read returns
-  fewer than all four periods instead of replacing good state with partial data.
-* Close and remove a coordinator when config-entry setup fails after opening its
-  transport, so a retry cannot leave a stale connection behind.
-* Validate the BGCP protocol type, controller-ID/password sizes, and response
-  function `0x06` instead of accepting any checksum-valid packet as a command;
-  apply decoded values only after the entire payload is valid, reject duplicate
-  or conflicting status rows, confirm that reads contain a requested parameter
-  with a decodable value, and confirm that writes echo every requested parameter
-  and raw value.
-* Preserve the active BGCP parameter page across batched reads and writes,
-  including an explicit return to page `0x00` before low-page parameters and
-  opportunistic RTC rows.
-* Restore Blauberg Smart Wi-Fi / VENTS iFan Wi-Fi extract-fan availability when
-  firmware `2.2 2022-06-16` rejects optional motion rows `0x000B`/`0x0012`;
-  state `0x0001` and fan speed `0x0004` remain the liveness rows.
-* Correlate normal BGCP replies with the configured controller ID while keeping
-  explicit broadcast discovery open to new device IDs.
-* Re-probe bulk reads after a temporary failure instead of permanently using
-  slower per-register polling until the device identity changes.
-* Reject mixed batch writes when any requested semantic key is unknown, and
-  refresh switch state from the controller after successful writes.
-* Treat failed UDP sends as failed commands without reading a stale response,
-  validate opportunistic RTC batches atomically, and report their failure to
-  the coordinator.
-* Suppress standalone automatic RTC correction in silent manual-speed mode;
-  explicit manual clock synchronization remains available and may be audible.
-* Reject malformed Breezy/Freshbox alarm lists with an unpaired trailing byte
-  instead of silently dropping the tail.
+## Version 0.6.0
+* Timeout Loop bailout
 
-Version 1.2.30
-* Accept Freshpoint/Breezy two-byte CO2 measurements above the PDF's 2000 ppm
-  reading range without widening the 400-2000 ppm writable CO2 threshold.
-* Recognize the optional registers rejected by Breezy/Freshpoint unit type
-  `0x1100`, firmware `0.8 2024-03-15`. Rejected rows stay hidden without
-  opening a Repair; unknown firmware and extra rejected rows remain reportable.
-* Accept BGCP `0x0077` final schedule rows ending at `23:59` instead of
-  rejecting them and leaving each day incomplete. Preserve either `00:00` or
-  `23:59` and the device-reserved byte through reads and period-speed updates.
-  Invalid terminal times remain rejected before any schedule record is written.
+## Version 0.5.0
+* Mainly fixes from autmated checks and hopefuly some latency improvements
+  - Removed await coordinator in turn_on/turn_off and other interactive
+    functions
+  - Some cleanup in config_flow
+  - Removed deprecated set_speed functions
+  - Fix error if _battery_voltage is None
+
+## Version 0.4.0
+* Added broadcast devices search
+  - hack, that searches on network, if string: `<broadcast>` is entered
+    instead of IP address
+  - this is not yer proper HomaAssistant Auto Discovery, but it seems to
+    work on my network
+
+## Version 0.2.0
+* Added binary sensors:
+  - boost_status
+  - timer_mode
+  - humidity_sensor_state
+  - relay_sensor_state
+  - relay_status
+  - filter_replacement_status
+  - alarm_status
+  - cloud_server_state
+  - humidity_status
+  - analogV_status
+
+All sensors are categorised and some are disabled by default.
+
+* Changed:
+  - Removed default IP address from config input field Host
+  - Added some icon defintions to sensors
+  - Battery percent caluclation
+
+* Added services
+  - filter_timer_reset (Reset filter timer)
+  - reset_alarms (Reset alarms)
+* Changed:
+  - From binary sensor to switch:
+    - humidity_sensor_state
+    - relay_sensor_state
+    - analogV_sensor_state
+
+## Version 0.1.0
+* Added sensors:
+  - battery_voltage
+  - timer_counter
+  - humidity_treshold
+  - filter_timer_countdown
+  - boost_time
+  - machine_hours
+  - analogV
+  - analogV_treshold
+
+All sensors are categorised and some are disabled by default.
+
+## Version 0.0.5
+* Added sensors:
+  - Humidity
+  - Fan1 speed
+  - Fan2 speed
+  - Airflow
+
+* Changed
+  - Update method to DataUpdateCoordinator for reduced request to FAN device

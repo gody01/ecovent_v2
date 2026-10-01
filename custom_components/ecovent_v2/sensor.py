@@ -72,8 +72,9 @@ async def async_setup_entry(
 ) -> None:
     """Set up Vento Sensors."""
     coordinator: EcoVentCoordinator = hass.data[DOMAIN][config.entry_id]
-    entities = [
-        VentoSensor(
+
+    def entity_for_spec(spec):
+        return VentoSensor(
             hass,
             config,
             spec.key,
@@ -88,18 +89,36 @@ async def async_setup_entry(
             translation_key=spec.translation_key,
             suggested_display_precision=spec.suggested_display_precision,
         )
-        for spec in SENSOR_SPECS
-        if coordinator._fan.profile_has_entity_requirements(
+
+    def spec_is_supported(spec):
+        return coordinator._fan.profile_has_entity_requirements(
             required_params=spec.required_params or (spec.method,),
             required_capabilities=spec.required_capabilities,
         )
-    ]
 
+    supported_specs = [spec for spec in SENSOR_SPECS if spec_is_supported(spec)]
+    added_sensor_keys = {spec.key for spec in supported_specs}
+    entities = [entity_for_spec(spec) for spec in supported_specs]
     supports_schedule = coordinator._fan.supports_parameter("weekly_schedule_setup")
     if supports_schedule:
         entities.append(WeeklyScheduleSummarySensor(hass, config))
-
     async_add_entities(entities)
+
+    def add_late_temperature_sensors():
+        new_specs = [
+            spec
+            for spec in SENSOR_SPECS
+            if "temperature_probes" in spec.required_capabilities
+            and spec.key not in added_sensor_keys
+            and spec_is_supported(spec)
+        ]
+        if new_specs:
+            added_sensor_keys.update(spec.key for spec in new_specs)
+            async_add_entities([entity_for_spec(spec) for spec in new_specs])
+
+    config.async_on_unload(
+        coordinator.async_add_listener(add_late_temperature_sensors)
+    )
 
     if supports_schedule:
         platform = entity_platform.async_get_current_platform()
@@ -208,6 +227,10 @@ class VentoSensor(StableObjectIdMixin, CoordinatorEntity, SensorEntity):
     def temperature(self):
         """Get temperature sensor value."""
         return self._fan.temperature
+
+    def temperature_setpoint(self):
+        """Get the read-only temperature setpoint."""
+        return self._fan.temperature_setpoint
 
     def room_temperature(self):
         """Get room temperature value."""

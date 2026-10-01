@@ -20,6 +20,11 @@ writes, or hardware/profile mismatch Repairs.
 - When a row is missing or returns `0xFD`, record whether it is required,
   optional-unavailable, unsupported, retried, backed off, or skipped. Tests
   should assert these sets, not just the final boolean.
+- Consider the prior-state policy separately for optional measurements: transient
+  soft omissions may retain a last known CO2/RPM value to avoid HA unknown
+  flicker, while a cold-start miss remains unknown and explicit unsupported or
+  malformed replies clear stale values. Keep measurement retention narrow and
+  test each transition through both polling and entity state.
 - After fixing availability for unsupported optional rows, check the second
   user-facing surface: Repairs/diagnostics. Known firmware variants should not
   keep suggesting a new hardware/profile mismatch report for rows that are now

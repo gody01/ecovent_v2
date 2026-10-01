@@ -453,9 +453,11 @@ class Issue35RegressionTest(unittest.TestCase):
         )
 
     def test_optional_entity_sync_waits_for_success_and_reloads_identity(self):
+        init_tree = _tree(INIT_PATH)
         function = _module_function(
-            _tree(INIT_PATH), "_async_register_optional_poll_entity_sync"
+            init_tree, "_async_register_optional_poll_entity_sync"
         )
+        identity_helper = _module_function(init_tree, "_fan_identity")
         namespace = {
             "HomeAssistant": object,
             "ConfigEntry": object,
@@ -472,7 +474,12 @@ class Issue35RegressionTest(unittest.TestCase):
         )
         exec(
             compile(
-                ast.fix_missing_locations(ast.Module(body=[function], type_ignores=[])),
+                ast.fix_missing_locations(
+                    ast.Module(
+                        body=[identity_helper, function],
+                        type_ignores=[],
+                    )
+                ),
                 str(INIT_PATH),
                 "exec",
             ),
@@ -484,6 +491,7 @@ class Issue35RegressionTest(unittest.TestCase):
             profile_key = "vento"
             _unit_type_id = 0x0500
             firmware = "0.5 2021-10-04"
+            device_search = "serial-1"
             unsupported = frozenset()
 
             def unsupported_optional_poll_parameter_ids(self):
@@ -507,9 +515,10 @@ class Issue35RegressionTest(unittest.TestCase):
 
         reloads = []
         hass = types.SimpleNamespace(
+            data={},
             config_entries=types.SimpleNamespace(
                 async_schedule_reload=lambda entry_id: reloads.append(entry_id)
-            )
+            ),
         )
         coordinator = Coordinator()
         register(hass, Entry(), coordinator)
@@ -721,7 +730,6 @@ class Issue35RegressionTest(unittest.TestCase):
                 ast.fix_missing_locations(
                     ast.Module(
                         body=[close_coordinator, delete_issue, setup_entry],
-                        type_ignores=[],
                     )
                 ),
                 str(INIT_PATH),

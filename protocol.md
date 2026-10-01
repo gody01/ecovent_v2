@@ -47,6 +47,7 @@ reports and earlier compatibility fixes show these differences:
 | Issue #84 | `0x0300` | Blauberg VENTO Expert A50-1 S10 Pro / W V.2 | `0.7 2021-10-04`; another unit `0.9 2024-07-08` | Firmware `0.7` rejects preset-speed rows `0x003A`..`0x003F` and filter timer `0x0063`; firmware `0.9` rejects only the preset-speed rows and accepts `0x0063`. |
 | Issue #94 | `0x0300` | Blauberg VENTO Expert 50 m3/h Wi-Fi, only Wi-Fi option installed | `0.6 2021-05-17` | Explicitly rejects only filter-timer setpoint `0x0063`; this row is optional for the reported old firmware and must not reopen the same hardware/profile Repair. |
 | Issue #97 | `0x0300` | Blauberg VENTO Expert / VENTS TwinFresh Expert | `0.6 2021-05-17` | Explicitly rejects optional preset-speed rows `0x003A`..`0x003F`; these family-level option rows remain known when the same firmware-specific policy also adds the Issue #94 filter-timer exception. |
+| Issue #110 | `0x1A00` | VENTO inHome old / TwinFresh Atmo old | `1.0 2023-12-03` | Explicitly rejects preset-speed rows `0x003A`..`0x003F` and filter-timer setpoint `0x0063`; unrelated unsupported rows remain reportable. |
 | Issue #80 | `0x0400` | Blauberg VENTO Expert DUO A30-1 S10 W V.2 | `0.7 2021-10-04` | Explicitly rejects the same optional preset-speed rows `0x003A`..`0x003F` and filter-timer setpoint `0x0063`. |
 | Issue #90 | `0x0500` | Blauberg VENTO Expert A30 / VENTS TwinFresh Expert RW-30; reporter linked Blauberg Mini Air Smart Wi-Fi | `0.3 2020-08-26` | Explicitly rejects optional analog-voltage rows `0x0016`, `0x002D`, `0x00B8`, and `0x0305`, preset-speed rows `0x003A`..`0x003F`, fan2 speed `0x004B`, and filter timer `0x0063`. |
 | Issue #95 | `0x0500` | Blauberg VENTO Expert A30 / VENTS TwinFresh Expert RW-30 | `0.5 2021-10-04` | Explicitly rejects the same optional analog-voltage, preset-speed, fan2-speed, and filter-timer rows as the older Issue #90 firmware. |
@@ -58,9 +59,11 @@ reports and earlier compatibility fixes show these differences:
 | -- | -- | -- | -- |
 | Vento/TwinFresh availability rows | The Vento-family map documents `0x0001` (`state`), `0x0002` (`speed`), and, in the B133 Vento guide, `0x0044` (`man_speed`). | Issue #76 shows `0x0001`/`0x0002` can be absent; Issue #85 shows `0x0044` can also be absent while other requested rows are tracked. | Do not treat one row as universally stable. A Vento full/quick poll is available when the device returns at least one tracked requested row; soft-missing control rows retain their last known values and are retried on the next poll (gody01/ecovent_v2#100). Explicitly unsupported rows are still cleared and suppressed. An empty or untracked response still fails the poll. |
 | Vento Expert A30 / A50-1 / DUO A30 option rows | The Vento-family maps include analog-voltage, preset-speed, secondary-fan, and filter-timer rows such as `0x0016`, `0x002D`, `0x003A` through `0x003F`, `0x004B`, `0x0063`, `0x00B8`, and `0x0305`. | The observation table above shows old A30, A50, and DUO A30 firmware can reject some or all of those rows, but newer A50 firmware may still support the filter timer. | Keep the rows in the Vento entity map because other Vento-family devices and newer firmware may support them, but treat their `0xFD` replies as unsupported optional data for known firmware-specific `0x0300`/`0x0400`/`0x0500` variants. Do not use those optional rows as proof that the device itself is unavailable or as a repeated hardware/profile report by themselves. |
+| VENTO inHome old / TwinFresh Atmo old option rows | The shared Vento map includes the six preset-speed rows and filter-timer setpoint. | Issue #110 identifies `0x1A00`, firmware `1.0 2023-12-03`, explicitly rejecting those seven optional rows. | Keep the shared map for variants that support them; treat only this exact firmware tuple's seven rejections as known. Other rejected rows remain reportable. |
 | TwinFresh manual-speed row | The B133 Vento guide explicitly lists parameter `0x0044`; the TwinFresh Style PDFs reference manual speed mode `255` using parameter 68 but omit a separate `0x0044` table row. | TwinFresh-family devices and the Home Assistant silent manual-speed path use the manual-speed row successfully. | Keep `0x0044` in the shared `vento` profile because both document the manual-speed mode path, even though one PDF omits the row from its table. |
-| Breezy/Freshpoint standard sensor rows | Freshpoint product documents describe relative humidity and four built-in temperature sensors on standard and Pro units; only the Pro package adds tVOC/CO2eq air-quality sensing. | Issue #74 reports a Freshpoint 160 whose humidity, built-in temperature, CO2, VOC, recovery-efficiency, and schedule entities stay unknown while the fan still works. Earlier reports also showed optional rows omitted or explicitly rejected. | Keep `0x0001`, `0x0002`, and `0x0044` as Breezy/Freshpoint availability rows. Missing or unsupported non-critical sensor/feature rows are retried, backed off, cleared, and hidden when permanently unsupported instead of flickering the fan entity unavailable. |
-| Freshpoint CO2 measurement | The [Freshpoint connection guide](https://blaubergventilatoren.net/download/freshpoint-manual-16999.pdf) lists `0x0027` as a two-byte measurement with a 0-2000 ppm range. | [gody01/ecovent_v2#104](https://github.com/gody01/ecovent_v2/issues/104) shows vendor-app readings of 2014 ppm (current) and 2272 ppm (maximum), while HA shows unknown. No packet capture was supplied. | Accept the unsigned two-byte measurement without the contradicted range cap. Keep malformed-width rejection and the independent 400-2000 ppm writable `0x001A` threshold bound. The report does not establish a physical maximum or sentinel values. |
+| Breezy/Freshpoint standard sensor rows | Freshpoint product documents describe relative humidity and four built-in temperature sensors on standard and Pro units; only the Pro package adds tVOC/CO2eq air-quality sensing. | Issue #74 reports a Freshpoint 160 whose humidity, built-in temperature, CO2, VOC, recovery-efficiency, and schedule entities stay unknown while the fan still works. Earlier reports also showed optional rows omitted or explicitly rejected. | Keep `0x0001`, `0x0002`, and `0x0044` as Breezy/Freshpoint availability rows. Missing non-critical rows are retried/backed off without affecting coordinator availability; known-value retention for intermittent CO2/RPM misses is specified below. Explicitly unsupported feature rows remain unavailable. |
+| Freshpoint/Breezy soft-missing measurements | RPM rows `0x004A`/`0x004B` and CO2 row `0x0027` are optional measurements in automatic polling. | Issue #104 reports intermittent CO2 gaps and #111 reports fan2 becoming unknown after Party/Turbo; no raw device capture was supplied. Fixture-driven polls confirm that a valid partial reply can omit these rows. | Soft misses previously cleared known values. Keep a previously decoded measurement for three consecutive requested-read misses, clearing it on the fourth; backoff polls count too. Successful reads reset the count. Explicit `0xFD` unsupported or malformed rows still clear immediately. Cold-start missing rows remain unknown. This policy does not change RPM or writable-threshold bounds. |
+| Freshpoint CO2 measurement | The [Freshpoint connection guide](https://blaubergventilatoren.net/download/freshpoint-manual-16999.pdf) lists `0x0027` as a two-byte measurement with a 0-2000 ppm range. | [gody01/ecovent_v2#104](https://github.com/gody01/ecovent_v2/issues/104) shows vendor-app readings of 2014 ppm (current) and 2272 ppm (maximum), while HA shows unknown. Its chart also shows unknown current state with plotted values mostly below 2000 ppm; no packet capture was supplied. | Accept the unsigned two-byte measurement without the contradicted range cap. Keep malformed-width rejection and the independent 400-2000 ppm writable `0x001A` threshold bound. The report does not establish a physical maximum or sentinel values; the chart is consistent with intermittent omissions as well as the reported high readings. |
 | Freshpoint standard optional hardware | Profiles include optional CO2/VOC/display rows. | [gody01/ecovent_v2#107](https://github.com/gody01/ecovent_v2/issues/107): `0x1100`, firmware `0.8 2024-03-15`, rejects the same 11 optional rows as the known `0.12 2025-09-01` variant. | Keep explicitly rejected rows unavailable, but suppress the Repair for this exact known tuple. Unknown firmware and additional rejected rows remain reportable. |
 | Smart Wi-Fi / iFan motion rows | The Smart Wi-Fi PDF documents motion status `0x000B` and motion sensor permission `0x0012` in the extract-fan map. | Issue #92 shows firmware `2.2 2022-06-16` can explicitly reject those motion rows on Smart Wi-Fi/iFan devices without affecting fan state, RPM/speed data, or HA control. | Keep the rows in the extract-fan entity map because other Smart Wi-Fi/iFan hardware may support motion features, but use only `0x0001` state and `0x0004` fan speed as extract-fan automatic-poll availability rows. Treat `0x000B`/`0x0012` as a known unsupported optional pair for the reported firmware so it does not repeatedly request another hardware/profile mismatch report by itself. |
 | Explicit `0xFD` unsupported markers | Source tables list readable rows, but the protocol can still answer an individual row with an unsupported marker. | Some firmware acknowledges a request with `0xFD` instead of returning fresh data. | Treat `0xFD` as "controller answered, but this row has no fresh value." Required rows still fail; optional rows become unavailable and may be removed from later automatic polls. |
@@ -68,6 +71,7 @@ reports and earlier compatibility fixes show these differences:
 | Weekly schedule rows | Vento/TwinFresh and Breezy/Freshpoint tables document `0x0072` (`weekly_schedule_state`) and `0x0077` (`weekly_schedule_setup`). | Some variants do not answer schedule rows during setup/reload, and probing all schedule records can cause delays. The `0x0077` table describes a final 24:00 period, while [gody01/ecovent_v2#102](https://github.com/gody01/ecovent_v2/issues/102#issuecomment-5624612590) supplied valid final `23:59` frames for both reported TwinFresh firmware identities; only posted payload templates are available, not a full 8x28 capture. | Load the full schedule cache only after `0x0072` reports a known `on`/`off` state. If `0x0072` is unavailable, keep the fan available and leave schedule entities unavailable. For BGCP, retain and write an exact final `00:00` or `23:59` and its reserved byte; reject other terminal ends before any write. This rule does not apply to A21 Modbus scheduling. |
 | Packet completeness | The guides impose a 256-byte packet limit, while older integration versions could accept a valid but partial response as a complete refresh. | Firmware can return a valid response that omits requested rows without using `0xFD`. | Split full polls into protocol-safe chunks, verify returned parameter ids, retry omitted rows individually, and distinguish required rows from optional rows. |
 | Response validation | Protocol type is `0x02`, controller IDs are 16 bytes, passwords are at most 8 bytes, and a controller reply uses response function `0x06`. For write-with-response function `0x03`, the reply reports the status of the requested parameters. Marker `0xFF` changes the active parameter-id high-byte page until another page marker changes it. | A checksum-valid packet from another controller, with another envelope value, nested/reserved markers, duplicate/conflicting status for one row, a malformed payload tail, an empty/different-row reply, an `0xFD` rejection, or a different echoed value is not proof that the requested command succeeded. A stale packet received after the current UDP send failed is not a reply to that command. Omitting `0xFF 0x00` after a high-page row also turns following low-page rows into different parameters. Applying a valid prefix before rejecting the tail would corrupt cached state. | Outside explicit discovery, require the response controller ID to match the configured controller. Do not call receive after a failed send. Validate the complete envelope and payload first, then apply decoded values atomically. Report a read successful only when it contains a requested row or explicit requested-row status; callers that need a fresh value reject `0xFD`. Report a write successful only when every requested row, including opportunistically batched rows, is echoed with the requested raw value and none is rejected, and reject main or opportunistic semantic batches before transport if any requested key is unmapped. Emit an explicit page change whenever a batch crosses parameter pages, including a return to page `0x00`. |
+| Alarm list validation | Breezy/Freshbox alarm lists contain two-byte records. | An unpaired trailing byte cannot describe a complete alarm. | Reject the malformed list rather than silently dropping the trailing byte. |
 | Shared parameter numbers across families | Several manuals reuse the same parameter ids for different device families. | `0x0002`, `0x0014`, `0x0068`, `0x0401`, and other rows do not always have the same semantics between Vento, extract-fan, Breezy/Freshpoint, Freshbox, and Arc profiles. | Keep profile-specific parameter maps instead of treating one PDF as a universal superset. |
 | A21 / Modbus controllers | VENTS A21 documents Modbus TCP/RTU and a controller identity at input register `37`. | A21 does not publish a BGCP `0x00B9` unit type and does not use the UDP BGCP parameter map. | Implement A21 as a separate Modbus transport. Do not infer BGCP compatibility from physical/OEM similarity alone. |
 | Unit-type parsing | The PDFs list unit-type values read from BGCP parameter `0x00B9`. | This parser stores those two response bytes as parser keys such as `0x0300`, and no reviewed PDF documents device type `7` / parser key `0x0700`. | Keep the byte-swapped parser keys documented next to the PDF values. Rows such as `0x0007` are parameters, not unit-type values. |
@@ -173,11 +177,18 @@ with `ECONOPRIME` in the product path. Most are filters, ducts, plenums,
 controllers, or other accessories. The public README indexes the distinct
 parent ventilation-unit names while keeping their protocol status separate.
 
-Issue #64 remains the only BGCP proof for the DF series: the reported
+Issue #64 provides BGCP proof for the DF series: the reported
 `ECONOPRIME DF270 Connect` returned parameter `0x00B9` as integer `256`
 (`0x0100` in this parser), and the existing `vento` profile controlled fixed
 presets and manual speed with matching RPM feedback. That observation is enough
 to map `0x0100`; it does not automatically map other ECONOPRIME devices.
+
+Issue #109 also reports RECOM 4 SR as parser unit type `0x0100` (firmware
+`0.43`). Keep its existing DF270 Vento controls. Expose air temperatures and a
+read-only temperature setpoint only after all four probes reply; recognize the
+seven reported unsupported optional rows without another Repair. This is
+verified against the issue dump fixture, not a live RECOM device, and does not
+establish that RECOM and DF270 are the same physical model.
 
 The direct [DF 270 Connect product page](https://www.econology.fr/df-270-connect-econoprime-vmc-double-flux.html)
 and manual materially strengthen the physical OEM research. A cross-document
@@ -291,6 +302,44 @@ row (`0` standby, `1` low, `2` medium, `3` high). A Vento-family response at
 `0x0306=03` is therefore treated as `schedule_speed=high`, not as a beeper
 state. The Vento/TwinFresh table does not document a beeper row at `0x0306`.
 
+### Home Assistant control and clock behavior
+
+Capabilities are profile-dependent. A21 setup checks input register `37 == 1`;
+A21 Modbus is not interchangeable with BGCP. Timer selection needs `0x0007`,
+raw airflow selection needs `0x00B7`, and weekly schedules need `0x0072`/`0x0077`.
+
+Silent manual-speed mode is an optional VENTO/TwinFresh configuration setting.
+It maps HA presets to manual percentages while preserving device-side humidity,
+relay, and analog-voltage auto-boost triggers, including configured thresholds.
+Already-on manual-speed changes use only the quiet manual speed register;
+entering manual mode can beep once. Airflow/direction changes still require the
+airflow command and batch the current manual speed into the same write. They
+may beep and do not add opportunistic RTC rows while already in manual mode.
+After HA restarts, an already-active silent preset restores the HA facade without
+sending a duplicate write. Zero percentage keeps the unit on at zero manual
+speed; silent presets use deterministic low/medium/high fallback percentages
+when the device does not report configurable setpoints.
+
+Freshpoint/Breezy airflow value `3` is `extract`. HA's built-in direction has
+only forward/reverse, so extract is exposed through the airflow Select instead.
+For balanced modes with separate supply/extract setpoints, HA percentage
+averages both setpoints as a single-value UI compromise, not measured fan speed.
+Other unknown airflow values remain `Unknown airflow <value>`.
+
+Automatic clock sync is enabled by default and can be disabled in reconfigure.
+Checks run every five minutes and write only for drift exceeding one minute from
+HA local time. On OS/Supervised installs, Supervisor must report the host clock
+as NTP synchronized; Core/container installs have no Supervisor quality signal.
+Startup discovery stays read-only and defers standalone RTC correction. Periodic
+standalone correction rereads RTC immediately before writing and skips unavailable
+fresh state. Silent manual mode suppresses standalone automatic correction;
+explicit `sync_device_clock` remains available and may beep. Already-audible
+writes may batch drifted RTC rows; failed RTC writes do not suppress retries.
+
+Entries migrated by 1.2.16/1.2.17 use config-entry version 2. Before downgrading
+to 1.2.15, delete and re-add integration entries or restore a full HA backup:
+older code cannot load migrated entries.
+
 ### Breezy / Freshpoint Eco notes
 
 The 2025 Breezy Eco and Freshpoint manuals are relabels of the same protocol
@@ -322,13 +371,23 @@ reports before 1.2.17 showed the fan/control rows working while humidity,
 temperature, CO2, VOC, alarm, schedule, or airflow rows could stay absent. The
 Breezy/Freshpoint poll therefore treats only `0x0001` (`state`), `0x0002`
 (`speed`), and `0x0044` (`man_speed`) as fatal for coordinator availability.
-Quick polling includes those same control proof rows. Missing or unsupported non-critical rows are retried once, then put into a
-ten-poll retry backoff; their HA entities report `unknown`/`unavailable` instead of stale or false
-states. Automatic weekly-schedule cache loading waits until `0x0072`
+Quick polling includes those same control proof rows. Missing optional rows are
+retried once and then put into a ten-poll retry backoff. A soft omission of CO2
+(`0x0027`) or RPM (`0x004A`/`0x004B`) retains its last valid value for three
+consecutive requested-read misses, then clears it on the fourth. Each poll
+requesting an omitted row counts once, including polls that skip the individual
+retry during backoff; bulk and individual attempts are not separate misses.
+A successful read resets that row's count. Cold-start misses remain unknown.
+The shared bound also applies to filter countdown (`0x0064`), device search
+(`0x007C`), firmware (`0x0086`), assigned/current Wi-Fi IP (`0x009C`/`0x00A3`),
+and unit type (`0x00B9`), which previously shared unbounded retention.
+Explicit unsupported (`0xFD`) or malformed rows clear immediately, and
+permanently unsupported optional rows remain hidden. Automatic
+weekly-schedule cache loading waits until `0x0072`
 (`weekly_schedule_state`) reports `on` or `off`; if that row is unavailable,
 setup/reload avoids probing all 28 `0x0077` schedule records. Identity rows such
-as `0x00B9` (`unit_type`) are preserved on soft misses so the active profile is
-not lost during a degraded poll. For the Vento profile, soft-missing control rows `0x0001`, `0x0002`,
+as `0x00B9` (`unit_type`) survive three consecutive requested-read soft misses,
+but expire on the fourth like other preserved rows. For the Vento profile, soft-missing control rows `0x0001`, `0x0002`,
 and `0x0044` retain their last known values and retry next poll without backoff.
 Other optional rows and other profiles keep their existing clearing/backoff policy.
 Retained control values are display-only evidence: fan commands require a
@@ -349,9 +408,10 @@ reports the same model's firmware `0.5 2024-07-10` responding with that row;
 until its raw capture arrives, accepting it is an evidence-backed format
 inference rather than a second physical capture. This model variant uses the
 four-byte decoder with minute/hour bounds and a 365-day limit; other Vento
-variants retain their three-byte requirement. A soft omission preserves a
-previously decoded filter countdown, but an explicit unsupported or malformed
-row clears it.
+variants retain their three-byte requirement. Soft omissions preserve a
+previously decoded filter countdown for three consecutive requested-read
+misses, clearing it on the fourth; an explicit unsupported or malformed row
+clears it immediately.
 Initialization reads firmware before the first full poll. The captured full/quick
 cycle is replayed by `tests/test_twinfresh_capture.py`; identity/IP values are
 redacted, and operational payload bytes are preserved.

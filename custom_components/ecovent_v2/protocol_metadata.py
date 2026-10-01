@@ -159,6 +159,7 @@ class DeviceModel:
     official_names: tuple[MarketingName, ...] = ()
     relabels: tuple[MarketingName, ...] = ()
     candidates: tuple[MarketingName, ...] = ()
+    params_extension_name: str | None = None
 
     @property
     def display_name(self):

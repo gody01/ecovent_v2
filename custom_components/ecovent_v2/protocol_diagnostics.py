@@ -54,6 +54,12 @@ _FRESHPOINT_160E_STANDARD_UNSUPPORTED_OPTIONAL_ROWS = frozenset(
     }
 )
 _EXTRACT_FAN_SMART_WIFI_UNSUPPORTED_OPTIONAL_ROWS = frozenset({0x000B, 0x0012})
+
+# Issue #109: keep RECOM 4 SR rejections quiet only after its four probes
+# positively identify this 0x0100 variant; DF270-shaped devices remain reportable.
+_RECOM_4_SR_UNSUPPORTED_OPTIONAL_ROWS = frozenset(
+    {0x00B7, 0x00B8, 0x0302, 0x0303, 0x0304, 0x0305, 0x0306}
+)
 _KNOWN_VARIANT_UNSUPPORTED_OPTIONAL_PARAMS = {
     # Blauberg VENTO Expert A50-1 W V.2 firmware 0.4 and VENTO Expert DUO
     # A30-1 S10 W V.2 firmware 0.7 devices explicitly reject these optional
@@ -68,6 +74,9 @@ _KNOWN_VARIANT_UNSUPPORTED_OPTIONAL_PARAMS = {
 }
 
 _KNOWN_VARIANT_FIRMWARE_UNSUPPORTED_OPTIONAL_PARAMS = {
+    # TwinFresh Atmo old / VENTO inHome old explicitly reject the same optional
+    # preset-speed and filter-timer rows on firmware 1.0 2023-12-03.
+    ("vento", 0x1A00, "1.0 2023-12-03"): _VENTO_EXPERT_SPEED_FILTER_OPTION_ROWS,
     ("vento", 0x0300, "0.4 2019-12-20"): _VENTO_EXPERT_SPEED_FILTER_OPTION_ROWS,
     ("vento", 0x0300, "0.6 2021-05-17"): frozenset({0x0063}),
     ("vento", 0x0300, "0.7 2021-10-04"): _VENTO_EXPERT_SPEED_FILTER_OPTION_ROWS,
@@ -112,6 +121,12 @@ def reportable_hardware_profile_mismatch_param_ids(fan) -> frozenset[int]:
     ) | _KNOWN_VARIANT_FIRMWARE_UNSUPPORTED_OPTIONAL_PARAMS.get(
         (fan.profile_key, unit_type_id, fan.firmware), frozenset()
     )
+    if (
+        fan.profile_key == "vento"
+        and unit_type_id == 0x0100
+        and fan.supports_capability("temperature_probes")
+    ):
+        known_variant |= _RECOM_4_SR_UNSUPPORTED_OPTIONAL_ROWS
     return frozenset(unsupported - known_variant)
 
 

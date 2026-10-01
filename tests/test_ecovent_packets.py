@@ -5,6 +5,7 @@ import unittest
 
 from ecovent_test_helpers import Fan, packet_for_write_command, packet_with_payload
 from fan_protocol import BULK_READ_REPROBE_READS, MAX_BULK_READ_PARAMS
+from protocol_diagnostics import reportable_hardware_profile_mismatch_param_ids
 from schedule_helpers import WeeklyScheduleRecord
 
 
@@ -137,6 +138,131 @@ class PacketBuilderTest(unittest.TestCase):
         configure_soft_omission(absent, [])
         self.assertTrue(absent._read_params("00640002", required_params=frozenset()))
         self.assertIsNone(absent.filter_timer_countdown)
+
+    def test_freshpoint_measurement_soft_misses_retain_known_values(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        fan._co2 = 1500
+        fan._fan1_speed = "1800"
+        fan._fan2_speed = "1800"
+        requested = "000100020027004A004B"
+        # A healthy core poll omits the optional measurements from bulk and
+        # individual replies, as happens when a controller drops sensor rows.
+        missing_measurements = packet_with_payload([0x01, 1, 0x02, 3])
+        fan.send = lambda _data: True
+        fan.receive = lambda: missing_measurements
+
+        self.assertTrue(
+            fan._read_params(requested, required_params=frozenset({0x0001, 0x0002}))
+        )
+        self.assertEqual(fan.co2, 1500)
+        self.assertEqual(fan.fan1_speed, "1800")
+        self.assertEqual(fan.fan2_speed, "1800")
+        self.assertEqual(
+            fan.last_missing_optional_params, {0x0027, 0x004A, 0x004B}
+        )
+
+        for param_id in (0x0027, 0x004A, 0x004B):
+            self.assertEqual(fan._optional_read_backoff[param_id], 10)
+
+        cold = Fan("192.0.2.2")
+        cold.unit_type = "1100"
+        cold.send = lambda _data: True
+        cold.receive = lambda: missing_measurements
+        self.assertTrue(
+            cold._read_params(requested, required_params=frozenset({0x0001, 0x0002}))
+        )
+        self.assertIsNone(cold.co2)
+        self.assertIsNone(cold.fan1_speed)
+        self.assertIsNone(cold.fan2_speed)
+
+        recovered = [0x01, 1, 0x02, 4]
+        for param_id, value in (
+            (0x0027, 2014),
+            (0x004A, 2340),
+            (0x004B, 2340),
+        ):
+            recovered.extend(
+                [0xFE, 0x02, param_id & 0xFF, *value.to_bytes(2, "little")]
+            )
+        fan.receive = lambda: packet_with_payload(recovered)
+        self.assertTrue(
+            fan._read_params(requested, required_params=frozenset({0x0001, 0x0002}))
+        )
+        self.assertEqual(fan.co2, 2014)
+        self.assertEqual(fan.fan1_speed, "2340")
+        self.assertEqual(fan.fan2_speed, "2340")
+        self.assertFalse(fan._optional_read_backoff)
+
+    def test_preserved_parameter_soft_miss_retention_is_bounded_and_resets(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        fan._co2 = 1500
+        fan._fan1_speed = fan._fan2_speed = "1800"
+        request = "000100020027004A004B"
+        missing = packet_with_payload([0x01, 1, 0x02, 3])
+        fan.send = lambda _data: True
+
+        def poll():
+            self.assertTrue(
+                fan._read_params(request, required_params=frozenset({1, 2}))
+            )
+
+        for initial, fresh in ((1500, 2014), (2014, 2272)):
+            fan.receive = lambda: missing
+            for _ in range(3):
+                poll()
+                self.assertEqual(fan.co2, initial)
+                self.assertEqual(fan.fan1_speed, "1800")
+                self.assertEqual(fan.fan2_speed, "1800")
+            poll()
+            self.assertIsNone(fan.co2)
+            self.assertIsNone(fan.fan1_speed)
+            self.assertIsNone(fan.fan2_speed)
+
+            recovered = [0x01, 1, 0x02, 3]
+            for param, value in ((0x27, fresh), (0x4A, 1800), (0x4B, 1800)):
+                recovered.extend([0xFE, 2, param, *value.to_bytes(2, "little")])
+            fan.receive = lambda: packet_with_payload(recovered)
+            poll()
+            self.assertEqual(fan.co2, fresh)
+            self.assertEqual(fan.fan1_speed, "1800")
+            self.assertEqual(fan.fan2_speed, "1800")
+
+    def test_firmware_soft_misses_do_not_expire_known_profile_identity(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        fan.firmware = "00080f03e807"
+        fan._unsupported_optional_poll_params = {0x0027}
+        fan.send = lambda _data: True
+        fan.receive = lambda: packet_with_payload([0x01, 1])
+
+        for _ in range(4):
+            self.assertTrue(
+                fan._read_params("00010086", required_params=frozenset({0x0001}))
+            )
+
+        self.assertEqual(fan.firmware, "0.8 2024-03-15")
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan), frozenset()
+        )
+
+    def test_freshpoint_measurement_invalid_or_unsupported_rows_clear_values(self):
+        for param_id, attr, value in (
+            (0x0027, "co2", 1500),
+            (0x004A, "fan1_speed", "1800"),
+            (0x004B, "fan2_speed", "1800"),
+        ):
+            for payload in ([0xFD, param_id & 0xFF], [param_id & 0xFF, 0x01]):
+                with self.subTest(param=param_id, payload=payload):
+                    fan = Fan("192.0.2.1")
+                    fan.unit_type = "1100"
+                    setattr(fan, f"_{attr}", value)
+                    fan.send = lambda _data: True
+                    fan.receive = lambda payload=payload: packet_with_payload(payload)
+
+                    self.assertFalse(fan._read_params(f"{param_id:04x}"))
+                    self.assertIsNone(getattr(fan, attr))
 
     def test_filter_countdown_explicit_invalid_or_unsupported_rows_clear_stale_value(self):
         for payload in (
@@ -1458,6 +1584,43 @@ class PacketBuilderTest(unittest.TestCase):
                     unsupported_optional, fan.last_missing_optional_params
                 )
                 self.assertLessEqual(unsupported_optional, fan.last_unsupported_params)
+
+    def test_issue110_rejected_option_rows_are_not_retried(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1A00"
+        fan.firmware = "0100030CE707"
+        rejected_rows = {
+            0x003A,
+            0x003B,
+            0x003C,
+            0x003D,
+            0x003E,
+            0x003F,
+            0x0063,
+        }
+        requested_by_poll = []
+
+        def send_command(func, param, value="", retries=10):
+            requested = {
+                int(param[i : i + 4], 16) for i in range(0, len(param), 4)
+            }
+            requested_by_poll.append(requested)
+            fan._last_response_param_ids = requested - rejected_rows
+            fan._last_unsupported_param_ids = requested & rejected_rows
+            return True
+
+        fan.send_command = send_command
+        self.assertTrue(fan.update())
+        self.assertTrue(
+            rejected_rows <= set().union(*requested_by_poll)
+        )
+        self.assertTrue(rejected_rows <= fan.unsupported_optional_poll_parameter_ids())
+
+        requested_by_poll.clear()
+        self.assertTrue(fan.update())
+        self.assertFalse(
+            any(rejected_rows & requested for requested in requested_by_poll)
+        )
 
     def test_vento_update_allows_issue90_a30_optional_rows(self):
         unsupported_optional = {

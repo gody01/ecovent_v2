@@ -164,6 +164,16 @@ params = {
     0x0306: ["schedule_speed", speeds],
 }
 
+# Unit type 0x0100 shares the Vento controls but this issue confirms these
+# additional read-only rows for RECOM 4 SR firmware 0.43.
+recom_0100_params = {
+    0x0018: ["temperature_setpoint", None],
+    0x001F: ["outdoor_temperature", None],
+    0x0020: ["supply_temperature", None],
+    0x0021: ["exhaust_in_temperature", None],
+    0x0022: ["exhaust_out_temperature", None],
+}
+
 # Extract-fan profile. Keep this ordered by parameter number so
 # it can be compared against the implementation reference in protocol.md and
 # the PDF parameter table. Parameters 0x0014, 0x0016, 0x002E, and

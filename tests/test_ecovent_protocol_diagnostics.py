@@ -172,6 +172,54 @@ class ProtocolDiagnosticsTest(unittest.TestCase):
             reportable_hardware_profile_mismatch_param_ids(fan), frozenset()
         )
 
+    def test_issue110_old_vento_inhome_option_rows_are_known(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1A00"
+        fan.firmware = "0100030CE707"
+        known_rows = {
+            0x003A,
+            0x003B,
+            0x003C,
+            0x003D,
+            0x003E,
+            0x003F,
+            0x0063,
+        }
+        fan._unsupported_optional_poll_params = set(known_rows)
+
+        self.assertEqual(fan.profile_key, "vento")
+        self.assertEqual(fan.firmware, "1.0 2023-12-03")
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan), frozenset()
+        )
+        self.assertEqual(hardware_profile_mismatch_state(fan)[-1], frozenset())
+        self.assertTrue(known_rows <= fan.unsupported_optional_poll_parameter_ids())
+        for param in (
+            "supply_speed_low",
+            "exhaust_speed_low",
+            "supply_speed_medium",
+            "exhaust_speed_medium",
+            "supply_speed_high",
+            "exhaust_speed_high",
+            "filter_timer_setpoint",
+        ):
+            self.assertFalse(
+                fan.supports_entity(
+                    required_params=(param,),
+                    required_capabilities=(
+                        ("three_speed_setpoints",)
+                        if param != "filter_timer_setpoint"
+                        else ()
+                    ),
+                ),
+                param,
+            )
+
+        fan._unsupported_optional_poll_params.add(0x0083)
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan), frozenset({0x0083})
+        )
+
     def test_issue84_newer_vento_firmware_only_rejects_speed_rows(self):
         """The newer reported firmware keeps the filter timer supported."""
         fan = Fan("192.0.2.1")

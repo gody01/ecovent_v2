@@ -57,6 +57,7 @@ DEVICE_MODELS = {
         aliases=("Econology DF270 Connect",),
         device_type=1,
         parser_key=0x0100,
+        params_extension_name="recom_0100_params",
         manufacturer_group="Unknown (marketed as ECONOPRIME)",
         official_names=(
             MarketingName(

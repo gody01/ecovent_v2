@@ -234,6 +234,7 @@ class FanCapabilitiesMixin:
         self._bulk_read_reprobe_countdown = 0
         self._optional_read_backoff = {}
         self._unsupported_optional_poll_params = set()
+        self._seen_valid_optional_poll_params = set()
         self._temperature_probes_detected = False
 
     def unsupported_optional_poll_parameters(self):

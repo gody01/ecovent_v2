@@ -670,6 +670,7 @@ class FanProtocolMixin:
         getattr(self, "_preserved_param_soft_misses", {}).pop(param_id, None)
         self._optional_param_backoff().pop(param_id, None)
         self._unsupported_optional_poll_param_ids().discard(param_id)
+        self._seen_valid_optional_poll_params.add(param_id)
 
     def _delay_optional_param_retry(self, param_id):
         self._optional_param_backoff()[param_id] = OPTIONAL_PARAM_RETRY_BACKOFF_READS
@@ -823,7 +824,11 @@ class FanProtocolMixin:
                         self._mark_param_available_for_retry(param_id)
                     for param_id in unsupported_ids:
                         unsupported_params.add(param_id)
-                        if param_id not in required_param_ids:
+                        if (
+                            param_id not in required_param_ids
+                            and param_id
+                            not in self._seen_valid_optional_poll_params
+                        ):
                             self._unsupported_optional_poll_param_ids().add(param_id)
                         mark_unavailable(param_id, unsupported=True)
                     for param_id in invalid_ids:
@@ -884,7 +889,10 @@ class FanProtocolMixin:
                 received_response = param_complete or received_response
                 if param_complete and param_id in unsupported_ids:
                     unsupported_params.add(param_id)
-                    if param_id not in required_param_ids:
+                    if (
+                        param_id not in required_param_ids
+                        and param_id not in self._seen_valid_optional_poll_params
+                    ):
                         self._unsupported_optional_poll_param_ids().add(param_id)
                     mark_unavailable(param_id, unsupported=True)
                     continue

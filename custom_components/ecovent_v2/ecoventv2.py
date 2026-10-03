@@ -320,6 +320,7 @@ class Fan(
         self._last_invalid_response_param_ids = None
         self._last_response_device_id = None
         self._unsupported_optional_poll_params = set()
+        self._seen_valid_optional_poll_params = set()
         self.audible_write_command_count = 0
         self._profile_key = "vento"
         self._set_device_profile("vento")

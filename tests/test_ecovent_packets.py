@@ -4,7 +4,11 @@ from datetime import datetime
 import unittest
 
 from ecovent_test_helpers import Fan, packet_for_write_command, packet_with_payload
-from fan_protocol import BULK_READ_REPROBE_READS, MAX_BULK_READ_PARAMS
+from fan_protocol import (
+    BULK_READ_REPROBE_READS,
+    MAX_BULK_READ_PARAMS,
+    OPTIONAL_PARAM_RETRY_BACKOFF_READS,
+)
 from protocol_diagnostics import reportable_hardware_profile_mismatch_param_ids
 from schedule_helpers import WeeklyScheduleRecord
 
@@ -138,6 +142,125 @@ class PacketBuilderTest(unittest.TestCase):
         configure_soft_omission(absent, [])
         self.assertTrue(absent._read_params("00640002", required_params=frozenset()))
         self.assertIsNone(absent.filter_timer_countdown)
+
+    def test_optional_retry_backoff_does_not_rearm_when_skipping(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        request = "0002004A"
+        recovering = False
+
+        def send_command(_func, param, _value="", retries=10):
+            if len(param) > 4:
+                return fan.parse_response(packet_with_payload([0x02, 4]))
+            if recovering:
+                rpm = (2340).to_bytes(2, "little")
+                return fan.parse_response(
+                    packet_with_payload([0xFE, 2, 0x4A, *rpm])
+                )
+            return False
+
+        fan.send_command = send_command
+        self.assertTrue(fan._read_params(request, required_params=frozenset({2})))
+        self.assertIsNone(fan.fan1_speed)
+        recovering = True
+
+        recovery_polls = None
+        for recovery_polls in range(1, OPTIONAL_PARAM_RETRY_BACKOFF_READS + 2):
+            self.assertTrue(fan._read_params(request, required_params=frozenset({2})))
+            if fan.fan1_speed is not None:
+                break
+
+        self.assertEqual(fan.fan1_speed, "2340")
+        self.assertEqual(recovery_polls, OPTIONAL_PARAM_RETRY_BACKOFF_READS + 1)
+
+    def test_freshpoint_transient_unsupported_measurements_recover(self):
+        values = {
+            0x0002: b"\x04",
+            0x0007: b"\x02",
+            0x0027: (2167).to_bytes(2, "little"),
+            0x004A: (2340).to_bytes(2, "little"),
+            0x004B: (2014).to_bytes(2, "little"),
+            0x0320: (216).to_bytes(2, "little"),
+        }
+
+        def attach_wire(fan, rejected, calls):
+            def send_command(_func, request, _value="", retries=10):
+                calls.append(request)
+                payload = []
+                for index in range(0, len(request), 4):
+                    param_id = int(request[index : index + 4], 16)
+                    payload.extend((0xFF, param_id >> 8))
+                    if param_id in rejected:
+                        payload.extend((0xFD, param_id & 0xFF))
+                        continue
+                    value = values[param_id]
+                    if len(value) > 1:
+                        payload.extend((0xFE, len(value), param_id & 0xFF))
+                    else:
+                        payload.append(param_id & 0xFF)
+                    payload.extend(value)
+                return fan.parse_response(packet_with_payload(payload))
+
+            fan.send_command = send_command
+
+        request = "000200070027004A004B0320"
+        required = frozenset({0x0002, 0x0007})
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        rejected = set()
+        calls = []
+        attach_wire(fan, rejected, calls)
+
+        def poll(target):
+            return target._read_params(request, required_params=required)
+
+        self.assertTrue(poll(fan))
+        self.assertEqual((fan.fan1_speed, fan.fan2_speed), ("2340", "2014"))
+        self.assertEqual((fan.co2, fan.voc), (2167, 216))
+
+        rejected.update({0x004A, 0x004B})
+        for _ in range(2):
+            self.assertTrue(poll(fan))
+            self.assertIsNone(fan.fan1_speed)
+            self.assertIsNone(fan.fan2_speed)
+            self.assertEqual((fan.co2, fan.voc), (2167, 216))
+        rejected.clear()
+        self.assertTrue(poll(fan))
+        self.assertEqual((fan.fan1_speed, fan.fan2_speed), ("2340", "2014"))
+
+        cold = Fan("192.0.2.2")
+        cold.unit_type = "1100"
+        cold_rejected = {0x004A, 0x004B}
+        cold_calls = []
+        attach_wire(cold, cold_rejected, cold_calls)
+        self.assertTrue(poll(cold))
+        self.assertEqual(
+            cold.unsupported_optional_poll_parameter_ids(),
+            frozenset({0x004A, 0x004B}),
+        )
+        self.assertIsNone(cold.fan1_speed)
+        self.assertIsNone(cold.fan2_speed)
+
+        cold_rejected.clear()
+        self.assertTrue(poll(cold))
+        self.assertNotIn("004a", cold_calls[-1])
+        self.assertNotIn("004b", cold_calls[-1])
+
+        vento = Fan("192.0.2.3")
+        vento.unit_type = "0e00"
+        vento_rejected = set()
+        vento_calls = []
+        attach_wire(vento, vento_rejected, vento_calls)
+        vento_request = "0002004A"
+        self.assertTrue(vento._read_params(vento_request, required_params=frozenset({2})))
+        self.assertEqual(vento.fan1_speed, "2340")
+        vento_rejected.add(0x004A)
+        self.assertTrue(vento._read_params(vento_request, required_params=frozenset({2})))
+        self.assertIsNone(vento.fan1_speed)
+        self.assertNotIn(0x004A, vento.unsupported_optional_poll_parameter_ids())
+        vento_rejected.clear()
+        self.assertTrue(vento._read_params(vento_request, required_params=frozenset({2})))
+        self.assertEqual(vento.fan1_speed, "2340")
 
     def test_freshpoint_measurement_soft_misses_retain_known_values(self):
         fan = Fan("192.0.2.1")

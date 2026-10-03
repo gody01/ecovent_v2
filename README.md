@@ -117,6 +117,9 @@ silent-mode, airflow, and clock-sync caveats; capabilities depend on the device 
 
 # Changelog
 
+## Unreleased
+* Retry previously available optional measurements after transient unsupported responses (#113).
+
 ## Version 1.2.31
 * Keep Freshpoint/Breezy CO2 and fan RPM through three missed reads; clear on the fourth or invalid data (#104, #111).
 * Add RECOM 4 SR air temperatures and a read-only setpoint; recognize its optional-row variant (fixture-verified, #109).

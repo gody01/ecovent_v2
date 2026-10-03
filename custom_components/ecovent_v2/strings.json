@@ -104,7 +104,7 @@
         },
         "rejected_device_values": {
             "title": "EcoVent rejected device values",
-            "description": "{name} sent values EcoVent could not decode ({count} rejected readings). This Repair stays until you dismiss it or the EcoVent V2 integration version changes. Review the prefilled GitHub issue to see the collected values; nothing is sent automatically. Values are grouped by parameter and reason, with episodes shown as previous valid → rejected samples → next valid."
+            "description": "{name} sent values that EcoVent V2 could not decode (rejected readings: {count}). This Repair stays until you ignore it or the EcoVent V2 integration version changes. Use the learn-more link to open a prefilled GitHub issue with the collected values; nothing is sent automatically. In that issue, values are grouped by parameter and reason, and each episode is shown as previous valid value → rejected samples → next valid value."
         }
     },
     "entity": {

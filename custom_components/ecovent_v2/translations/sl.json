@@ -66,7 +66,7 @@
         },
         "rejected_device_values": {
             "title": "EcoVent je zavrnil vrednosti naprave",
-            "description": "{name} je poslal vrednosti, ki jih EcoVent ni mogel dekodirati ({count} zavrnjenih odčitkov). To popravilo ostane, dokler ga ne zaprete ali se spremeni različica EcoVent V2. Zbrane vrednosti si oglejte v vnaprej izpolnjeni GitHub prijavi; nič se ne pošlje samodejno. Vrednosti so združene po parametru in razlogu, epizoda pa prikazuje prejšnjo veljavno vrednost → zavrnjene vzorce → naslednjo veljavno vrednost."
+            "description": "Naprava {name} je poslala vrednosti, ki jih EcoVent V2 ni mogel dekodirati (število zavrnjenih odčitkov: {count}). To obvestilo ostane, dokler ga ne prezrete ali dokler se ne spremeni različica integracije EcoVent V2. Uporabite povezavo z več informacijami, da odprete vnaprej izpolnjeno GitHub prijavo z zbranimi vrednostmi; nič se ne pošlje samodejno. V prijavi so vrednosti združene po parametru in razlogu, vsaka epizoda pa je prikazana kot prejšnja veljavna vrednost → zavrnjeni vzorci → naslednja veljavna vrednost."
         }
     },
     "entity": {

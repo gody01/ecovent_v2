@@ -28,8 +28,6 @@ _PARAMETER_RANGES = {
         "analogV_treshold": (5, 100),
         "battery_voltage": (0, 5000),
         "boost_time": (0, 60),
-        "fan1_speed": (0, 5000),
-        "fan2_speed": (0, 5000),
         "filter_timer_setpoint": (70, 365),
         "humidity": (0, 100),
         "humidity_treshold": (40, 80),
@@ -42,7 +40,6 @@ _PARAMETER_RANGES = {
     },
     "extract_fan": {
         "boost_time": (0, 60),
-        "fan1_speed": (0, 6000),
         "humidity": (0, 100),
         "humidity_treshold": (40, 80),
         "interval_ventilation_speed_setpoint": (30, 100),
@@ -52,11 +49,9 @@ _PARAMETER_RANGES = {
     },
     "breezy": {
         "battery_voltage": (0, 5000),
-        # CO2 measurements can exceed the PDF's 2000 ppm range (issue #104).
+        # PDF measurement ranges are not device limits (issues #104 and #113).
         # Keep the writable threshold bounded independently.
         "co2_treshold": (400, 2000),
-        "fan1_speed": (0, 5000),
-        "fan2_speed": (0, 5000),
         "filter_timer_setpoint": (70, 365),
         "humidity": (0, 100),
         "humidity_treshold": (40, 80),
@@ -91,7 +86,6 @@ _PARAMETER_RANGES = {
         "air_quality_treshold": (50, 500),
         "battery_voltage": (0, 5000),
         "boost_time": (0, 60),
-        "fan1_speed": (0, 5000),
         "humidity": (0, 100),
         "humidity_treshold": (40, 80),
         "temperature_treshold": (18, 36),

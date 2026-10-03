@@ -173,6 +173,53 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertEqual(fan.fan1_speed, "2340")
         self.assertEqual(recovery_polls, OPTIONAL_PARAM_RETRY_BACKOFF_READS + 1)
 
+    def test_freshpoint_rpm_above_pdf_range_stays_visible_in_poll(self):
+        """Above the PDF 5000 rpm table; no real Freshpoint value is known, assumption like CO2 2014 ppm in #104."""
+        values = {
+            0x0002: b"\x04",
+            0x0007: b"\x02",
+            0x0027: (2014).to_bytes(2, "little"),
+            0x004A: (5200).to_bytes(2, "little"),
+            0x004B: (5400).to_bytes(2, "little"),
+            0x0320: (216).to_bytes(2, "little"),
+        }
+        request = "000200070027004A004B0320"
+        required = frozenset({0x0002, 0x0007})
+
+        def attach_wire(fan, malformed_rpm=None):
+            def send_command(_func, _request, _value="", retries=10):
+                payload = []
+                for param_id, value in values.items():
+                    if param_id == 0x004A and malformed_rpm is not None:
+                        value = malformed_rpm
+                    payload.extend((0xFF, param_id >> 8))
+                    if len(value) > 1:
+                        payload.extend((0xFE, len(value), param_id & 0xFF))
+                    else:
+                        payload.append(param_id & 0xFF)
+                    payload.extend(value)
+                return fan.parse_response(packet_with_payload(payload))
+
+            fan.send_command = send_command
+
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        attach_wire(fan)
+        self.assertTrue(fan._read_params(request, required_params=required))
+        self.assertEqual((fan.fan1_speed, fan.fan2_speed), ("5200", "5400"))
+        self.assertEqual((fan.co2, fan.voc), (2014, 216))
+
+        for malformed in (b"\x10", b"\x10\x14\x00"):
+            with self.subTest(malformed=malformed):
+                invalid = Fan("192.0.2.2")
+                invalid.unit_type = "1100"
+                attach_wire(invalid, malformed)
+                self.assertTrue(
+                    invalid._read_params(request, required_params=required)
+                )
+                self.assertIsNone(invalid.fan1_speed)
+                self.assertEqual(invalid.fan2_speed, "5400")
+
     def test_freshpoint_transient_unsupported_measurements_recover(self):
         values = {
             0x0002: b"\x04",

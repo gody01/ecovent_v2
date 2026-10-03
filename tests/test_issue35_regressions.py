@@ -156,6 +156,7 @@ class Issue35RegressionTest(unittest.TestCase):
             "ConfigEntry": object,
             "DOMAIN": "ecovent_v2",
             "_report_version": lambda: "test",
+            "rejected_device_value_details": lambda _fan: (),
             "unsupported_optional_poll_parameter_details": lambda _fan: (
                 {"id": "0x003A", "name": "supply_speed_low"},
             ),

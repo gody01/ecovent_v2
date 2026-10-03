@@ -120,11 +120,26 @@ silent-mode, airflow, and clock-sync caveats; capabilities depend on the device 
 ## Unreleased
 * Retry previously available optional measurements after transient unsupported responses (#113); accept RPM measurements beyond PDF ranges without widening writable setpoint limits (#113).
 
+## Rejected device value Repairs
+
+When the device sends a known parameter value that EcoVent cannot decode, the
+integration creates a persistent Home Assistant Repair with a prefilled
+GitHub issue link. It collects the parameter id and name, rejection reason,
+count, first and last observation times, raw minimum/maximum and bounded raw
+samples, plus bounded episodes shown as `previous valid → rejected samples →
+next valid`.
+
+Nothing is sent automatically. Review the prefilled issue and click Submit
+yourself if you choose to report it. A later valid value, integration reload,
+or restart does not clear the Repair or stored records. It remains until you
+dismiss it or the running EcoVent V2 integration version changes; a version
+change clears the old Repair and records.
+
 ## Version 1.2.31
 * Keep Freshpoint/Breezy CO2 and fan RPM through three missed reads; clear on the fourth or invalid data (#104, #111).
 * Add RECOM 4 SR air temperatures and a read-only setpoint; recognize its optional-row variant (fixture-verified, #109).
 * Register RECOM 4 SR temperature sensors as probes appear during polling without reloading the config entry.
-* Recognize VENTO inHome old / TwinFresh Atmo old optional-row rejections without a false Repair (#110).
+* Add persistent, user-submitted Repairs for rejected device values.
 
 ## Version 1.2.30
 * Accept Freshpoint/Breezy CO2 readings above 2000 ppm without changing writable threshold limits (#104).

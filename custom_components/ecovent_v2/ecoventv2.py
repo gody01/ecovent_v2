@@ -311,6 +311,10 @@ class Fan(
         self._pwd_size = 0
         self._password = password
         self._unknown_params = {}
+        self._rejected_value_reports = {}
+        self._open_rejection_episodes = {}
+        self._last_valid_param_values = {}
+        self._logged_rejection_keys = set()
         self.socket = None
         self._command_lock = RLock()
         self._bulk_read_supported = None

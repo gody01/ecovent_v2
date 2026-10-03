@@ -63,6 +63,10 @@
         "hardware_profile_mismatch": {
             "title": "Wykryto niezgodność profilu sprzętowego EcoVent",
             "description": "{name} zgłasza się jako {unit_type} z profilem {profile}, ale jawnie odrzuciło opcjonalne rejestry oczekiwane przez ten profil: {unsupported_params}. EcoVent V2 ukrył pasujące wygenerowane encje i pozostawi wentylator dostępny. Użyj linku z dodatkowymi informacjami, aby otworzyć wstępnie wypełnione zgłoszenie GitHub z wykrytymi szczegółami, a następnie dodaj dokładny model handlowy, zdjęcia tabliczki, firmware i zainstalowane opcje sprzętowe."
+        },
+        "rejected_device_values": {
+            "title": "EcoVent odrzucił wartości urządzenia",
+            "description": "{name} wysłał wartości, których EcoVent nie potrafił zdekodować ({count} odrzuconych odczytów). To zgłoszenie pozostaje widoczne do czasu jego zamknięcia lub zmiany wersji EcoVent V2. Sprawdź wstępnie wypełnione zgłoszenie GitHub; dane nie są wysyłane automatycznie. Wartości są grupowane według parametru i przyczyny, a epizod pokazuje poprzednią poprawną wartość → odrzucone próbki → następną poprawną wartość."
         }
     },
     "entity": {

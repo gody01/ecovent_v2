@@ -796,6 +796,7 @@ class FanProtocolMixin:
             if unsupported or not self._is_vento_soft_miss_control(param_id):
                 self._delay_optional_param_retry(param_id)
 
+        self._rejected_value_poll_seen = set()
         for start in range(0, len(request), chunk_size):
             chunk = request[start : start + chunk_size]
             missing = [chunk[i : i + 4] for i in range(0, len(chunk), 4)]
@@ -915,6 +916,7 @@ class FanProtocolMixin:
                             read_name,
                             self._protocol_context(),
                         )
+        self._rejected_value_poll_seen = None
         self._last_missing_required_params = frozenset(missing_required_params)
         self._last_missing_optional_params = frozenset(missing_optional_params)
         self._last_unsupported_params = frozenset(unsupported_params)

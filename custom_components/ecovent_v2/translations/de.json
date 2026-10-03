@@ -63,6 +63,10 @@
         "hardware_profile_mismatch": {
             "title": "EcoVent-Hardwareprofil stimmt nicht überein",
             "description": "{name} meldet sich als {unit_type} mit dem Profil {profile}, hat aber optionale Register, die dieses Profil erwartet, ausdrücklich abgelehnt: {unsupported_params}. EcoVent V2 hat passende erzeugte Entitäten ausgeblendet und hält den Lüfter verfügbar. Öffnen Sie über den Link mit weiteren Informationen ein vorausgefülltes GitHub-Issue mit diesen erkannten Details und ergänzen Sie das genaue Verkaufsmodell, Fotos des Typenschilds, Firmware und installierte Hardwareoptionen."
+        },
+        "rejected_device_values": {
+            "title": "EcoVent hat Gerätewerte abgelehnt",
+            "description": "{name} hat Werte gesendet, die EcoVent nicht decodieren konnte ({count} abgelehnte Messwerte). Diese Reparatur bleibt bestehen, bis Sie sie schließen oder sich die EcoVent-V2-Version ändert. Im vorausgefüllten GitHub-Issue können Sie die gesammelten Werte prüfen; es werden keine Daten automatisch gesendet. Werte sind nach Parameter und Grund gruppiert; ein Ereignis zeigt gültigen Vorgänger → abgelehnte Werte → nächsten gültigen Wert."
         }
     },
     "entity": {

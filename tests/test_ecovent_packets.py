@@ -13,6 +13,51 @@ from protocol_diagnostics import reportable_hardware_profile_mismatch_param_ids
 from schedule_helpers import WeeklyScheduleRecord
 
 
+def _poll_fan1_speed(fan, value):
+    """Feed a standard RPM poll or a three-byte value to test width rejection."""
+    if value <= 0xFFFF:
+        payload = bytes((0xFE, 2, 0x4A, value & 0xFF, value >> 8))
+    else:
+        raw_value = value.to_bytes(3, "little")
+        payload = bytes((0xFE, len(raw_value), 0x4A)) + raw_value
+    fan.send_command = lambda *args, **kwargs: fan.parse_response(
+        packet_with_payload(payload)
+    )
+    return fan._read_params("004a", required_params=frozenset())
+
+
+class RejectedDeviceValueTest(unittest.TestCase):
+    def test_rejected_rpm_aggregates_and_records_valid_episode_context(self):
+        import logging
+
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        with self.assertLogs("fan_protocol_parse", level=logging.WARNING) as logs:
+            self.assertTrue(_poll_fan1_speed(fan, 1450))
+            for _ in range(50):
+                self.assertFalse(_poll_fan1_speed(fan, 0x10000))
+                self.assertTrue(_poll_fan1_speed(fan, 1480))
+
+        self.assertEqual(len(fan._rejected_value_reports), 1)
+        report = next(iter(fan._rejected_value_reports.values()))
+        self.assertEqual(report["count"], 50)
+        self.assertLessEqual(len(report["raw_samples"]), 5)
+        self.assertEqual(len(report["episodes"]), 4)
+        self.assertEqual(len(logs.records), 1)
+        self.assertEqual(report["episodes"][0]["prev_valid"], "1450")
+        self.assertEqual(report["episodes"][0]["next_valid"], "1480")
+
+    def test_clean_poll_stream_does_not_create_repairable_rejection(self):
+        import logging
+
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        with self.assertNoLogs("fan_protocol_parse", level=logging.WARNING):
+            for rpm in (1450, 1480, 4000):
+                self.assertTrue(_poll_fan1_speed(fan, rpm))
+        self.assertFalse(fan._rejected_value_reports)
+
+
 class PacketBuilderTest(unittest.TestCase):
     def test_vento_soft_miss_preserves_controls_and_retries_next_poll(self):
         for param_id, attr, initial, recovered in (

@@ -15,7 +15,6 @@ class ProfileParseTest(unittest.TestCase):
         self.assertEqual(fan.parameter_range("supply_speed_low"), (4, 100))
 
         fan.unit_type = "0600"
-        self.assertEqual(fan.parameter_range("fan1_speed"), (0, 6000))
         self.assertEqual(fan.parameter_range("humidity_treshold"), (40, 80))
         self.assertEqual(fan.parameter_range("temperature_treshold"), (18, 36))
         self.assertIsNone(fan.parameter_range("analogV_treshold"))

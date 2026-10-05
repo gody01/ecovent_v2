@@ -1,5 +1,10 @@
 """EcoVent Fan mixin extracted from the vendored protocol client."""
 
+import logging
+from datetime import datetime, timezone
+
+_LOGGER = logging.getLogger(__name__)
+
 
 _FIXED_VALUE_SIZES = {
     "air_quality": 2,
@@ -285,18 +290,140 @@ class FanProtocolParseMixin:
         expected_size = _FIXED_VALUE_SIZES.get(parameter)
         if definition[1] is not None and parameter != "unit_type":
             expected_size = 1
+        reason = None
         if expected_size is not None and len(response) != expected_size + 2:
+            reason = f"unexpected width {len(response) - 2}, expected {expected_size}"
+        else:
+            try:
+                setattr(self, parameter, value)
+            except (AttributeError, KeyError, TypeError, ValueError, OverflowError) as err:
+                reason = str(err) or type(err).__name__
+        if reason is not None:
             if record_unknown:
+                # Legacy store keeps raw hex so existing callers/tests are unaffected.
                 self._unknown_params[param_id] = value
-            return False
-        try:
-            setattr(self, parameter, value)
-        except (AttributeError, KeyError, TypeError, ValueError, OverflowError):
-            if record_unknown:
-                self._unknown_params[param_id] = value
+                self._record_rejected_param(param_id, parameter, value, reason)
             return False
         self._unknown_params.pop(param_id, None)
+        self._close_rejection_episode(param_id, value)
+        try:
+            current = getattr(self, parameter, None)
+        except AttributeError:
+            current = None
+        self._last_valid_param_values[param_id] = value if current is None else str(current)
         return True
+
+    @staticmethod
+    def _rejection_reason_class(reason):
+        low = reason.lower()
+        if "unexpected width" in low:
+            return "unexpected_width"
+        if "outside" in low:
+            return "out_of_range"
+        return reason.split(":")[0].strip().lower()[:60] or "rejected"
+
+    def _record_rejected_param(self, param_id, parameter, raw_hex, reason):
+        """Aggregate oscillating bad values under one (param, reason-class) key."""
+        reason_class = self._rejection_reason_class(reason)
+        key = (param_id, reason_class)
+        poll_seen = getattr(self, "_rejected_value_poll_seen", None)
+        if poll_seen is not None:
+            poll_key = (key, raw_hex)
+            if poll_key in poll_seen:
+                return
+            poll_seen.add(poll_key)
+        try:
+            raw_int = int(raw_hex, 16) if raw_hex else 0
+        except ValueError:
+            raw_int = 0
+        now = datetime.now(timezone.utc).isoformat()
+        reports = self._rejected_value_reports
+        report = reports.get(key)
+        if report is None:
+            try:
+                from .ecoventv2 import __version__
+            except ImportError:
+                from ecoventv2 import __version__
+            report = reports[key] = {
+                "id": f"0x{param_id:04X}",
+                "name": parameter,
+                "reason_class": reason_class,
+                "reason": reason[:160],
+                "count": 0,
+                "first_seen": now,
+                "last_seen": now,
+                "min_raw_hex": raw_hex,
+                "max_raw_hex": raw_hex,
+                "min_raw_int": raw_int,
+                "max_raw_int": raw_int,
+                "raw_samples": [],
+                "episodes": [],
+                "integration_version": __version__.removeprefix("loc_"),
+            }
+        report["count"] += 1
+        report["last_seen"] = now
+        if raw_int < report["min_raw_int"]:
+            report["min_raw_int"] = raw_int
+            report["min_raw_hex"] = raw_hex
+        if raw_int > report["max_raw_int"]:
+            report["max_raw_int"] = raw_int
+            report["max_raw_hex"] = raw_hex
+        if raw_hex not in report["raw_samples"]:
+            if len(report["raw_samples"]) < 5:
+                report["raw_samples"].append(raw_hex)
+        # One episode runs from the first bad value until the next valid one;
+        # consecutive bad polls extend the open episode instead of opening one.
+        open_ep = self._open_rejection_episodes.get(key)
+        if open_ep is None:
+            open_ep = self._open_rejection_episodes[key] = {
+                "prev_valid": self._last_valid_param_values.get(param_id),
+                "bad_samples": [],
+                "next_valid": None,
+                "started": now,
+                "ended": None,
+            }
+        if raw_hex not in open_ep["bad_samples"]:
+            if len(open_ep["bad_samples"]) < 5:
+                open_ep["bad_samples"].append(raw_hex)
+        if key not in self._logged_rejection_keys:
+            self._logged_rejection_keys.add(key)
+            _LOGGER.warning(
+                "Rejected EcoVent device value: model=%s profile=%s unit_type=%s "
+                "firmware=%s param_id=0x%04X param_name=%s raw_hex=%s reason=%s",
+                getattr(self, "name", "unknown"),
+                getattr(self, "profile_key", "unknown"),
+                getattr(self, "unit_type", None) or "unknown",
+                getattr(self, "firmware", None) or "unknown",
+                param_id,
+                parameter,
+                raw_hex,
+                reason,
+            )
+        else:
+            _LOGGER.debug(
+                "Rejected EcoVent value again 0x%04X (%s) count=%d",
+                param_id,
+                reason_class,
+                report["count"],
+            )
+
+    def _close_rejection_episode(self, param_id, valid_value):
+        """Close open episodes on next valid value; keep first 3 plus latest 1."""
+        for key in [k for k in self._open_rejection_episodes if k[0] == param_id]:
+            open_ep = self._open_rejection_episodes.pop(key)
+            try:
+                current = getattr(self, self.params[param_id][0], None)
+            except (AttributeError, KeyError):
+                current = None
+            open_ep["next_valid"] = str(current) if current is not None else valid_value
+            open_ep["ended"] = datetime.now(timezone.utc).isoformat()
+            report = self._rejected_value_reports.get(key)
+            if report is None:
+                continue
+            report["episodes"].append(open_ep)
+            if len(report["episodes"]) > 4:
+                report["episodes"] = report["episodes"][:3] + report["episodes"][-1:]
+
 
     def _map_value(self, mapping, value, label):
         mapped_value = mapping.get(value)

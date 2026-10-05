@@ -63,6 +63,10 @@
         "hardware_profile_mismatch": {
             "title": "Zaznano neujemanje strojnega profila EcoVent",
             "description": "{name} se prijavlja kot {unit_type} s profilom {profile}, vendar je izrecno zavrnila izbirne registre, ki jih ta profil pričakuje: {unsupported_params}. EcoVent V2 je skril ustrezne ustvarjene entitete in bo ventilator ohranil razpoložljiv. Uporabite povezavo z več informacijami, da odprete vnaprej izpolnjeno GitHub prijavo s temi zaznanimi podrobnostmi, nato dodajte natančen prodajni model, fotografije nalepke, firmware in nameščene strojne možnosti."
+        },
+        "rejected_device_values": {
+            "title": "EcoVent je zavrnil vrednosti naprave",
+            "description": "Naprava {name} je poslala vrednosti, ki jih EcoVent V2 ni mogel dekodirati (število zavrnjenih odčitkov: {count}). To obvestilo ostane, dokler ga ne prezrete ali dokler se ne spremeni različica integracije EcoVent V2. Uporabite povezavo z več informacijami, da odprete vnaprej izpolnjeno GitHub prijavo z zbranimi vrednostmi; nič se ne pošlje samodejno. V prijavi so vrednosti združene po parametru in razlogu, vsaka epizoda pa je prikazana kot prejšnja veljavna vrednost → zavrnjeni vzorci → naslednja veljavna vrednost."
         }
     },
     "entity": {

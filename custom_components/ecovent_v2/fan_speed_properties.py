@@ -258,24 +258,21 @@ class FanSpeedPropertiesMixin:
         raw = bytes.fromhex(input)
         if len(raw) == 5 and raw[0] == 0:
             raw = raw[1:]
-        expected_size = {
-            "vento": 3,
-            "breezy": 4,
-            "freshbox": 4,
+        expected_sizes = {
+            "vento": (3, 4),
+            "breezy": (4,),
+            "freshbox": (4,),
         }.get(self.profile_key)
-        # TwinFresh Style 0x0E00 uses a four-byte minute/hour/u16-day value,
-        # unlike three-byte Vento timers. Extend the captured 0.3 format to
-        # this model's newer firmware; see protocol.md for the evidence limit.
-        if getattr(self, "_unit_type_id", None) == 0x0E00:
-            expected_size = 4
+        # Vento firmware uses both minute/hour/u8-day and minute/hour/u16-day
+        # layouts; the returned width identifies the format, not the unit id.
         if (
             getattr(self, "_unit_type_id", None) is not None
-            and expected_size is not None
-            and len(raw) != expected_size
+            and expected_sizes is not None
+            and len(raw) not in expected_sizes
         ):
             raise ValueError(
                 f"filter_timer_countdown for {self.profile_key} must contain "
-                f"exactly {expected_size} bytes, got {len(raw)}"
+                f"{expected_sizes} bytes, got {len(raw)}"
             )
         if len(raw) == 4:
             val = raw

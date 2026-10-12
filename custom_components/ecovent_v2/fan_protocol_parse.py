@@ -184,7 +184,9 @@ class FanProtocolParseMixin:
                 self._last_response_param_ids = set()
         return valid
 
-    def _store_staged_response_params(self, param_ids, *, record_unknown=True):
+    def _store_staged_response_params(
+        self, param_ids, *, record_unknown=True, record_rejected=False
+    ):
         """Commit selected staged rows and return the successfully decoded ids."""
         decoded_param_ids = set()
         selected_responses = [
@@ -215,7 +217,11 @@ class FanProtocolParseMixin:
             decoded_profile_ids = set()
             for response in profile_responses:
                 param_id = int.from_bytes(response[:2], byteorder="big")
-                if self._store_param(response, record_unknown=record_unknown):
+                if self._store_param(
+                    response,
+                    record_unknown=record_unknown,
+                    record_rejected=record_rejected,
+                ):
                     decoded_profile_ids.add(param_id)
             profile_ids = {
                 int.from_bytes(response[:2], byteorder="big")
@@ -241,7 +247,11 @@ class FanProtocolParseMixin:
             param_id = int.from_bytes(response[:2], byteorder="big")
             if param_id in _PROFILE_SELECTING_PARAM_IDS:
                 continue
-            if self._store_param(response, record_unknown=record_unknown):
+            if self._store_param(
+                response,
+                record_unknown=record_unknown,
+                record_rejected=record_rejected,
+            ):
                 decoded_param_ids.add(param_id)
         self._last_response_param_ids = decoded_param_ids
         return decoded_param_ids
@@ -278,7 +288,7 @@ class FanProtocolParseMixin:
             self.__dict__.clear()
             self.__dict__.update(before)
 
-    def _store_param(self, response, *, record_unknown=True):
+    def _store_param(self, response, *, record_unknown=True, record_rejected=False):
         param_id = int(response[:2].hex(), 16)
         value = response[2:].hex()
         if param_id not in self.params:
@@ -302,6 +312,7 @@ class FanProtocolParseMixin:
             if record_unknown:
                 # Legacy store keeps raw hex so existing callers/tests are unaffected.
                 self._unknown_params[param_id] = value
+            if record_unknown or record_rejected:
                 self._record_rejected_param(param_id, parameter, value, reason)
             return False
         self._unknown_params.pop(param_id, None)

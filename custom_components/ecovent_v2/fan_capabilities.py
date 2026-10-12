@@ -155,6 +155,12 @@ class FanCapabilitiesMixin:
         index = self.get_params_index(parameter)
         if index is None:
             return False
+        if (
+            self.profile_key == "freshbox"
+            and parameter in (*_TEMPERATURE_PROBE_PARAMETERS, "heater_status")
+            and index not in getattr(self, "_seen_valid_optional_poll_params", ())
+        ):
+            return False
         return index not in self.unsupported_optional_poll_parameter_ids()
 
     def profile_supports_capability(self, capability):

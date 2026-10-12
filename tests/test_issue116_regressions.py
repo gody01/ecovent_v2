@@ -19,7 +19,9 @@ PROBES = ("outdoor_temperature", "supply_temperature", "exhaust_in_temperature",
 
 def _load_sensors():
     with patch.dict(sys.modules):
-        _module("voluptuous")
+        _module("voluptuous", Optional=lambda key: key, Required=lambda key: key,
+                In=lambda values: values, All=lambda *validators: validators,
+                Coerce=lambda value: value, Range=lambda **bounds: bounds)
         _module(
             "homeassistant.components.sensor",
             SensorEntity=type("SensorEntity", (), {}),
@@ -33,6 +35,9 @@ def _load_sensors():
                 EntityCategory=types.SimpleNamespace(DIAGNOSTIC="diagnostic"),
                 UnitOfTemperature=types.SimpleNamespace(CELSIUS="°C"))
         _module("homeassistant.helpers.update_coordinator", CoordinatorEntity=_CoordinatorEntity)
+        _module("homeassistant.helpers.entity_platform", AddEntitiesCallback=object,
+                async_get_current_platform=lambda: types.SimpleNamespace(
+                    async_register_entity_service=lambda *args: None))
         package = _module(PACKAGE)
         package.__path__ = [str(COMPONENT_PATH)]
         _module(f"{PACKAGE}.const", DOMAIN="ecovent_v2")
@@ -104,13 +109,51 @@ def _freshbox(*, speed=1, state=1, ignore_writes=False):
     return entity, fan, calls
 
 
-def _sensor_entities(fan):
-    coordinator = _Coordinator(fan)
+def _sensor_entities(fan, coordinator=None):
+    coordinator = coordinator or _Coordinator(fan)
     hass = types.SimpleNamespace(data={"ecovent_v2": {"entry": coordinator}})
     config = types.SimpleNamespace(entry_id="entry", async_on_unload=lambda callback: None)
     entities = []
     asyncio.run(Sensors.async_setup_entry(hass, config, entities.extend))
-    return {entity._ecovent_object_id_suffix: entity for entity in entities}
+    return entities
+
+
+def _entities_by_suffix(fan):
+    return {entity._ecovent_object_id_suffix: entity for entity in _sensor_entities(fan)}
+
+
+def _read_payload(fan, payload, request, required_params=None):
+    fan.send_command = lambda *args, **kwargs: fan.parse_response(packet_with_payload(payload))
+    return fan._read_params(request, required_params=required_params)
+
+
+def _registry(fan):
+    entries = {fan.id + spec.key: types.SimpleNamespace(hidden_by=None)
+               for spec in Sensors.SENSOR_SPECS}
+    registry = types.SimpleNamespace(
+        async_get_entity_id=lambda platform, domain, unique_id: unique_id if unique_id in entries else None,
+        async_get=entries.get,
+        async_update_entity=lambda entity_id, **changes: setattr(entries[entity_id], "hidden_by", changes["hidden_by"]),
+    )
+    return registry, entries
+
+
+def _sync_registry(registry, fan):
+    tree = ast.parse((COMPONENT_PATH / "__init__.py").read_text())
+    node = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
+                and node.name == "_async_update_unsupported_optional_poll_entities")
+    namespace = {"__package__": PACKAGE, "DOMAIN": "ecovent_v2",
+                 "Platform": types.SimpleNamespace(SENSOR="sensor", BINARY_SENSOR="binary_sensor",
+                                                    SWITCH="switch", NUMBER="number", SELECT="select"),
+                 "er": types.SimpleNamespace(RegistryEntryHider=types.SimpleNamespace(INTEGRATION="integration")),
+                 "_LOGGER": logging.getLogger(__name__)}
+    exec(compile(ast.Module(body=[node], type_ignores=[]), "__init__.py", "exec"), namespace)
+    with patch.dict(sys.modules):
+        _module(f"{PACKAGE}.sensor_specs", SENSOR_SPECS=Sensors.SENSOR_SPECS)
+        for module, attribute in (("binary_sensor", "BINARY_SENSOR_SPECS"), ("number", "NUMBER_SPECS"),
+                                  ("select", "SELECT_SPECS"), ("switch", "SWITCH_SPECS")):
+            _module(f"{PACKAGE}.{module}", **{attribute: ()})
+        namespace["_async_update_unsupported_optional_poll_entities"](registry, fan)
 
 
 class Issue116RegressionTest(unittest.TestCase):
@@ -120,55 +163,104 @@ class Issue116RegressionTest(unittest.TestCase):
         for param, tenths in zip(range(0x1F, 0x23), (103, 186, 192, 141)):
             payload.extend([0xFE, 2, param, *tenths.to_bytes(2, "little", signed=True)])
         payload.extend([0x81, 1])
-        self.assertTrue(fan.parse_response(packet_with_payload(payload)))
-        entities = _sensor_entities(fan)
+        self.assertTrue(_read_payload(fan, payload, "001F0020002100220081"))
+        entities = _entities_by_suffix(fan)
         for name, expected in zip(PROBES, (10.3, 18.6, 19.2, 14.1)):
             self.assertEqual(entities[name].native_value, expected)
         self.assertEqual(entities["heater_status"].native_value, "on")
         self.assertFalse({"co2", "humidity", "temperature_setpoint"} & entities.keys())
         self.assertAlmostEqual(entities["freshbox_recovery_efficiency"].native_value, 93.2584269663)
 
-    def test_registry_hides_unreported_rows_and_restores_reported_rows(self):
+    def test_registry_hides_explicitly_rejected_rows_and_restores_reported_rows(self):
         _, fan, _ = _freshbox()
-        entities = _sensor_entities(fan)
-        entries = {entity._attr_unique_id: types.SimpleNamespace(hidden_by=None)
-                   for entity in entities.values()}
-        registry = types.SimpleNamespace(
-            async_get_entity_id=lambda platform, domain, unique_id: unique_id if unique_id in entries else None,
-            async_get=entries.get,
-            async_update_entity=lambda entity_id, **changes: setattr(entries[entity_id], "hidden_by", changes["hidden_by"]),
-        )
-        tree = ast.parse((COMPONENT_PATH / "__init__.py").read_text())
-        node = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
-                    and node.name == "_async_update_unsupported_optional_poll_entities")
-        namespace = {"__package__": PACKAGE, "DOMAIN": "ecovent_v2",
-                     "Platform": types.SimpleNamespace(SENSOR="sensor", BINARY_SENSOR="binary_sensor",
-                                                        SWITCH="switch", NUMBER="number", SELECT="select"),
-                     "er": types.SimpleNamespace(RegistryEntryHider=types.SimpleNamespace(INTEGRATION="integration")),
-                     "_LOGGER": logging.getLogger(__name__)}
-        exec(compile(ast.Module(body=[node], type_ignores=[]), "__init__.py", "exec"), namespace)
-        with patch.dict(sys.modules):
-            _module(f"{PACKAGE}.sensor_specs", SENSOR_SPECS=Sensors.SENSOR_SPECS)
-            for module, attribute in (("binary_sensor", "BINARY_SENSOR_SPECS"), ("number", "NUMBER_SPECS"),
-                                      ("select", "SELECT_SPECS"), ("switch", "SWITCH_SPECS")):
-                _module(f"{PACKAGE}.{module}", **{attribute: ()})
-            fan.send_command = lambda *args, **kwargs: fan.parse_response(
-                packet_with_payload([2, 1, 6, 0, 0xFD, 0x20, 0xFD, 0x81]))
-            self.assertTrue(fan._read_params("0002000600200081", required_params=frozenset({2, 6})))
-            sync = namespace["_async_update_unsupported_optional_poll_entities"]
-            sync(registry, fan)
-            for name in ("supply_temperature", "heater_status", "freshbox_recovery_efficiency"):
-                self.assertEqual(entries[entities[name]._attr_unique_id].hidden_by, "integration")
-            self.assertIsNone(entries[entities["outdoor_temperature"]._attr_unique_id].hidden_by)
-            fan.send_command = lambda *args, **kwargs: fan.parse_response(
-                packet_with_payload([0xFE, 2, 0x20, 186, 0, 0x81, 1]))
-            self.assertTrue(fan._read_params("00200081"))
-            sync(registry, fan)
-            for name in ("supply_temperature", "heater_status", "freshbox_recovery_efficiency"):
-                self.assertIsNone(entries[entities[name]._attr_unique_id].hidden_by)
+        self.assertTrue(_read_payload(fan, [0xFE, 2, 0x1F, 103, 0, 0xFE, 2, 0x21, 192, 0], "001F0021"))
+        registry, entries = _registry(fan)
+        self.assertTrue(_read_payload(fan, [2, 1, 6, 0, 0xFD, 0x20, 0xFD, 0x81],
+                                      "0002000600200081", frozenset({2, 6})))
+        _sync_registry(registry, fan)
+        for name in ("supply_temperature", "heater_status", "freshbox_recovery_efficiency"):
+            self.assertEqual(entries[fan.id + "_" + name].hidden_by, "integration")
+        self.assertIsNone(entries[fan.id + "_outdoor_temperature"].hidden_by)
+        self.assertTrue(_read_payload(fan, [0xFE, 2, 0x20, 186, 0, 0x81, 1], "00200081"))
+        _sync_registry(registry, fan)
+        for name in ("supply_temperature", "heater_status", "freshbox_recovery_efficiency"):
+            self.assertIsNone(entries[fan.id + "_" + name].hidden_by)
+
+    def test_silent_omissions_hide_never_observed_rows_but_keep_established_entities(self):
+        _, fan, _ = _freshbox()
+        request = "00020006001F0020002100220081"
+        omitted = [2, 1, 6, 0]
+        self.assertTrue(_read_payload(fan, omitted, request, frozenset({2, 6})))
+        self.assertFalse(fan.unsupported_optional_poll_parameter_ids())
+        coordinator = _Coordinator(fan)
+        entities = _sensor_entities(fan, coordinator)
+        optional = {*PROBES, "heater_status", "freshbox_recovery_efficiency"}
+        self.assertFalse(optional & {entity._ecovent_object_id_suffix for entity in entities})
+        registry, entries = _registry(fan)
+        _sync_registry(registry, fan)
+        for name in optional:
+            self.assertEqual(entries[fan.id + "_" + name].hidden_by, "integration")
+
+        reported = list(omitted)
+        for param, tenths in zip(range(0x1F, 0x23), (103, 186, 192, 141)):
+            reported.extend([0xFE, 2, param, *tenths.to_bytes(2, "little", signed=True)])
+        reported.extend([0x81, 1])
+        self.assertTrue(_read_payload(fan, reported, request, frozenset({2, 6})))
+        for listener in coordinator.listeners:
+            listener()
+        by_suffix = {entity._ecovent_object_id_suffix: entity for entity in entities}
+        self.assertTrue(optional <= by_suffix.keys())
+        _sync_registry(registry, fan)
+        for name in optional:
+            self.assertIsNone(entries[fan.id + "_" + name].hidden_by)
+        count = len(entities)
+        for _ in range(8):
+            self.assertTrue(_read_payload(fan, omitted, request, frozenset({2, 6})))
+            for listener in coordinator.listeners:
+                listener()
+            _sync_registry(registry, fan)
+        self.assertEqual(len(entities), count)
+        for name in optional:
+            self.assertIsNone(entries[fan.id + "_" + name].hidden_by)
+        self.assertIsNone(by_suffix["freshbox_recovery_efficiency"].native_value)
+
+    def test_vento_and_breezy_persisted_probe_entries_survive_unobserved_rows(self):
+        for unit_type in ("0100", "1100"):
+            with self.subTest(unit_type=unit_type):
+                fan = Fan("192.0.2.1")
+                fan.unit_type = unit_type
+                fan._id = "DEFAULT_DEVICEID"
+                if fan.profile_key == "vento":
+                    fan._temperature_probes_detected = True
+                registry, entries = _registry(fan)
+                _sync_registry(registry, fan)
+                for name in PROBES:
+                    self.assertIsNone(entries[fan.id + "_" + name].hidden_by)
+                self.assertTrue(set(PROBES) <= _entities_by_suffix(fan).keys())
+
+    def test_estimated_efficiency_is_freshbox_only(self):
+        from test_a21_modbus import A21ModbusDevice
+
+        devices = [A21ModbusDevice(transport="modbus_tcp", endpoint="192.0.2.1",
+                                  name="A21", model="A21")]
+        for unit_type in ("0e00", "1100"):
+            fan = Fan("192.0.2.1")
+            fan.unit_type = unit_type
+            fan._temperature_probes_detected = True
+            devices.append(fan)
+        spec = next(spec for spec in Sensors.SENSOR_SPECS if spec.method == "freshbox_recovery_efficiency")
+        for fan in devices:
+            with self.subTest(profile=fan.profile_key):
+                self.assertFalse(fan.profile_has_entity_requirements(
+                    required_params=spec.required_params,
+                    required_capabilities=spec.required_capabilities))
+                registry, entries = _registry(fan)
+                _sync_registry(registry, fan)
+                self.assertEqual(entries[fan.id + spec.key].hidden_by, "integration")
 
     def test_rejected_rows_use_existing_entity_gates_and_recover(self):
         _, fan, _ = _freshbox()
+        self.assertTrue(_read_payload(fan, [0xFE, 2, 0x1F, 103, 0], "001F"))
         fan.send_command = lambda *args, **kwargs: fan.parse_response(
             packet_with_payload([2, 1, 6, 0, 0xFD, 0x20, 0xFD, 0x81]))
         self.assertTrue(fan._read_params("0002000600200081", required_params=frozenset({2, 6})))
@@ -241,6 +333,21 @@ class Issue116RegressionTest(unittest.TestCase):
         for values, expected in (((0, 30, 20), 150), ((30, 10, 20), 200), ((0, -10, 20), -50)):
             fan._outdoor_temperature, fan._supply_temperature, fan._exhaust_in_temperature = values
             self.assertEqual(sensor.freshbox_recovery_efficiency(), expected)
+
+    def test_efficiency_accepts_positive_and_negative_one_tenth_boundaries(self):
+        _, fan, _ = _freshbox()
+        sensor = Sensors.VentoSensor.__new__(Sensors.VentoSensor)
+        sensor._fan = fan
+        for outdoor, supply, exhaust, expected in (
+            (103, 104, 104, 100), (104, 103, 103, 100),
+            (103, 102, 104, -100), (104, 105, 103, -100),
+        ):
+            with self.subTest(outdoor=outdoor, supply=supply, exhaust=exhaust):
+                payload = []
+                for param, tenths in zip(range(0x1F, 0x22), (outdoor, supply, exhaust)):
+                    payload.extend([0xFE, 2, param, *tenths.to_bytes(2, "little", signed=True)])
+                self.assertTrue(_read_payload(fan, payload, "001F00200021"))
+                self.assertAlmostEqual(sensor.freshbox_recovery_efficiency(), expected)
 
     def test_vento_speed_mapping_is_unchanged(self):
         fan = Fan("192.0.2.1")

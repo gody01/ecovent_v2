@@ -123,11 +123,11 @@ DEVICE_PROFILES = {
         schedule_speed_modes=("speed_1", "speed_2", "speed_3", "speed_4", "speed_5"),
         capabilities=frozenset(
             {
-                # Issue #116: Micra ERV2 100 WiFi reports Freshbox probe and
-                # heater rows. Existing optional-row gates hide missing entities.
+                # Optional probe/heater rows are exposed after a valid reply.
                 "heater",
                 "temperature_probes",
                 "five_speed_setpoints",
+                "estimated_recovery_efficiency",
                 "filter_maintenance",
                 "timer_mode",
             }

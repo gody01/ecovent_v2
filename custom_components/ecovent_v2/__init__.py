@@ -385,7 +385,7 @@ def _async_migrate_entity_registry(
 
 
 def _async_update_unsupported_optional_poll_entities(registry, fan) -> None:
-    """Hide or restore generated entities for rows this hardware rejects."""
+    """Hide or restore generated entities for unavailable optional hardware."""
     from .binary_sensor import BINARY_SENSOR_SPECS
     from .number import NUMBER_SPECS
     from .select import SELECT_SPECS
@@ -478,7 +478,7 @@ def _async_update_unsupported_optional_poll_entities(registry, fan) -> None:
                     hidden_by=er.RegistryEntryHider.INTEGRATION,
                 )
                 _LOGGER.info(
-                    "Hidden EcoVent V2 entity %s because this hardware rejected %s",
+                    "Hidden EcoVent V2 entity %s because this hardware has not reported %s",
                     entity_id,
                     method,
                 )

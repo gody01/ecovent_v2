@@ -333,7 +333,7 @@ SENSOR_SPECS = (
         icon="mdi:heat-pump-outline",
         suggested_display_precision=1,
         required_params=("outdoor_temperature", "supply_temperature", "exhaust_in_temperature"),
-        required_capabilities=("temperature_probes", "five_speed_setpoints"),
+        required_capabilities=("temperature_probes", "estimated_recovery_efficiency"),
     ),
     SensorSpec(
         "_schedule_speed",

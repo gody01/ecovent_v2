@@ -34,6 +34,21 @@ def _load_sensors():
                 REVOLUTIONS_PER_MINUTE="rpm",
                 EntityCategory=types.SimpleNamespace(DIAGNOSTIC="diagnostic"),
                 UnitOfTemperature=types.SimpleNamespace(CELSIUS="°C"))
+        _module("homeassistant.components.number",
+                NumberEntity=type("NumberEntity", (), {}),
+                NumberDeviceClass=types.SimpleNamespace(TEMPERATURE="temperature"),
+                NumberMode=types.SimpleNamespace(AUTO="auto", BOX="box"))
+        _module("homeassistant.components.binary_sensor",
+                BinarySensorEntity=type("BinarySensorEntity", (), {}),
+                BinarySensorDeviceClass=types.SimpleNamespace(PROBLEM="problem"))
+        _module("homeassistant.components.select", SelectEntity=type("SelectEntity", (), {}))
+        _module("homeassistant.components.switch",
+                SwitchEntity=type("SwitchEntity", (), {}),
+                SwitchDeviceClass=types.SimpleNamespace(SWITCH="switch"))
+        _module("homeassistant.config_entries", ConfigEntry=object)
+        _module("homeassistant.core", HomeAssistant=object)
+        _module("homeassistant.helpers.device_registry", DeviceInfo=lambda **kwargs: kwargs)
+        sys.modules["homeassistant.const"].EntityCategory.CONFIG = "config"
         _module("homeassistant.helpers.update_coordinator", CoordinatorEntity=_CoordinatorEntity)
         _module("homeassistant.helpers.entity_platform", AddEntitiesCallback=object,
                 async_get_current_platform=lambda: types.SimpleNamespace(
@@ -51,6 +66,12 @@ def _load_sensors():
         module = importlib.util.module_from_spec(spec)
         sys.modules[name] = module
         spec.loader.exec_module(module)
+        module.registry_specs = {"sensor_specs": ("SENSOR_SPECS", module.SENSOR_SPECS)}
+        for platform, attribute in (("binary_sensor", "BINARY_SENSOR_SPECS"),
+                                    ("number", "NUMBER_SPECS"), ("select", "SELECT_SPECS"),
+                                    ("switch", "SWITCH_SPECS")):
+            platform_module = importlib.import_module(f"{PACKAGE}.{platform}")
+            module.registry_specs[platform] = (attribute, getattr(platform_module, attribute))
         return module
 
 
@@ -150,10 +171,8 @@ def _sync_registry(registry, fan):
                  "_LOGGER": logging.getLogger(__name__)}
     exec(compile(ast.Module(body=[node], type_ignores=[]), "__init__.py", "exec"), namespace)
     with patch.dict(sys.modules):
-        _module(f"{PACKAGE}.sensor_specs", SENSOR_SPECS=Sensors.SENSOR_SPECS)
-        for module, attribute in (("binary_sensor", "BINARY_SENSOR_SPECS"), ("number", "NUMBER_SPECS"),
-                                  ("select", "SELECT_SPECS"), ("switch", "SWITCH_SPECS")):
-            _module(f"{PACKAGE}.{module}", **{attribute: ()})
+        for module, (attribute, specs) in Sensors.registry_specs.items():
+            _module(f"{PACKAGE}.{module}", **{attribute: specs})
         namespace["_async_update_unsupported_optional_poll_entities"](registry, fan)
 
 
@@ -175,6 +194,68 @@ def _register_registry_sync(registry, coordinator):
 
 
 class Issue116RegressionTest(unittest.TestCase):
+    def test_real_spec_registry_sync_is_stable_on_repeated_successful_polls(self):
+        from test_a21_modbus import A21ModbusDevice
+
+        devices = []
+        for unit_type in ("0100", "1100", "0200"):
+            fan = Fan("192.0.2.1")
+            fan.unit_type = unit_type
+            fan._id = "DEFAULT_DEVICEID"
+            devices.append(fan)
+        devices.append(A21ModbusDevice(transport="modbus_tcp", endpoint="192.0.2.1",
+                                       name="A21", model="A21"))
+        speed_methods = tuple(f"{direction}_speed_{level}"
+                              for level in ("low", "medium", "high")
+                              for direction in ("supply", "exhaust"))
+        for fan in devices:
+            with self.subTest(profile=fan.profile_key):
+                entries = {}
+                for module, (_, specs) in Sensors.registry_specs.items():
+                    platform = "sensor" if module == "sensor_specs" else module
+                    for spec in specs:
+                        suffix = spec.method if platform == "number" else spec.key
+                        entries[(platform, fan.id + suffix)] = types.SimpleNamespace(hidden_by=None)
+                entries[("sensor", fan.id + "_schedule")] = types.SimpleNamespace(hidden_by=None)
+                updates = []
+
+                def update(entity_id, **changes):
+                    updates.append((entity_id, changes))
+                    entries[entity_id].hidden_by = changes["hidden_by"]
+
+                registry = types.SimpleNamespace(
+                    async_get_entity_id=lambda platform, domain, unique_id:
+                        (platform, unique_id) if (platform, unique_id) in entries else None,
+                    async_get=entries.get, async_update_entity=update)
+                coordinator = _Coordinator(fan)
+                _register_registry_sync(registry, coordinator)
+                first_updates = [entity_id for entity_id, _ in updates]
+                self.assertEqual(len(first_updates), len(set(first_updates)))
+                updates.clear()
+                for listener in coordinator.listeners:
+                    listener()
+                self.assertEqual(updates, [])
+                if fan.profile_key in ("vento", "breezy"):
+                    for method in speed_methods:
+                        self.assertTrue(fan.supports_entity(
+                            required_params=(method,),
+                            required_capabilities=("three_speed_setpoints",)))
+                        self.assertIsNone(entries[("number", fan.id + method)].hidden_by)
+
+                # Failed polls must not restore even a supported persisted entry.
+                supported_id = next(entity_id for entity_id, entry in entries.items()
+                                    if entry.hidden_by is None)
+                entries[supported_id].hidden_by = "integration"
+                coordinator.last_update_success = False
+                for listener in coordinator.listeners:
+                    listener()
+                self.assertEqual(updates, [])
+                self.assertEqual(entries[supported_id].hidden_by, "integration")
+                coordinator.last_update_success = True
+                for listener in coordinator.listeners:
+                    listener()
+                self.assertEqual(updates, [(supported_id, {"hidden_by": None})])
+
     def test_freshbox_exposes_reported_probes_and_heater_without_optional_modules(self):
         _, fan, _ = _freshbox()
         payload = []

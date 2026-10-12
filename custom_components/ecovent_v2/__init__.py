@@ -462,7 +462,14 @@ def _async_update_unsupported_optional_poll_entities(registry, fan) -> None:
             fan.supports_parameter("weekly_schedule_setup"),
         ),
     )
+    # Alternative profile gates can describe the same registry entity.
+    supported_by_id = {}
     for platform, unique_id, method, supported in entity_specs:
+        key = (platform, unique_id)
+        previous_method, previous_supported = supported_by_id.get(key, (method, False))
+        supported_by_id[key] = (previous_method, previous_supported or supported)
+
+    for (platform, unique_id), (method, supported) in supported_by_id.items():
         entity_id = registry.async_get_entity_id(platform, DOMAIN, unique_id)
         if entity_id is None:
             continue

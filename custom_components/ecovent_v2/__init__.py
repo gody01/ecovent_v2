@@ -508,14 +508,13 @@ def _async_register_optional_poll_entity_sync(
     entry: ConfigEntry,
     coordinator: EcoVentCoordinator,
 ) -> None:
-    """Keep generated entity visibility aligned with learned capabilities."""
+    """Sync generated entity visibility after each successful same-identity poll."""
     registry = er.async_get(hass)
     loaded_identity = _fan_identity(coordinator._fan)
-    last_capability_state = None
     reload_requested = False
 
     def _async_sync_entity_registry() -> None:
-        nonlocal last_capability_state, reload_requested
+        nonlocal reload_requested
         if not coordinator.last_update_success:
             return
 
@@ -538,15 +537,7 @@ def _async_register_optional_poll_entity_sync(
                 hass.config_entries.async_schedule_reload(entry.entry_id)
                 reload_requested = True
             return
-        capability_state = (
-            *current_identity,
-            coordinator._fan.unsupported_optional_poll_parameter_ids(),
-        )
-        if capability_state == last_capability_state:
-            return
-
         _async_update_unsupported_optional_poll_entities(registry, coordinator._fan)
-        last_capability_state = capability_state
 
     entry.async_on_unload(coordinator.async_add_listener(_async_sync_entity_registry))
     _async_sync_entity_registry()

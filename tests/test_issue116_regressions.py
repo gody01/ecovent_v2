@@ -63,6 +63,7 @@ class _Hass:
 
 
 class _Coordinator:
+    last_update_success = True
     silent_mode_enabled = False
     silent_preset_mode = None
 
@@ -156,6 +157,23 @@ def _sync_registry(registry, fan):
         namespace["_async_update_unsupported_optional_poll_entities"](registry, fan)
 
 
+def _register_registry_sync(registry, coordinator):
+    tree = ast.parse((COMPONENT_PATH / "__init__.py").read_text())
+    nodes = [node for node in tree.body if isinstance(node, ast.FunctionDef)
+             and node.name in ("_fan_identity", "_async_register_optional_poll_entity_sync")]
+    namespace = {
+        "HomeAssistant": object, "ConfigEntry": object, "EcoVentCoordinator": object,
+        "er": types.SimpleNamespace(async_get=lambda hass: registry),
+        "_LOGGER": logging.getLogger(__name__),
+        "_async_update_unsupported_optional_poll_entities": _sync_registry,
+    }
+    exec(compile(ast.Module(body=nodes, type_ignores=[]), "__init__.py", "exec"), namespace)
+    hass = types.SimpleNamespace(config_entries=types.SimpleNamespace(
+        async_schedule_reload=lambda entry_id: None))
+    entry = types.SimpleNamespace(entry_id="entry", async_on_unload=lambda callback: None)
+    namespace["_async_register_optional_poll_entity_sync"](hass, entry, coordinator)
+
+
 class Issue116RegressionTest(unittest.TestCase):
     def test_freshbox_exposes_reported_probes_and_heater_without_optional_modules(self):
         _, fan, _ = _freshbox()
@@ -197,7 +215,7 @@ class Issue116RegressionTest(unittest.TestCase):
         optional = {*PROBES, "heater_status", "freshbox_recovery_efficiency"}
         self.assertFalse(optional & {entity._ecovent_object_id_suffix for entity in entities})
         registry, entries = _registry(fan)
-        _sync_registry(registry, fan)
+        _register_registry_sync(registry, coordinator)
         for name in optional:
             self.assertEqual(entries[fan.id + "_" + name].hidden_by, "integration")
 
@@ -210,7 +228,7 @@ class Issue116RegressionTest(unittest.TestCase):
             listener()
         by_suffix = {entity._ecovent_object_id_suffix: entity for entity in entities}
         self.assertTrue(optional <= by_suffix.keys())
-        _sync_registry(registry, fan)
+        self.assertEqual(fan.unsupported_optional_poll_parameter_ids(), frozenset())
         for name in optional:
             self.assertIsNone(entries[fan.id + "_" + name].hidden_by)
         count = len(entities)
@@ -218,7 +236,6 @@ class Issue116RegressionTest(unittest.TestCase):
             self.assertTrue(_read_payload(fan, omitted, request, frozenset({2, 6})))
             for listener in coordinator.listeners:
                 listener()
-            _sync_registry(registry, fan)
         self.assertEqual(len(entities), count)
         for name in optional:
             self.assertIsNone(entries[fan.id + "_" + name].hidden_by)

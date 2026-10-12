@@ -326,6 +326,18 @@ class VentoSensor(StableObjectIdMixin, CoordinatorEntity, SensorEntity):
         """Get recovery efficiency."""
         return self._fan.recovery_efficiency
 
+    def freshbox_recovery_efficiency(self):
+        """Estimate temperature recovery; installed heaters can affect this."""
+        outdoor = self._fan.outdoor_temperature
+        supply = self._fan.supply_temperature
+        exhaust = self._fan.exhaust_in_temperature
+        if outdoor is None or supply is None or exhaust is None:
+            return None
+        denominator = exhaust - outdoor
+        if abs(denominator) < 0.1:
+            return None
+        return (supply - outdoor) / denominator * 100
+
     def schedule_speed(self):
         """Get current schedule speed."""
         return self._fan.schedule_speed

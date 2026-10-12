@@ -121,6 +121,8 @@ silent-mode, airflow, and clock-sync caveats; capabilities depend on the device 
 * Retry previously available optional measurements after transient unsupported responses (#113); accept RPM measurements beyond PDF ranges without widening writable setpoint limits (#113).
 * Decode both Vento filter-countdown layouts and accept acknowledged write-only resets without an echo; keep transport failures and rejected writes as errors (#115).
 * Include rejected poll values in Repair diagnostics so raw countdown bytes can be reported without sharing credentials (#115).
+* Fix Freshbox/Micra five-speed preset confirmation and expose reported air temperatures and heater status (#116). Missing optional rows remain hidden by the existing hardware gates.
+* Add estimated Freshbox recovery efficiency from outdoor, supply, and exhaust-inlet probes; missing values or a temperature difference below 0.1 °C yield unknown. Installed heaters affect this temperature ratio, so it is not a measurement of exchanger-only efficiency and is not clamped to 0–100%.
 
 ## Rejected device value Repairs
 

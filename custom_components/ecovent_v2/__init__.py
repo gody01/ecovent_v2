@@ -14,7 +14,7 @@ from homeassistant.const import (
     Platform,
     REVOLUTIONS_PER_MINUTE,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import slugify
 
@@ -606,12 +606,26 @@ async def _async_migrate_statistics_metadata_on_start(
     """Run statistics migration now and again after recorder startup."""
     await _async_migrate_statistics_metadata(hass, coordinator)
 
-    async def _async_run_at_start(_event) -> None:
-        await _async_migrate_statistics_metadata(hass, coordinator)
+    listener_pending = True
 
-    entry.async_on_unload(
-        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _async_run_at_start)
+    @callback
+    def _run_at_start(_event) -> None:
+        nonlocal listener_pending
+        listener_pending = False
+        hass.async_create_task(_async_migrate_statistics_metadata(hass, coordinator))
+
+    remove_listener = hass.bus.async_listen_once(
+        EVENT_HOMEASSISTANT_STARTED, _run_at_start
     )
+
+    @callback
+    def _async_remove_listener() -> None:
+        nonlocal listener_pending
+        if listener_pending:
+            listener_pending = False
+            remove_listener()
+
+    entry.async_on_unload(_async_remove_listener)
 
 
 async def _async_close_coordinator(

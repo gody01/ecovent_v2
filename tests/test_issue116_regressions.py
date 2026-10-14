@@ -149,7 +149,8 @@ def _read_payload(fan, payload, request, required_params=None):
     return fan._read_params(request, required_params=required_params)
 
 
-_MICRA_OBSERVED_VALUES = {
+# Synthetic valid values; response parameter IDs come from issue #116.
+_MICRA_TEST_VALUES = {
     0x0001: b"\x01",
     0x0002: b"\x02",
     0x000B: b"\x2a\x00\x00",
@@ -180,7 +181,7 @@ def _mock_micra_poll(fan, *, omitted=(), transport_failure=False):
             param_id = int(params[offset : offset + 4], 16)
             if param_id == 0x0006 or param_id in omitted:
                 continue
-            raw_value = _MICRA_OBSERVED_VALUES.get(param_id)
+            raw_value = _MICRA_TEST_VALUES.get(param_id)
             if raw_value is not None:
                 payload.extend(_encode_poll_value(param_id, raw_value))
         if not payload:

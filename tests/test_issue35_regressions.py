@@ -1319,6 +1319,7 @@ class Issue35RegressionTest(unittest.TestCase):
             "HomeAssistant": object,
             "ConfigEntry": object,
             "EcoVentCoordinator": object,
+            "callback": lambda function: function,
             "EVENT_HOMEASSISTANT_STARTED": "started",
             "_async_migrate_statistics_metadata": migrate,
         }
@@ -1352,7 +1353,9 @@ class Issue35RegressionTest(unittest.TestCase):
         )
         self.assertEqual(events[0], "migrate")
         self.assertEqual(events[1][0:2], ("listen", "started"))
-        self.assertEqual(events[2], ("unload", cancel))
+        self.assertEqual(events[2][0], "unload")
+        events[2][1]()
+        self.assertEqual(events[-1], "cancel")
 
     def test_coordinator_rejects_false_initialization_even_when_id_was_assigned(self):
         coordinator_path = COMPONENT_PATH / "coordinator.py"

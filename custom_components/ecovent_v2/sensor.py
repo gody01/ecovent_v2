@@ -91,8 +91,17 @@ async def async_setup_entry(
         )
 
     def spec_is_supported(spec):
+        required_params = spec.required_params or (spec.method,)
+        if (
+            coordinator._fan.profile_key == "freshbox"
+            and {"temperature_probes", "heater"} & set(spec.required_capabilities)
+        ):
+            return coordinator._fan.supports_entity(
+                required_params=required_params,
+                required_capabilities=spec.required_capabilities,
+            )
         return coordinator._fan.profile_has_entity_requirements(
-            required_params=spec.required_params or (spec.method,),
+            required_params=required_params,
             required_capabilities=spec.required_capabilities,
         )
 
@@ -104,11 +113,11 @@ async def async_setup_entry(
         entities.append(WeeklyScheduleSummarySensor(hass, config))
     async_add_entities(entities)
 
-    def add_late_temperature_sensors():
+    def add_late_optional_sensors():
         new_specs = [
             spec
             for spec in SENSOR_SPECS
-            if "temperature_probes" in spec.required_capabilities
+            if {"temperature_probes", "heater"} & set(spec.required_capabilities)
             and spec.key not in added_sensor_keys
             and spec_is_supported(spec)
         ]
@@ -117,7 +126,7 @@ async def async_setup_entry(
             async_add_entities([entity_for_spec(spec) for spec in new_specs])
 
     config.async_on_unload(
-        coordinator.async_add_listener(add_late_temperature_sensors)
+        coordinator.async_add_listener(add_late_optional_sensors)
     )
 
     if supports_schedule:
@@ -325,6 +334,18 @@ class VentoSensor(StableObjectIdMixin, CoordinatorEntity, SensorEntity):
     def recovery_efficiency(self):
         """Get recovery efficiency."""
         return self._fan.recovery_efficiency
+
+    def freshbox_recovery_efficiency(self):
+        """Estimate temperature recovery; installed heaters can affect this."""
+        outdoor = self._fan.outdoor_temperature
+        supply = self._fan.supply_temperature
+        exhaust = self._fan.exhaust_in_temperature
+        if outdoor is None or supply is None or exhaust is None:
+            return None
+        denominator = round(exhaust - outdoor, 1)
+        if abs(denominator) < 0.1:
+            return None
+        return (supply - outdoor) / denominator * 100
 
     def schedule_speed(self):
         """Get current schedule speed."""

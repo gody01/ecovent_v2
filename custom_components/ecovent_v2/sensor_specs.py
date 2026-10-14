@@ -325,6 +325,17 @@ SENSOR_SPECS = (
         required_capabilities=("air_quality",),
     ),
     SensorSpec(
+        "_freshbox_recovery_efficiency",
+        "Estimated recovery efficiency",
+        "freshbox_recovery_efficiency",
+        PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:heat-pump-outline",
+        suggested_display_precision=1,
+        required_params=("outdoor_temperature", "supply_temperature", "exhaust_in_temperature"),
+        required_capabilities=("temperature_probes", "estimated_recovery_efficiency"),
+    ),
+    SensorSpec(
         "_schedule_speed",
         "Weekly schedule speed",
         "schedule_speed",

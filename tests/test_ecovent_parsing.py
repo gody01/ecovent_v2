@@ -323,7 +323,7 @@ class ParseRobustnessTest(unittest.TestCase):
         for unit, firmware, valid in (
             ("0e00", "0003040ae507", True),
             ("0e00", "0005040ae507", True),
-            ("0500", "0003040ae507", False),
+            ("0500", "0003040ae507", True),
         ):
             with self.subTest(unit=unit, firmware=firmware):
                 fan = Fan("192.0.2.1")
@@ -367,7 +367,7 @@ class ParseRobustnessTest(unittest.TestCase):
 
     def test_filter_countdown_rejects_wrong_width_after_profile_discovery(self):
         cases = (
-            ("0500", [0, 0, 181], [0, 0, 181, 0], "181d 0h 0m "),
+            ("0500", [0, 0, 181], [0, 181], "181d 0h 0m "),
             ("1100", [0, 0, 181, 0], [0, 0, 181], "181d 0h 0m "),
             ("0200", [0, 0, 181, 0], [0, 0, 181], "181d 0h 0m "),
         )

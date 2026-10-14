@@ -14,7 +14,7 @@ from homeassistant.const import (
     Platform,
     REVOLUTIONS_PER_MINUTE,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import slugify
 
@@ -385,7 +385,7 @@ def _async_migrate_entity_registry(
 
 
 def _async_update_unsupported_optional_poll_entities(registry, fan) -> None:
-    """Hide or restore generated entities for rows this hardware rejects."""
+    """Hide or restore generated entities for unavailable optional hardware."""
     from .binary_sensor import BINARY_SENSOR_SPECS
     from .number import NUMBER_SPECS
     from .select import SELECT_SPECS
@@ -462,7 +462,14 @@ def _async_update_unsupported_optional_poll_entities(registry, fan) -> None:
             fan.supports_parameter("weekly_schedule_setup"),
         ),
     )
+    # Alternative profile gates can describe the same registry entity.
+    supported_by_id = {}
     for platform, unique_id, method, supported in entity_specs:
+        key = (platform, unique_id)
+        previous_method, previous_supported = supported_by_id.get(key, (method, False))
+        supported_by_id[key] = (previous_method, previous_supported or supported)
+
+    for (platform, unique_id), (method, supported) in supported_by_id.items():
         entity_id = registry.async_get_entity_id(platform, DOMAIN, unique_id)
         if entity_id is None:
             continue
@@ -478,7 +485,7 @@ def _async_update_unsupported_optional_poll_entities(registry, fan) -> None:
                     hidden_by=er.RegistryEntryHider.INTEGRATION,
                 )
                 _LOGGER.info(
-                    "Hidden EcoVent V2 entity %s because this hardware rejected %s",
+                    "Hidden EcoVent V2 entity %s because this hardware has not reported %s",
                     entity_id,
                     method,
                 )
@@ -508,14 +515,13 @@ def _async_register_optional_poll_entity_sync(
     entry: ConfigEntry,
     coordinator: EcoVentCoordinator,
 ) -> None:
-    """Keep generated entity visibility aligned with learned capabilities."""
+    """Sync generated entity visibility after each successful same-identity poll."""
     registry = er.async_get(hass)
     loaded_identity = _fan_identity(coordinator._fan)
-    last_capability_state = None
     reload_requested = False
 
     def _async_sync_entity_registry() -> None:
-        nonlocal last_capability_state, reload_requested
+        nonlocal reload_requested
         if not coordinator.last_update_success:
             return
 
@@ -538,15 +544,7 @@ def _async_register_optional_poll_entity_sync(
                 hass.config_entries.async_schedule_reload(entry.entry_id)
                 reload_requested = True
             return
-        capability_state = (
-            *current_identity,
-            coordinator._fan.unsupported_optional_poll_parameter_ids(),
-        )
-        if capability_state == last_capability_state:
-            return
-
         _async_update_unsupported_optional_poll_entities(registry, coordinator._fan)
-        last_capability_state = capability_state
 
     entry.async_on_unload(coordinator.async_add_listener(_async_sync_entity_registry))
     _async_sync_entity_registry()
@@ -608,12 +606,26 @@ async def _async_migrate_statistics_metadata_on_start(
     """Run statistics migration now and again after recorder startup."""
     await _async_migrate_statistics_metadata(hass, coordinator)
 
-    async def _async_run_at_start(_event) -> None:
-        await _async_migrate_statistics_metadata(hass, coordinator)
+    listener_pending = True
 
-    entry.async_on_unload(
-        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _async_run_at_start)
+    @callback
+    def _run_at_start(_event) -> None:
+        nonlocal listener_pending
+        listener_pending = False
+        hass.async_create_task(_async_migrate_statistics_metadata(hass, coordinator))
+
+    remove_listener = hass.bus.async_listen_once(
+        EVENT_HOMEASSISTANT_STARTED, _run_at_start
     )
+
+    @callback
+    def _async_remove_listener() -> None:
+        nonlocal listener_pending
+        if listener_pending:
+            listener_pending = False
+            remove_listener()
+
+    entry.async_on_unload(_async_remove_listener)
 
 
 async def _async_close_coordinator(

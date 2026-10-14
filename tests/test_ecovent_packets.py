@@ -1008,10 +1008,7 @@ class PacketBuilderTest(unittest.TestCase):
         required = fan.device_profile.poll_required_params
         self.assertEqual(
             required,
-            {
-                0x0002,
-                0x0006,
-            },
+            {0x0002},
         )
         calls = []
 
@@ -1079,11 +1076,11 @@ class PacketBuilderTest(unittest.TestCase):
         self.assertEqual(fan.last_missing_optional_params, missing_optional)
         self.assertEqual(calls[:2], [("007c", 10), ("00b9", 10)])
 
-    def test_freshbox_full_and_quick_polls_fail_when_core_rows_are_absent(self):
-        for method_name, missing_param in (
-            ("update", 0x0002),
-            ("update", 0x0006),
-            ("quick_update", 0x0006),
+    def test_freshbox_polls_require_speed_but_allow_missing_boost_status(self):
+        for method_name, missing_param, expected in (
+            ("update", 0x0002, False),
+            ("update", 0x0006, True),
+            ("quick_update", 0x0006, True),
         ):
             with self.subTest(method=method_name, missing=f"0x{missing_param:04X}"):
                 fan = Fan("192.0.2.1")
@@ -1101,8 +1098,11 @@ class PacketBuilderTest(unittest.TestCase):
 
                 fan.send_command = send_command
 
-                self.assertFalse(getattr(fan, method_name)())
-                self.assertEqual(fan.last_missing_required_params, {missing_param})
+                self.assertEqual(getattr(fan, method_name)(), expected)
+                self.assertEqual(
+                    fan.last_missing_required_params,
+                    set() if expected else {missing_param},
+                )
 
     def test_freshpoint_update_clears_optional_unsupported_param_without_retrying(self):
         fan = Fan("192.0.2.1")

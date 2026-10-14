@@ -100,10 +100,12 @@ def _decode_encoded_write_values(encoded_params, *, initial_high_byte=0):
     return decoded[0]
 
 
-def _response_matches_write_values(expected, received, unsupported):
-    """Return whether a response confirms each requested raw write value."""
+def _response_matches_write_values(expected, received, unsupported, write_only=()):
+    """Confirm echoes, allowing an acknowledged action to omit its write-only row."""
     return set(expected).isdisjoint(unsupported) and all(
-        received.get(param_id) == value for param_id, value in expected.items()
+        (param_id in write_only and param_id not in received)
+        or received.get(param_id) == value
+        for param_id, value in expected.items()
     )
 
 
@@ -451,18 +453,22 @@ class FanProtocolMixin:
                             expected_extra_write_values,
                             received_values,
                             unsupported_ids,
+                            self._write_only_params,
                         )
                     write_confirmed = expected_write_values is None or (
                         _response_matches_write_values(
                             expected_write_values,
                             received_values,
                             unsupported_ids,
+                            self._write_only_params,
                         )
                     )
                     if expected_response_param_ids is not None:
                         requested_read_ids = set(expected_response_param_ids)
                         decoded_read_ids = self._store_staged_response_params(
-                            requested_read_ids, record_unknown=False
+                            requested_read_ids,
+                            record_unknown=False,
+                            record_rejected=True,
                         )
                         # An answered but undecodable row is not silence. Keep this
                         # transaction fact for both direct and bulk-read callers.
@@ -504,11 +510,16 @@ class FanProtocolMixin:
                             storable_write_values
                         )
                     if extra_write_confirmed:
+                        storable_extra_values = {
+                            param_id: value
+                            for param_id, value in expected_extra_write_values.items()
+                            if param_id not in self._write_only_params
+                        }
                         decoded_extra_ids = self._store_staged_response_params_atomic(
-                            expected_extra_write_values
+                            storable_extra_values
                         )
                         extra_write_confirmed = decoded_extra_ids == set(
-                            expected_extra_write_values
+                            storable_extra_values
                         )
                 else:
                     write_confirmed = False

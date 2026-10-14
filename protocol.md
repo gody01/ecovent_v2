@@ -407,15 +407,36 @@ A captured TwinFresh Style Wi-Fi (`0x0E00`, firmware `0.3 2021-10-04`) returns
 a four-byte `0x0064`: minute, hour, then little-endian 16-bit days. Issue #101
 reports the same model's firmware `0.5 2024-07-10` responding with that row;
 until its raw capture arrives, accepting it is an evidence-backed format
-inference rather than a second physical capture. This model variant uses the
-four-byte decoder with minute/hour bounds and a 365-day limit; other Vento
-variants retain their three-byte requirement. Soft omissions preserve a
+inference rather than a second physical capture. Issue #115 reports a returned
+but undecodable countdown on TwinFresh Expert (`0x0300`, firmware
+`0.9 2024-07-08`), consistent with the same four-byte layout; its raw payload
+has not yet been supplied. The Vento profile therefore selects the decoder by
+returned width: three bytes retain the 181-day limit, four bytes use a
+little-endian 16-bit day count with a 365-day limit. Both enforce minute/hour
+bounds; Breezy/Freshbox still require four bytes. The filter setpoint (`0x0063`)
+remains exactly two bytes, the timer counter (`0x000B`) three, and machine hours
+(`0x007E`) four. Soft omissions preserve a
 previously decoded filter countdown for three consecutive requested-read
 misses, clearing it on the fourth; an explicit unsupported or malformed row
 clears it immediately.
 Initialization reads firmware before the first full poll. The captured full/quick
 cycle is replayed by `tests/test_twinfresh_capture.py`; identity/IP values are
 redacted, and operational payload bytes are preserved.
+
+BGCP write-only action rows (filter reset `0x0065`, alarm reset `0x0080`, and
+extract-fan factory reset/Wi-Fi apply commands) can be omitted from a valid
+device response. A checked FUNC `0x06` response acknowledges these actions;
+an explicit unsupported row, conflicting echo, malformed packet or no response
+still fails. Readable rows in the same write must still echo the requested
+value and decode successfully. A21 uses separate Modbus write acknowledgments
+and does not require action-coil readback.
+
+Rejected requested read rows now enter the same raw-value Repair diagnostics
+as direct parser calls. To capture an undecodable `0x0064`, open the EcoVent
+Repair under Home Assistant Settings → System → Repairs and review its
+prefilled issue, or download the integration's diagnostics and find
+`rejected_device_values` / `0x0064` / `raw_samples`. Only the value bytes are
+needed; do not share a complete packet containing credentials or device IDs.
 
 Schedule cache reads use the documented day/period selector for all four slots.
 Only a complete, validated day replaces its cache entry. An incomplete day keeps

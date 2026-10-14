@@ -116,14 +116,18 @@ DEVICE_PROFILES = {
         key="freshbox",
         params_name="freshbox_params",
         write_params_name="freshbox_write_params",
-        quick_update_request="0006000B003200330081008300A100B6",
+        quick_update_request="000B003200330081008300A100B6",
         preset_modes=("off", "speed_1", "speed_2", "speed_3", "speed_4", "speed_5"),
         boost_statuses_name="statuses",
         humidity_sensor_states_name="states",
         schedule_speed_modes=("speed_1", "speed_2", "speed_3", "speed_4", "speed_5"),
         capabilities=frozenset(
             {
+                # Optional probe/heater rows are exposed after a valid reply.
+                "heater",
+                "temperature_probes",
                 "five_speed_setpoints",
+                "estimated_recovery_efficiency",
                 "filter_maintenance",
                 "timer_mode",
             }
@@ -133,11 +137,10 @@ DEVICE_PROFILES = {
         poll_required_params=frozenset(
             {
                 # VENTS Micra 100 WiFi units have been observed never
-                # answering alarm_list (0x007F), with occasional lossy drops
-                # of other rows. Keep only the rows that proved stable across
-                # the full and quick poll paths fatal for availability.
+                # answering boost_status (0x0006) and alarm_list (0x007F),
+                # with occasional lossy drops of other rows. Keep only speed
+                # as fatal for availability; 0x0006 remains in full polls.
                 0x0002,
-                0x0006,
             }
         ),
     ),

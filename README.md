@@ -119,6 +119,12 @@ silent-mode, airflow, and clock-sync caveats; capabilities depend on the device 
 
 ## Unreleased
 * Retry previously available optional measurements after transient unsupported responses (#113); accept RPM measurements beyond PDF ranges without widening writable setpoint limits (#113).
+* Decode both Vento filter-countdown layouts and accept acknowledged write-only resets without an echo; keep transport failures and rejected writes as errors (#115).
+* Include rejected poll values in Repair diagnostics so raw countdown bytes can be reported without sharing credentials (#115).
+* Fix Freshbox/Micra five-speed preset confirmation and expose air temperatures and heater status only after their rows report valid values (#116). Never-observed optional hardware stays hidden, while previously observed rows survive transient omissions; existing Vento/Breezy probe visibility is unchanged.
+* Keep Freshbox/Micra available when read-only boost status `0x0006` is absent: require speed `0x0002`, keep `0x0006` in full polls as optional, and continue polling boost switch status `0x0032`.
+* Add Freshbox-only estimated recovery efficiency from outdoor, supply, and exhaust-inlet probes; missing values or a temperature difference below 0.1 °C at the probes' one-decimal resolution yield unknown. Installed heaters affect this temperature ratio, so it is not a measurement of exchanger-only efficiency and is not clamped to 0–100%.
+* Fold alternative profile definitions before syncing entity visibility so each registry ID is updated at most once per poll. Supported Vento/Breezy three-speed setpoints stay visible, and unchanged polls no longer hide/restore duplicate IDs (#116).
 
 ## Rejected device value Repairs
 
@@ -128,6 +134,10 @@ GitHub issue link. It collects the parameter id and name, rejection reason,
 count, first and last observation times, raw minimum/maximum and bounded raw
 samples, plus bounded episodes shown as `previous valid → rejected samples →
 next valid`.
+The same capture applies to rejected values during normal polling. To report
+an unknown filter countdown, open Settings → System → Repairs and review the
+EcoVent Repair's prefilled issue, or download integration diagnostics and find
+`rejected_device_values`, entry `0x0064`, field `raw_samples`.
 
 Nothing is sent automatically. Review the prefilled issue and click Submit
 yourself if you choose to report it. A later valid value, integration reload,

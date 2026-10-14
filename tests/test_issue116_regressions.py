@@ -149,6 +149,48 @@ def _read_payload(fan, payload, request, required_params=None):
     return fan._read_params(request, required_params=required_params)
 
 
+_MICRA_OBSERVED_VALUES = {
+    0x0001: b"\x01",
+    0x0002: b"\x02",
+    0x000B: b"\x2a\x00\x00",
+    0x0032: b"\x01",
+    0x0033: b"\x00",
+    0x0081: b"\x01",
+    0x0083: b"\x00",
+    0x00A1: b"\x01",
+    0x00B6: b"\x01",
+}
+
+
+def _encode_poll_value(param_id, value):
+    if len(value) > 1:
+        return [0xFE, len(value), param_id & 0xFF, *value]
+    return [param_id & 0xFF, *value]
+
+
+def _mock_micra_poll(fan, *, omitted=(), transport_failure=False):
+    requests = []
+
+    def send_command(function, params, value="", retries=10):
+        requests.append(params)
+        if transport_failure:
+            return False
+        payload = []
+        for offset in range(0, len(params), 4):
+            param_id = int(params[offset : offset + 4], 16)
+            if param_id == 0x0006 or param_id in omitted:
+                continue
+            raw_value = _MICRA_OBSERVED_VALUES.get(param_id)
+            if raw_value is not None:
+                payload.extend(_encode_poll_value(param_id, raw_value))
+        if not payload:
+            return False
+        return fan.parse_response(packet_with_payload(payload))
+
+    fan.send_command = send_command
+    return requests
+
+
 def _registry(fan):
     entries = {fan.id + spec.key: types.SimpleNamespace(hidden_by=None)
                for spec in Sensors.SENSOR_SPECS}
@@ -194,6 +236,48 @@ def _register_registry_sync(registry, coordinator):
 
 
 class Issue116RegressionTest(unittest.TestCase):
+    def test_freshbox_quick_poll_ignores_missing_boost_status_and_keeps_0032(self):
+        _, fan, _ = _freshbox()
+        requests = _mock_micra_poll(fan)
+
+        self.assertTrue(fan.quick_update())
+        self.assertEqual(fan.boost_switch_status, "on")
+        quick_ids = {
+            int(params[offset : offset + 4], 16)
+            for params in requests
+            for offset in range(0, len(params), 4)
+        }
+        self.assertNotIn(0x0006, quick_ids)
+        self.assertIn(0x0032, quick_ids)
+
+    def test_freshbox_full_poll_keeps_missing_0006_optional(self):
+        _, fan, _ = _freshbox()
+        requests = _mock_micra_poll(fan)
+
+        self.assertTrue(fan.update())
+        self.assertEqual(fan.boost_switch_status, "on")
+        full_ids = {
+            int(params[offset : offset + 4], 16)
+            for params in requests
+            for offset in range(0, len(params), 4)
+        }
+        self.assertIn(0x0006, full_ids)
+        self.assertIn(0x0002, full_ids)
+
+    def test_freshbox_full_poll_still_requires_speed_0002(self):
+        _, fan, _ = _freshbox()
+        _mock_micra_poll(fan, omitted={0x0002})
+
+        self.assertFalse(fan.update())
+        self.assertEqual(fan._last_missing_required_params, frozenset({0x0002}))
+
+    def test_freshbox_full_poll_still_fails_on_transport_error(self):
+        _, fan, _ = _freshbox()
+        _mock_micra_poll(fan, transport_failure=True)
+
+        self.assertFalse(fan.update())
+        self.assertEqual(fan._last_missing_required_params, frozenset({0x0002}))
+
     def test_real_spec_registry_sync_is_stable_on_repeated_successful_polls(self):
         from test_a21_modbus import A21ModbusDevice
 

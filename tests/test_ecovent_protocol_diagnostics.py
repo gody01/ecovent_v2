@@ -304,6 +304,50 @@ class ProtocolDiagnosticsTest(unittest.TestCase):
             reportable_hardware_profile_mismatch_param_ids(fan), frozenset({0x0063})
         )
 
+    def test_issue118_vento_0300_unknown_firmware_only_rejects_filter_timer(self):
+        """Issue #118: unknown 0x0300 firmware rejecting only 0x0063 is a known
+        variant and must not reopen a Repairs mismatch report."""
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0300"
+        fan._firmware = None
+        fan._unsupported_optional_poll_params = {0x0063}
+
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan), frozenset()
+        )
+
+    def test_issue118_vento_0300_unknown_firmware_extra_row_still_requests_report(self):
+        """Issue #118: the unknown-firmware exemption is limited to 0x0063; any
+        other rejected optional row must still request a maintainer report."""
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0300"
+        fan._firmware = None
+        fan._unsupported_optional_poll_params = {0x0063, 0x0083}
+
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan), frozenset({0x0083})
+        )
+
+    def test_issue118_vento_0300_unknown_firmware_speed_rows_are_unit_type_known(self):
+        """Issue #118: 0x0300 preset-speed rows are exempt at the unit-type
+        level for every firmware, including unknown firmware."""
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0300"
+        fan._firmware = None
+        fan._unsupported_optional_poll_params = {
+            0x003A,
+            0x003B,
+            0x003C,
+            0x003D,
+            0x003E,
+            0x003F,
+            0x0063,
+        }
+
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan), frozenset()
+        )
+
     def test_issue88_freshpoint_160e_standard_rows_do_not_request_report(self):
         fan = Fan("192.0.2.1")
         fan.unit_type = "1100"

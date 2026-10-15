@@ -79,6 +79,11 @@ _KNOWN_VARIANT_FIRMWARE_UNSUPPORTED_OPTIONAL_PARAMS = {
     ("vento", 0x1A00, "1.0 2023-12-03"): _VENTO_EXPERT_SPEED_FILTER_OPTION_ROWS,
     ("vento", 0x0300, "0.4 2019-12-20"): _VENTO_EXPERT_SPEED_FILTER_OPTION_ROWS,
     ("vento", 0x0300, "0.6 2021-05-17"): frozenset({0x0063}),
+    # Issue #118: a 0x0300 device whose firmware is not yet reported still
+    # rejects only the optional filter-timer setpoint row. Preserve the
+    # known-variant exemption for that single row without requiring a
+    # firmware string, but keep additional rows outside existing family/firmware exemptions reportable.
+    ("vento", 0x0300, None): frozenset({0x0063}),
     ("vento", 0x0300, "0.7 2021-10-04"): _VENTO_EXPERT_SPEED_FILTER_OPTION_ROWS,
     (
         "vento",

@@ -125,6 +125,7 @@ silent-mode, airflow, and clock-sync caveats; capabilities depend on the device 
 * Keep Freshbox/Micra available when read-only boost status `0x0006` is absent: require speed `0x0002`, keep `0x0006` in full polls as optional, and continue polling boost switch status `0x0032`.
 * Add Freshbox-only estimated recovery efficiency from outdoor, supply, and exhaust-inlet probes; missing values or a temperature difference below 0.1 °C at the probes' one-decimal resolution yield unknown. Installed heaters affect this temperature ratio, so it is not a measurement of exchanger-only efficiency and is not clamped to 0–100%.
 * Fold alternative profile definitions before syncing entity visibility so each registry ID is updated at most once per poll. Supported Vento/Breezy three-speed setpoints stay visible, and unchanged polls no longer hide/restore duplicate IDs (#116).
+* Stop reopening the hardware/profile mismatch Repair when a `0x0300` Vento/TwinFresh unit with firmware not yet reported rejects only the optional filter-timer setpoint `0x0063` (#118). Additional rows outside existing family/firmware exemptions and reported-but-unmapped firmware strings remain reportable; entity generation and device controls are unchanged.
 
 ## Rejected device value Repairs
 

@@ -113,6 +113,8 @@ SENSOR_SPECS = (
         UnitOfTemperature.CELSIUS,
         icon="mdi:thermometer",
         required_capabilities=("temperature_probes",),
+        # Freshbox exposes this register as a writable number instead.
+        excluded_capabilities=("estimated_recovery_efficiency",),
     ),
     SensorSpec(
         "_co2",

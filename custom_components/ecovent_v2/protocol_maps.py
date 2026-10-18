@@ -34,6 +34,8 @@ freshbox_speeds = {
     5: "speed_5",
 }
 
+freshbox_heater_states = {0: "off", 1: "on", 2: "invert"}
+
 battery_statuses = {0: "discharged", 1: "normal"}
 
 humidity_permission_modes = {
@@ -293,6 +295,7 @@ freshbox_params = {
     0x0006: ["boost_status", statuses],
     0x0007: ["timer_status", states],
     0x000B: ["timer_counter", None],
+    0x0018: ["temperature_setpoint", None],
     0x001F: ["outdoor_temperature", None],
     0x0020: ["supply_temperature", None],
     0x0021: ["exhaust_in_temperature", None],
@@ -312,6 +315,7 @@ freshbox_params = {
     0x0063: ["filter_timer_setpoint", None],
     0x0064: ["filter_timer_countdown", None],
     0x0066: ["boost_time", None],
+    0x0068: ["heater_state", freshbox_heater_states],
     0x007C: ["device_search", None],
     0x007E: ["machine_hours", None],
     0x007F: ["alarm_list", None],

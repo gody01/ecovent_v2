@@ -80,6 +80,7 @@ _PARAMETER_RANGES = {
         "supply_speed_5": (0, 100),
         "exhaust_speed_5": (0, 100),
         "filter_timer_setpoint": (70, 365),
+        "temperature_setpoint": (15, 30),
     },
     "arc": {
         "air_quality": (0, 500),

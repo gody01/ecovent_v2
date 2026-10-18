@@ -3,7 +3,7 @@
 import logging
 from threading import RLock
 
-__version__ = "loc_1.2.33"
+__version__ = "loc_1.2.34"
 
 _LOGGER = logging.getLogger(__name__)
 

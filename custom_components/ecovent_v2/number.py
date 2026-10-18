@@ -394,8 +394,19 @@ NUMBER_SPECS = (
         unit_of_measurement=PERCENTAGE,
         required_capabilities=("breezy_screen",),
     ),
+    NumberSpec(
+        "Temperature setpoint",
+        "temperature_setpoint",
+        "mdi:thermometer",
+        True,
+        native_min_value=15.0,
+        native_max_value=30.0,
+        native_step=1,
+        unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=NumberDeviceClass.TEMPERATURE,
+        required_capabilities=("heater", "estimated_recovery_efficiency"),
+    ),
 )
-
 
 async def async_setup_entry(
     hass: HomeAssistant,

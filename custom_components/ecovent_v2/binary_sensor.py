@@ -137,6 +137,23 @@ BINARY_SENSOR_SPECS = (
         False,
         "mdi:flash-alert-outline",
     ),
+    BinarySensorSpec(
+        "_heater_status",
+        "Heater active",
+        "heater_status",
+        True,
+        "mdi:heat-wave",
+        BinarySensorDeviceClass.HEAT,
+        required_capabilities=("heater", "estimated_recovery_efficiency"),
+    ),
+    BinarySensorSpec(
+        "_heater_blowing_status",
+        "Electric heater blowing",
+        "heater_blowing_status",
+        False,
+        "mdi:fan",
+        required_capabilities=("heater", "estimated_recovery_efficiency"),
+    ),
 )
 
 

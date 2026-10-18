@@ -607,28 +607,53 @@ Documented unit type from parameter `0x00B9`:
 | `0x0002` | `0x0200` | Freshbox 100 WiFi / Micra 100 WiFi | `freshbox` profile, conservative HA exposure; Freshbox/Micra ERV/E/E1/E2 variants are aliases |
 
 Freshbox rows that overlap useful HA concepts. The current `freshbox` profile
-keeps basic fan/filter/timer parsing separate from Vento/Breezy; the
-AHU-specific rows below are documented for the next profile-expansion pass.
+keeps basic fan/filter/timer parsing separate from Vento/Breezy; the rows below
+are the normative exposure policy for this profile.
+
+[Issue #120](https://github.com/gody01/ecovent_v2/issues/120) reports the
+following behavior confirmed by the reporter on a real VENTS Micra ERV2 100
+WiFi (unit type `0x0200`, profile `freshbox`, local UDP). These are
+requirements for the integration, checked by the automated oracles
+[`tests/test_issue120_entities.py`](tests/test_issue120_entities.py) and
+[`tests/test_issue120_protocol.py`](tests/test_issue120_protocol.py); the
+tests are not a live-hardware claim.
+
+| Area | Measurable requirement |
+| -- | -- |
+| `0x0018` temperature setpoint | One raw byte, integer 15–30 °C, step 1 °C, no scaling. Freshbox exposes the writable number only: no read-only `temperature_setpoint` sensor may appear beside it, while non-Freshbox profiles keep their existing read-only sensor. |
+| `0x0068` heater state | Ordinary regulation switch with protocol values `0` off, `1` on, `2` invert. Ordinary Home Assistant control writes only `off`/`on`; `invert` is documented but not written. |
+| `0x0081` heater status | Actual heating, not regulation control: `heater_state` on with `heater_status` off is a normal state and must be shown as such. |
+| `0x00B6` electric-heater blowing | Generic blowing diagnostic for preheating or reheating; the entity name must not claim preheater-only coverage. |
+| Four temperature probes | `0x001F` outdoor, `0x0020` supply, `0x0021` exhaust inlet, `0x0022` exhaust outlet remain exposed as today; this fix does not change probe visibility. |
+| Estimated recovery efficiency | Display clamped to 0–100% with one decimal place; missing probe values or `abs(exhaust_in - outdoor) < 0.1 °C` at the one-decimal resolution stay unknown. |
+| Availability | Already supported and unchanged: quick poll `000B003200330081008300A100B6`, required availability parameter `0x0002` only, `0x0006` optional and never required. |
+| Boost | No new selectable Boost mode; `0x0032` remains read-only external Boost switch status. |
+
+Reporter-tested evidence covers `0x0068` values off/on, raw one-byte `0x0018`
+reads and writes, and `0x00B6` blowing status. The `invert` value `2`, the
+physical external Boost input, full timer-mode control, and writes of
+individual per-speed setpoints were not tested on this unit and are not
+claimed as supported behavior.
 
 | Parameter | Functions | Description | Notes |
 | -- | -- | -- | -- |
 | 0x0002 | R/W/RW/INC/DEC | Speed mode 1-5 | exposed as `speed_1` through `speed_5`; `off` is parameter `0x0001`, and this PDF row has no manual `0xFF` mode |
 | 0x0003 | R/W/RW/INC/DEC | Maximum speed number | 3 or 5 speed configuration |
-| 0x0006 | R | Boost-mode status | Same ID as Vento boost status, compatible status meaning |
+| 0x0006 | R | Boost-mode status | Same ID as Vento boost status, compatible status meaning; optional in Freshbox polls and never required for availability (#120) |
 | 0x0008 | R/W/RW/INC/DEC | Timer mode speed | Different from extract-fan humidity status at same ID |
 | 0x0009 | R/W/RW/INC/DEC | Timer setpoint minutes | Freshbox-specific timer setup |
 | 0x000A | R/W/RW/INC/DEC | Timer setpoint hours | Freshbox-specific timer setup |
 | 0x000D | R/W/RW/INC/DEC | Room temperature setpoint in timer mode | Freshbox-specific temperature control |
 | 0x0014 | R/W/RW | BOOST switch control | Same ID as Vento relay sensor activation, different semantics |
 | 0x0015 | R/W/RW | Fire alarm sensor control | Freshbox-specific safety input |
-| 0x0018 | R/W/RW/INC/DEC | Room temperature setpoint in normal mode | Same ID as extract-fan max speed setpoint, different semantics |
+| 0x0018 | R/W/RW/INC/DEC | Room temperature setpoint in normal mode | Same ID as extract-fan max speed setpoint, different semantics; exposed on Freshbox as a writable number: raw byte, 15–30 °C, step 1 °C (#120) |
 | 0x001D | R/W/RW/INC/DEC | Temperature sensor selected for room-temperature control | Freshbox-specific enum |
 | 0x001E | R | Current room-control temperature | Signed tenths-of-degree value |
 | 0x001F | R | Current intake air temperature at the unit inlet | Signed tenths-of-degree value |
 | 0x0020 | R | Current supply air temperature at the unit outlet | Signed tenths-of-degree value |
 | 0x0021 | R | Current extract air temperature at the unit inlet | Signed tenths-of-degree value |
 | 0x0022 | R | Current exhaust air temperature at the unit outlet | Signed tenths-of-degree value |
-| 0x0032 | R | Current Boost switch status | Same ID as Vento relay status, different semantics |
+| 0x0032 | R | Current Boost switch status | Same ID as Vento relay status, different semantics; read-only external Boost input status, not a selectable Boost mode (#120) |
 | 0x0033 | R | Current fire alarm sensor status | Freshbox-specific binary status |
 | 0x0036 | R/W/RW/INC/DEC | Minimum supply fan speed | Freshbox-specific speed bound |
 | 0x0037 | R/W/RW/INC/DEC | Minimum extract fan speed | Freshbox-specific speed bound |
@@ -641,13 +666,13 @@ AHU-specific rows below are documented for the next profile-expansion pass.
 | 0x0047 | R/W/RW/INC/DEC | Extract fan speed in BOOST mode | Boost-specific speed |
 | 0x0060 | R/W/RW/INC/DEC | Main heater type | Freshbox-specific enum |
 | 0x0067 | R/W/RW/INC/DEC | Boost turn-on delay setpoint | Freshbox-specific delay |
-| 0x0068 | R/W/RW | Temperature control in normal mode | Same ID as Breezy heater control, different semantics |
+| 0x0068 | R/W/RW | Temperature control in normal mode | Same ID as Breezy heater control, different semantics; ordinary control writes only off/on, protocol value 2 (invert) untested (#120) |
 | 0x006A | R | TE5 temperature | Signed tenths-of-degree value |
 | 0x0073 | R | Weekly schedule speed | Freshbox-specific schedule status |
 | 0x0074 | R | Weekly schedule temperature setup | Freshbox-specific schedule status |
 | 0x0093 | R | Wi-Fi module presence | Diagnostic only |
 | 0x00A1 | R | Wi-Fi access-point connection status | Diagnostic only |
-| 0x00B6 | R | Electric heater blowing status | Freshbox-specific status |
+| 0x00B6 | R | Electric heater blowing status | Generic preheat/reheat electric-heater blowing diagnostic, not preheater-specific (#120) |
 | 0x00F0 | R/W/RW/INC/DEC | Recirculation damper | Only for units with recirculation |
 | 0x0111 | R | Control device type | Freshbox control-panel metadata |
 | 0x0112 | R | Control panel firmware version/date | Freshbox control-panel metadata |

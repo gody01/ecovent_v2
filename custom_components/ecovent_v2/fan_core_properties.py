@@ -372,9 +372,11 @@ class FanCorePropertiesMixin:
 
     @temperature_setpoint.setter
     def temperature_setpoint(self, input):
-        self._temperature_setpoint = int.from_bytes(
+        value = int.from_bytes(
             self._decode_exact_bytes(input, 1, "temperature_setpoint"), "little"
         )
+        self._validate_parameter_range("temperature_setpoint", value)
+        self._temperature_setpoint = value
 
     @property
     def room_temperature(self):

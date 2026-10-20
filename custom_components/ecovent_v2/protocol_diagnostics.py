@@ -105,6 +105,17 @@ _KNOWN_VARIANT_FIRMWARE_UNSUPPORTED_OPTIONAL_PARAMS = {
         0x1100,
         "0.12 2025-09-01",
     ): _FRESHPOINT_160E_STANDARD_UNSUPPORTED_OPTIONAL_ROWS,
+    # Issue #125: base VENTS Breezy 200 / Blauberg Freshpoint 200 (0x1600)
+    # firmware 0.9 2024-07-02 rejects the same sensor/screen optional rows
+    # as the sensor-less Freshpoint 160-E standard variant (no CO2/VOC/
+    # humidity modules, no recovery-efficiency or screen-source rows).
+    # Keep hiding the generated entities without a mismatch Repair; rows
+    # outside this set and devices answering these rows stay reportable.
+    (
+        "breezy",
+        0x1600,
+        "0.9 2024-07-02",
+    ): _FRESHPOINT_160E_STANDARD_UNSUPPORTED_OPTIONAL_ROWS,
     (
         "extract_fan",
         0x0600,

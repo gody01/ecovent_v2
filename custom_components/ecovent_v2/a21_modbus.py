@@ -456,15 +456,29 @@ class A21ModbusDevice(Fan):
             raise A21ModbusError(f"A21 Modbus {operation} failed: {response!r}")
         return response
 
-    @staticmethod
-    def _invoke(method, *args, **kwargs) -> Any:
+    def _reset_transport_after_failure(self) -> None:
+        """Close a broken transport so the next poll reconnects first."""
+        # The A21 accepts a single Modbus TCP client and drops idle sockets.
+        # A reset peer leaves pymodbus reporting connected while every later
+        # call fails; closing releases the server slot before reconnect.
+        client = self._client
+        if client is None:
+            return
+        try:
+            client.close()
+        except Exception:  # noqa: BLE001 - reset must not mask the failure
+            _LOGGER.debug("A21 transport reset close failed", exc_info=True)
+
+    def _invoke(self, method, *args, **kwargs) -> Any:
         """Call pymodbus while preserving programming errors as programming errors."""
         try:
             return method(*args, **kwargs)
         except (OSError, ConnectionError, TimeoutError) as err:
+            self._reset_transport_after_failure()
             raise A21ModbusError(f"A21 Modbus transport failed: {err}") from err
         except Exception as err:
             if err.__class__.__module__.startswith("pymodbus"):
+                self._reset_transport_after_failure()
                 raise A21ModbusError(f"A21 Modbus transport failed: {err}") from err
             raise
 

@@ -99,10 +99,16 @@ async def async_setup_entry(
             return coordinator._fan.supports_entity(
                 required_params=required_params,
                 required_capabilities=spec.required_capabilities,
+                excluded_params=spec.excluded_params,
+                excluded_capabilities=spec.excluded_capabilities,
             )
-        return coordinator._fan.profile_has_entity_requirements(
-            required_params=required_params,
-            required_capabilities=spec.required_capabilities,
+        return (
+            coordinator._fan.profile_has_entity_requirements(
+                required_params=required_params,
+                required_capabilities=spec.required_capabilities,
+            )
+            and not any(coordinator._fan.supports_parameter(param) for param in spec.excluded_params)
+            and not any(coordinator._fan.supports_capability(capability) for capability in spec.excluded_capabilities)
         )
 
     supported_specs = [spec for spec in SENSOR_SPECS if spec_is_supported(spec)]
@@ -345,7 +351,7 @@ class VentoSensor(StableObjectIdMixin, CoordinatorEntity, SensorEntity):
         denominator = round(exhaust - outdoor, 1)
         if abs(denominator) < 0.1:
             return None
-        return (supply - outdoor) / denominator * 100
+        return round(min(100.0, max(0.0, (supply - outdoor) / denominator * 100)), 1)
 
     def schedule_speed(self):
         """Get current schedule speed."""

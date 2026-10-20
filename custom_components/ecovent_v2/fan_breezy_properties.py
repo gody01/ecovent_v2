@@ -69,7 +69,10 @@ class FanBreezyPropertiesMixin:
     @heater_state.setter
     def heater_state(self, input):
         val = int(input, 16)
-        self._heater_state = self._map_value(self.states, val, "heater_state")
+        mapping = self.params.get(
+            self.get_params_index("heater_state"), (None, self.states)
+        )[1]
+        self._heater_state = self._map_value(mapping, val, "heater_state")
 
     @property
     def alarm_list(self):

@@ -40,7 +40,7 @@ def _load_sensors():
                 NumberMode=types.SimpleNamespace(AUTO="auto", BOX="box"))
         _module("homeassistant.components.binary_sensor",
                 BinarySensorEntity=type("BinarySensorEntity", (), {}),
-                BinarySensorDeviceClass=types.SimpleNamespace(PROBLEM="problem"))
+                BinarySensorDeviceClass=types.SimpleNamespace(PROBLEM="problem", HEAT="heat"))
         _module("homeassistant.components.select", SelectEntity=type("SelectEntity", (), {}))
         _module("homeassistant.components.switch",
                 SwitchEntity=type("SwitchEntity", (), {}),
@@ -67,11 +67,13 @@ def _load_sensors():
         sys.modules[name] = module
         spec.loader.exec_module(module)
         module.registry_specs = {"sensor_specs": ("SENSOR_SPECS", module.SENSOR_SPECS)}
+        module.platform_modules = {"sensor": module}
         for platform, attribute in (("binary_sensor", "BINARY_SENSOR_SPECS"),
                                     ("number", "NUMBER_SPECS"), ("select", "SELECT_SPECS"),
                                     ("switch", "SWITCH_SPECS")):
             platform_module = importlib.import_module(f"{PACKAGE}.{platform}")
             module.registry_specs[platform] = (attribute, getattr(platform_module, attribute))
+            module.platform_modules[platform] = platform_module
         return module
 
 
@@ -353,7 +355,7 @@ class Issue116RegressionTest(unittest.TestCase):
             self.assertEqual(entities[name].native_value, expected)
         self.assertEqual(entities["heater_status"].native_value, "on")
         self.assertFalse({"co2", "humidity", "temperature_setpoint"} & entities.keys())
-        self.assertAlmostEqual(entities["freshbox_recovery_efficiency"].native_value, 93.2584269663)
+        self.assertEqual(entities["freshbox_recovery_efficiency"].native_value, 93.3)
 
     def test_registry_hides_explicitly_rejected_rows_and_restores_reported_rows(self):
         _, fan, _ = _freshbox()
@@ -505,7 +507,7 @@ class Issue116RegressionTest(unittest.TestCase):
             with self.subTest(service=service), self.assertRaisesRegex(RuntimeError, "Device did not confirm power"):
                 asyncio.run(getattr(entity, service)())
 
-    def test_efficiency_guards_missing_and_near_equal_probes_without_clamping(self):
+    def test_freshbox_efficiency_clamps_and_preserves_unknowns(self):
         _, fan, _ = _freshbox()
         sensor = Sensors.VentoSensor.__new__(Sensors.VentoSensor)
         sensor._fan = fan
@@ -513,24 +515,19 @@ class Issue116RegressionTest(unittest.TestCase):
                        (10.3, 18.6, 10.3), (10.3, 18.6, 10.35)):
             fan._outdoor_temperature, fan._supply_temperature, fan._exhaust_in_temperature = values
             self.assertIsNone(sensor.freshbox_recovery_efficiency())
-        for values, expected in (((0, 30, 20), 150), ((30, 10, 20), 200), ((0, -10, 20), -50)):
-            fan._outdoor_temperature, fan._supply_temperature, fan._exhaust_in_temperature = values
-            self.assertEqual(sensor.freshbox_recovery_efficiency(), expected)
+        fan._outdoor_temperature, fan._supply_temperature, fan._exhaust_in_temperature = (16.3, 19.2, 18.0)
+        self.assertEqual(sensor.freshbox_recovery_efficiency(), 100.0)
+        fan._outdoor_temperature, fan._supply_temperature, fan._exhaust_in_temperature = (10.0, 15.0, 20.0)
+        self.assertEqual(sensor.freshbox_recovery_efficiency(), 50.0)
+        fan._outdoor_temperature, fan._supply_temperature, fan._exhaust_in_temperature = (10.0, 5.0, 20.0)
+        self.assertEqual(sensor.freshbox_recovery_efficiency(), 0.0)
 
-    def test_efficiency_accepts_positive_and_negative_one_tenth_boundaries(self):
+    def test_efficiency_rounds_to_one_decimal(self):
         _, fan, _ = _freshbox()
         sensor = Sensors.VentoSensor.__new__(Sensors.VentoSensor)
         sensor._fan = fan
-        for outdoor, supply, exhaust, expected in (
-            (103, 104, 104, 100), (104, 103, 103, 100),
-            (103, 102, 104, -100), (104, 105, 103, -100),
-        ):
-            with self.subTest(outdoor=outdoor, supply=supply, exhaust=exhaust):
-                payload = []
-                for param, tenths in zip(range(0x1F, 0x22), (outdoor, supply, exhaust)):
-                    payload.extend([0xFE, 2, param, *tenths.to_bytes(2, "little", signed=True)])
-                self.assertTrue(_read_payload(fan, payload, "001F00200021"))
-                self.assertAlmostEqual(sensor.freshbox_recovery_efficiency(), expected)
+        fan._outdoor_temperature, fan._supply_temperature, fan._exhaust_in_temperature = (10.0, 11.0, 13.0)
+        self.assertEqual(sensor.freshbox_recovery_efficiency(), 33.3)
 
     def test_vento_speed_mapping_is_unchanged(self):
         fan = Fan("192.0.2.1")

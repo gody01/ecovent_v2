@@ -149,6 +149,63 @@ class Issue120ProtocolTest(unittest.TestCase):
         self.assertEqual(commands, ["036802"])
         self.assertEqual(fan.heater_state, "toggle")
 
+    def test_freshbox_quick_poll_without_0006_keeps_device_available(self):
+        # Issue #120: VENTS Micra ERV2 100 WiFi never answers boost_status
+        # (0x0006). The quick poll must not request it, must require only
+        # speed (0x0002), and must leave the device available.
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "0200"
+        profile = fan.device_profile
+        self.assertEqual(profile.quick_update_request, "000B003200330081008300A100B6")
+        quick_ids = {
+            int(profile.quick_update_request[offset : offset + 4], 16)
+            for offset in range(0, len(profile.quick_update_request), 4)
+        }
+        self.assertNotIn(0x0006, quick_ids)
+        self.assertEqual(profile.poll_required_params, frozenset({0x0002}))
+        for capability in (
+            "heater",
+            "temperature_probes",
+            "five_speed_setpoints",
+            "estimated_recovery_efficiency",
+            "filter_maintenance",
+        ):
+            with self.subTest(capability=capability):
+                self.assertIn(capability, profile.capabilities)
+        # Reply to every requested row; 0x0006 is never answered, matching
+        # the reporting unit, and must not affect availability.
+        values = {
+            0x000B: b"\x2a\x00\x00",
+            0x0032: b"\x01",
+            0x0033: b"\x00",
+            0x0081: b"\x01",
+            0x0083: b"\x00",
+            0x00A1: b"\x01",
+            0x00B6: b"\x01",
+        }
+
+        def send_command(function, params, value="", retries=10):
+            payload = []
+            for offset in range(0, len(params), 4):
+                param_id = int(params[offset : offset + 4], 16)
+                if param_id == 0x0006:
+                    continue
+                raw = values.get(param_id)
+                if raw is None:
+                    continue
+                if len(raw) > 1:
+                    payload.extend([0xFE, len(raw), param_id & 0xFF, *raw])
+                else:
+                    payload.extend([param_id & 0xFF, *raw])
+            if not payload:
+                return False
+            return fan.parse_response(packet_with_payload(payload))
+
+        fan.send_command = send_command
+        self.assertTrue(fan.quick_update())
+        self.assertEqual(fan._last_missing_required_params, frozenset())
+
+
 
 if __name__ == "__main__":
     unittest.main()

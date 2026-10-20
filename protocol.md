@@ -626,7 +626,7 @@ tests are not a live-hardware claim.
 | `0x00B6` electric-heater blowing | Generic blowing diagnostic for preheating or reheating; the entity name must not claim preheater-only coverage. |
 | Four temperature probes | `0x001F` outdoor, `0x0020` supply, `0x0021` exhaust inlet, `0x0022` exhaust outlet remain exposed as today; this fix does not change probe visibility. |
 | Estimated recovery efficiency | Display clamped to 0–100% with one decimal place; missing probe values or `abs(exhaust_in - outdoor) < 0.1 °C` at the one-decimal resolution stay unknown. |
-| Availability | Already supported and unchanged: quick poll `000B003200330081008300A100B6`, required availability parameter `0x0002` only, `0x0006` optional and never required. |
+| Availability | VENTS Micra ERV2 100 WiFi (issue #120) never answers `0x0006`: quick poll `000B003200330081008300A100B6` omits it, required availability parameter is `0x0002` only, and a missing `0x0006` never marks the device unavailable. |
 | Boost | No new selectable Boost mode; `0x0032` remains read-only external Boost switch status. |
 
 Reporter-tested evidence covers `0x0068` values off/on, raw one-byte `0x0018`

@@ -460,7 +460,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
             clock_read = await self.hass.async_add_executor_job(
                 self._refresh_device_clock_state
             )
-        except OSError as err:
+        except (OSError, ValueError) as err:
             _LOGGER.debug(
                 "EcoVentCoordinator: skipping standalone clock sync after "
                 "RTC read error for %s: %s",
@@ -561,7 +561,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         """Read back the device RTC and compare it with the requested wall clock."""
         try:
             refreshed = self._refresh_device_clock_state()
-        except OSError as err:
+        except (OSError, ValueError) as err:
             _LOGGER.warning(
                 "EcoVentCoordinator: failed to read back device clock for %s: %s",
                 self._fan.name,

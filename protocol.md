@@ -334,9 +334,13 @@ HA local time. On OS/Supervised installs, Supervisor must report the host clock
 as NTP synchronized; Core/container installs have no Supervisor quality signal.
 Startup discovery stays read-only and defers standalone RTC correction. Periodic
 standalone correction rereads RTC immediately before writing and skips unavailable
-fresh state. Silent manual mode suppresses standalone automatic correction;
-explicit `sync_device_clock` remains available and may beep. Already-audible
-writes may batch drifted RTC rows; failed RTC writes do not suppress retries.
+fresh state. An RTC read that fails to decode (including a device weekday that
+does not follow ISO 1=Monday..7=Sunday) is logged and skipped, never failing the
+coordinator update; device clock comparison ignores the weekday. After a Modbus
+transport failure the client is closed so the next poll reconnects first (the
+A21 accepts a single TCP client). Silent manual mode suppresses standalone
+automatic correction; explicit `sync_device_clock` remains available and may beep.
+Already-audible writes may batch drifted RTC rows; failed RTC writes do not suppress retries.
 
 Entries migrated by 1.2.16/1.2.17 use config-entry version 2. Before downgrading
 to 1.2.15, delete and re-add integration entries or restore a full HA backup:

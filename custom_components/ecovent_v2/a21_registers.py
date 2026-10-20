@@ -339,6 +339,16 @@ class RegisterSpec:
 
     def decode(self, words: Iterable[int]) -> Any:
         value = decode(self.kind, words)
+        if self.kind is Kind.RTC_CALENDAR:
+            # V55-8-1EN-02 does not document the weekday numbering, and field
+            # reports use a different convention than ISO 1=Monday..7=Sunday.
+            # Accept the device weekday on read; clock comparison ignores it.
+            _range(value.day, 1, 31, "day")
+            _range(value.weekday, 1, 7, "weekday")
+            _range(value.month, 1, 12, "month")
+            _range(value.year, 0, 99, "year")
+            date(2000 + value.year, value.month, value.day)
+            return value
         # Decoding is untrusted input just as encoding is untrusted service
         # input.  Reuse the type-specific codec validation for compound values
         # (RTC, timers, schedules, etc.) and apply the catalogue's published

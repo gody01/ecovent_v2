@@ -100,8 +100,14 @@ def test_register_decode_validates_structures_and_published_scalar_limits():
         get_register("HR_RTC_TIME").decode((0, 24))
     with pytest.raises(ValueError, match="day 31"):
         get_register("HR_RTC_CALENDAR").decode((0x1F01, 0x041A))
+    # The A21 weekday numbering is undocumented and differs from ISO in the
+    # field (issue #122): a device read must not reject its weekday, while a
+    # write still validates ISO 1=Monday..7=Sunday.
+    assert get_register("HR_RTC_CALENDAR").decode((0x1701, 0x041A)) == RtcCalendar(
+        23, 1, 4, 26
+    )
     with pytest.raises(ValueError, match="weekday does not match"):
-        get_register("HR_RTC_CALENDAR").decode((0x1701, 0x041A))
+        get_register("HR_RTC_CALENDAR").encode(RtcCalendar(23, 1, 4, 26))
     with pytest.raises(ValueError, match="day 31"):
         get_register("IR_VerMAIN_FMW").decode((0x0102, 0x1F04, 2026))
 

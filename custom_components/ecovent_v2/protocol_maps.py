@@ -252,6 +252,8 @@ breezy_params = {
     0x0063: ["filter_timer_setpoint", None],
     0x0064: ["filter_timer_countdown", None],
     0x0068: ["heater_state", states],
+    0x006F: ["rtc_time", None],
+    0x0070: ["rtc_date", None],
     0x0072: ["weekly_schedule_state", states],
     0x0077: ["weekly_schedule_setup", None],
     0x007C: ["device_search", None],

@@ -116,6 +116,16 @@ _KNOWN_VARIANT_FIRMWARE_UNSUPPORTED_OPTIONAL_PARAMS = {
         0x1600,
         "0.9 2024-07-02",
     ): _FRESHPOINT_160E_STANDARD_UNSUPPORTED_OPTIONAL_ROWS,
+    # Issue #130: Blauberg Freshpoint 200 (0x1600) firmware 0.12 2025-09-01
+    # rejects the same 11 optional rows on a sensor-less, display-less unit
+    # (no CO2/VOC/humidity modules, no display). Same treatment as #125:
+    # hide the generated entities without a mismatch Repair; rows outside
+    # this set and devices answering these rows stay reportable.
+    (
+        "breezy",
+        0x1600,
+        "0.12 2025-09-01",
+    ): _FRESHPOINT_160E_STANDARD_UNSUPPORTED_OPTIONAL_ROWS,
     (
         "extract_fan",
         0x0600,

@@ -122,3 +122,18 @@ writes, or hardware/profile mismatch Repairs.
   custom_components/ecovent_v2 tests`, `python3 -m compileall -q
   custom_components/ecovent_v2 tests`, JSON parse checks for changed metadata or
   translations, and `git diff --check`.
+
+## Identity and measurement decoding regressions (#129 and #131)
+
+- Startup must confirm the unit-type read before polling family-dependent rows.
+  If that read fails, initialization returns false so the caller can retry. The
+  default Vento map is not evidence that an unidentified device is a Vento:
+  Smart Wi-Fi/iFan uses `0x0006` for a three-byte boost countdown and `0x0024`
+  for a one-byte turn-on delay, not Vento boost status and battery voltage.
+- Freshpoint/Breezy VOC measurements use the unsigned two-byte wire range, like
+  CO2 and RPM. The PDF's 0–500 index range is not a decoder limit: issue #131
+  reports 505 (`f901`). Exact-width checks still reject malformed replies, and
+  the writable VOC threshold remains independently bounded to 50–250.
+- `tests/test_issues129_131_regressions.py` exercises initialization retries,
+  real command/response correlation for these rows, and malformed-width and
+  threshold negative controls without requiring fan hardware.

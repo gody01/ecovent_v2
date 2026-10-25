@@ -964,7 +964,12 @@ class PacketBuilderTest(unittest.TestCase):
             requested = {
                 int(param[i : i + 4], 16) for i in range(0, len(param), 4)
             }
-            if len(param) > 4:
+            # Production marks bulk reads with retries=3 and individual
+            # retries with retries=1. Classify by that signal: with 61 breezy
+            # rows the trailing bulk chunk holds a single parameter, which a
+            # length check would misclassify as an individual retry and flip
+            # bulk-read support off for the poll.
+            if retries == 3:
                 fan._last_response_param_ids = requested & required
                 return True
             param_id = int(param, 16)

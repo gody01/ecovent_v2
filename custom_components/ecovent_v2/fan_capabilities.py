@@ -49,8 +49,8 @@ _PARAMETER_RANGES = {
     },
     "breezy": {
         "battery_voltage": (0, 5000),
-        # PDF measurement ranges are not device limits (issues #104 and #113).
-        # Keep the writable threshold bounded independently.
+        # PDF CO2/RPM/VOC measurement ranges are not wire limits (#104/#113/#131).
+        # Keep writable thresholds bounded independently; decoding checks widths.
         "co2_treshold": (400, 2000),
         "filter_timer_setpoint": (70, 365),
         "humidity": (0, 100),
@@ -64,7 +64,6 @@ _PARAMETER_RANGES = {
         "exhaust_speed_medium": (10, 100),
         "supply_speed_high": (10, 100),
         "exhaust_speed_high": (10, 100),
-        "voc": (0, 500),
         "voc_treshold": (50, 250),
     },
     "freshbox": {

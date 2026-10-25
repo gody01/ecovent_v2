@@ -197,13 +197,64 @@ class EcoVentCoordinator(DataUpdateCoordinator):
             )
             return
 
+        def _previously_dismissed_ids(lookup, domain, issue_id):
+            """Return (dismissed, rejected ids) for the stored Repair, if any."""
+            if lookup is None:
+                return False, None
+            try:
+                previous = lookup.get((domain, issue_id))
+            except AttributeError:
+                return False, None
+            if previous is None:
+                return False, None
+            dismissed = (
+                getattr(previous, "dismissed_version", None) is not None
+            )
+            raw_ids = (getattr(previous, "data", None) or {}).get(
+                "unsupported_optional_param_ids"
+            )
+            try:
+                known_ids = frozenset(raw_ids) if raw_ids is not None else None
+            except TypeError:
+                known_ids = None
+            return dismissed, known_ids
+
         issue_id = self._hardware_profile_mismatch_issue_id()
         try:
+            # The dismissal lookup is best-effort: create/delete must still
+            # work when the registry accessor is unavailable.
+            async_get = getattr(ir, "async_get", None)
+            issues_by_id = None
+            if callable(async_get):
+                issues_by_id = getattr(async_get(self.hass), "issues", None)
+            previously_dismissed, dismissed_ids = _previously_dismissed_ids(
+                issues_by_id, DOMAIN, issue_id
+            )
             if not unsupported:
-                async_delete_hardware_profile_mismatch_issue(
-                    self.hass, self.config_entry.entry_id
-                )
+                if previously_dismissed:
+                    # The user dismissed this Repair. Home Assistant drops the
+                    # dismissal when the issue is deleted, so resolving by
+                    # delete here (transient empty set after restart, reload,
+                    # or firmware re-read) would resurrect it on the next poll
+                    # that re-learns the rows. Leave the dismissed issue in
+                    # place instead.
+                    pass
+                else:
+                    async_delete_hardware_profile_mismatch_issue(
+                        self.hass, self.config_entry.entry_id
+                    )
             else:
+                if (
+                    previously_dismissed
+                    and dismissed_ids is not None
+                    and frozenset(unsupported) != dismissed_ids
+                ):
+                    # Same issue id but a different rejected set: surface the
+                    # new problem instead of silently updating the dismissed
+                    # issue, which would stay ignored.
+                    async_delete_hardware_profile_mismatch_issue(
+                        self.hass, self.config_entry.entry_id
+                    )
                 unsupported_params = unsupported_optional_poll_parameter_summary(
                     self._fan, unsupported
                 )
@@ -229,6 +280,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
                         "unit_type": self._fan.unit_type,
                         "unit_type_id": getattr(self._fan, "_unit_type_id", None),
                         "unsupported_optional_params": unsupported_params,
+                        "unsupported_optional_param_ids": sorted(unsupported),
                         "github_issue_url": issue_url,
                     },
                 )

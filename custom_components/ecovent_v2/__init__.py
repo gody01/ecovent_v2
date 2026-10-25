@@ -651,6 +651,21 @@ def _delete_hardware_profile_mismatch_issue(
 ) -> None:
     """Remove a Repair owned by a config entry during rollback or unload."""
     try:
+        from homeassistant.helpers import issue_registry as ir
+
+        from .coordinator import hardware_profile_mismatch_issue_id
+
+        previous = ir.async_get(hass).issues.get(
+            (DOMAIN, hardware_profile_mismatch_issue_id(entry_id))
+        )
+        if previous is not None and getattr(previous, "dismissed_version", None) is not None:
+            # Entry reloads reuse the same entry id: deleting here would drop
+            # the user's dismissal and the setup pass would recreate the
+            # Repair as new. Leave dismissed issues in place.
+            return
+    except ImportError:
+        pass
+    try:
         async_delete_hardware_profile_mismatch_issue(hass, entry_id)
     except Exception as err:  # noqa: BLE001
         _LOGGER.warning(

@@ -66,6 +66,24 @@ class Issue130Freshpoint200Test(unittest.TestCase):
         )
         self.assertEqual(hardware_profile_mismatch_state(fan)[-1], frozenset())
 
+    def test_unknown_firmware_exact_set_requests_no_report(self):
+        # The 0x1600 exemption is firmware-agnostic: the rejection set is a
+        # property of the sensor-less hardware package, not the firmware.
+        fan = _issue130_fan(ISSUE130_REJECTED_ROWS)
+        fan._firmware = "0.13 2026-01-01"
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan), frozenset()
+        )
+        self.assertEqual(hardware_profile_mismatch_state(fan)[-1], frozenset())
+
+    def test_unknown_firmware_extra_row_still_requests_report(self):
+        fan = _issue130_fan(ISSUE130_REJECTED_ROWS | {0x00B7})
+        fan._firmware = "0.13 2026-01-01"
+        self.assertEqual(
+            reportable_hardware_profile_mismatch_param_ids(fan),
+            frozenset({0x00B7}),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

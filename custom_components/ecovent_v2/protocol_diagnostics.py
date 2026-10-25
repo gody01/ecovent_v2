@@ -71,6 +71,14 @@ _KNOWN_VARIANT_UNSUPPORTED_OPTIONAL_PARAMS = {
     # known old variant that rejects the complete set.
     ("vento", 0x0300): _VENTO_EXPERT_SPEED_OPTION_ROWS,
     ("vento", 0x0400): _VENTO_EXPERT_SPEED_FILTER_OPTION_ROWS,
+    # Issues #125 (duplicate #128) and #130: the sensor-less VENTS Breezy 200 /
+    # Blauberg Freshpoint 200 (0x1600) package rejects the same 11 optional
+    # sensor/screen rows on every firmware seen so far (0.9 2024-07-02, 0.12
+    # 2025-09-01): no CO2/VOC/humidity modules, no recovery-efficiency or
+    # screen-source rows. The rejection set is a property of the hardware
+    # package, not the firmware, so exempt it regardless of firmware version.
+    # Rows outside this set stay reportable, as do answering devices.
+    ("breezy", 0x1600): _FRESHPOINT_160E_STANDARD_UNSUPPORTED_OPTIONAL_ROWS,
 }
 
 _KNOWN_VARIANT_FIRMWARE_UNSUPPORTED_OPTIONAL_PARAMS = {
@@ -105,27 +113,8 @@ _KNOWN_VARIANT_FIRMWARE_UNSUPPORTED_OPTIONAL_PARAMS = {
         0x1100,
         "0.12 2025-09-01",
     ): _FRESHPOINT_160E_STANDARD_UNSUPPORTED_OPTIONAL_ROWS,
-    # Issue #125: base VENTS Breezy 200 / Blauberg Freshpoint 200 (0x1600)
-    # firmware 0.9 2024-07-02 rejects the same sensor/screen optional rows
-    # as the sensor-less Freshpoint 160-E standard variant (no CO2/VOC/
-    # humidity modules, no recovery-efficiency or screen-source rows).
-    # Keep hiding the generated entities without a mismatch Repair; rows
-    # outside this set and devices answering these rows stay reportable.
-    (
-        "breezy",
-        0x1600,
-        "0.9 2024-07-02",
-    ): _FRESHPOINT_160E_STANDARD_UNSUPPORTED_OPTIONAL_ROWS,
-    # Issue #130: Blauberg Freshpoint 200 (0x1600) firmware 0.12 2025-09-01
-    # rejects the same 11 optional rows on a sensor-less, display-less unit
-    # (no CO2/VOC/humidity modules, no display). Same treatment as #125:
-    # hide the generated entities without a mismatch Repair; rows outside
-    # this set and devices answering these rows stay reportable.
-    (
-        "breezy",
-        0x1600,
-        "0.12 2025-09-01",
-    ): _FRESHPOINT_160E_STANDARD_UNSUPPORTED_OPTIONAL_ROWS,
+    # 0x1600 firmware variants are covered by the general ("breezy", 0x1600)
+    # entry above; per-firmware entries would be dead weight.
     (
         "extract_fan",
         0x0600,

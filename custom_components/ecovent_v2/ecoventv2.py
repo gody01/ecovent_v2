@@ -336,7 +336,10 @@ class Fan(
         _LOGGER.debug("EcoventV2: Initialized fan with ID: %s", self._id)
         if not self._id:
             return False
-        self.get_param("unit_type")
+        # Register meanings depend on the unit type. A lost identity reply must
+        # not turn the default Vento map into a decoder for another family.
+        if not self.get_param("unit_type"):
+            return False
         self.get_param("firmware")
         self._apply_device_profile()
         return self.update()

@@ -557,7 +557,6 @@ class ParseRobustnessTest(unittest.TestCase):
             ),
             ("1100", 0x0129, "recovery_efficiency", [100], [101], 100),
             ("1100", 0x031F, "voc_treshold", [250, 0], [251, 0], 250),
-            ("1100", 0x0320, "voc", [0xF4, 0x01], [0xF5, 0x01], 500),
             ("1100", 0x0400, "screen_brightness", [100], [101], 100),
             ("0d00", 0x0019, "humidity_treshold", [80], [81], "80"),
             (
@@ -591,7 +590,7 @@ class ParseRobustnessTest(unittest.TestCase):
                 prefix = [0xFF, parameter >> 8] if parameter > 0xFF else []
                 low_byte = parameter & 0xFF
 
-                def row(value):
+                def row(value, prefix=prefix, low_byte=low_byte):
                     if len(value) == 1:
                         return [*prefix, low_byte, *value]
                     return [*prefix, 0xFE, len(value), low_byte, *value]

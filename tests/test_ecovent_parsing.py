@@ -6,6 +6,23 @@ from ecovent_test_helpers import Fan, packet_with_payload
 
 
 class ParseRobustnessTest(unittest.TestCase):
+    def test_empty_alarm_and_following_row(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        self.assertTrue(fan.parse_response(packet_with_payload([0xFE, 0, 0x7F, 1, 1])))
+        self.assertEqual(fan.alarm_list, "none")
+        self.assertEqual(fan.state, "on")
+        self.assertEqual(fan._last_response_param_ids, {0x7F, 1})
+        self.assertFalse(fan.parse_response(packet_with_payload([0xFE, 0])))
+
+    def test_breezy_stored_manual_speed_below_write_minimum(self):
+        fan = Fan("192.0.2.1")
+        fan.unit_type = "1100"
+        self.assertTrue(fan.parse_response(packet_with_payload([0x44, 5])))
+        self.assertEqual(fan.man_speed, 5)
+        self.assertTrue(fan.parse_response(packet_with_payload([0x44, 101])))
+        self.assertEqual(fan.man_speed, 5)
+
     def test_direct_parse_response_keeps_eager_store_behavior(self):
         fan = Fan("192.0.2.1")
 
@@ -546,7 +563,7 @@ class ParseRobustnessTest(unittest.TestCase):
                 2000,
             ),
             ("1100", 0x003A, "supply_speed_low", [10], [9], 10),
-            ("1100", 0x0044, "man_speed", [10], [9], 10),
+            ("1100", 0x0044, "man_speed", [0], [101], 0),
             (
                 "1100",
                 0x0063,

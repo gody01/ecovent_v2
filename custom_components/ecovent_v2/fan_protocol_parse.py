@@ -125,8 +125,6 @@ class FanProtocolParseMixin:
                     high_byte_value = p
                     ext_function = 1
                 elif ext_function == 0xFE:
-                    if p <= 1:
-                        return False
                     value_counter = p
                     ext_function = 2
                 elif ext_function == 0xFD:
@@ -151,7 +149,7 @@ class FanProtocolParseMixin:
                         value_counter -= 1
                     response.append(p)
 
-            if value_counter <= 0:
+            if value_counter <= 0 and not parameter and ext_function == 0:
                 parameter = 1
                 value_counter = 1
                 ext_function = 0

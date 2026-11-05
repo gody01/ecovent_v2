@@ -253,6 +253,20 @@ class A21ConfigFlowTest(unittest.TestCase):
         self.assertEqual(result, {"title": "Fan device-1", "id": "device-1"})
         self.assertEqual(len(warnings), 1)
 
+        # A controller that answered the identity probe but failed its full
+        # poll has not demonstrated an authentication failure.
+        Device.unit_type = "Freshpoint"
+        Device.init_device = lambda self: False
+        with self.assertRaises(namespace["CannotConnect"]):
+            asyncio.run(namespace["validate_input"](
+                Hass(), {"transport": "bgcp_udp", "name": "Fan"}
+            ))
+        Device.unit_type = None
+        with self.assertRaises(namespace["InvalidAuth"]):
+            asyncio.run(namespace["validate_input"](
+                Hass(), {"transport": "bgcp_udp", "name": "Fan"}
+            ))
+
 
 if __name__ == "__main__":
     unittest.main()

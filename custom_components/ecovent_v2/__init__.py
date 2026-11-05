@@ -522,15 +522,13 @@ def _async_register_optional_poll_entity_sync(
 
     def _async_sync_entity_registry() -> None:
         nonlocal reload_requested
-        if not coordinator.last_update_success:
+        if not coordinator.last_update_success or coordinator._failed_polls:
             return
 
-        current_firmware = coordinator._fan.firmware
-        current_identity = (
-            coordinator._fan.profile_key,
-            getattr(coordinator._fan, "_unit_type_id", None),
-            current_firmware if current_firmware is not None else loaded_identity[2],
-            coordinator._fan.device_search,
+        # A field that reads back as None is unknown, not changed.
+        current_identity = tuple(
+            loaded if current is None else current
+            for current, loaded in zip(_fan_identity(coordinator._fan), loaded_identity)
         )
         if current_identity != loaded_identity:
             if not reload_requested:

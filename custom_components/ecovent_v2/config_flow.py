@@ -154,7 +154,10 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         if not initialized:
             if getattr(device, "identity_probe_failed", False):
                 raise UnsupportedDevice
-            if config[CONF_TRANSPORT] == TRANSPORT_BGCP_UDP:
+            if (
+                config[CONF_TRANSPORT] == TRANSPORT_BGCP_UDP
+                and not getattr(device, "unit_type", None)
+            ):
                 raise InvalidAuth
             raise CannotConnect
 
@@ -162,13 +165,13 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         if not device_id or device_id == "DEFAULT_DEVICEID":
             if getattr(device, "identity_probe_failed", False):
                 raise UnsupportedDevice
-            raise InvalidAuth
+            raise CannotConnect
 
         if (
             config[CONF_TRANSPORT] == TRANSPORT_BGCP_UDP
             and getattr(device, "current_wifi_ip", None) is None
         ):
-            raise InvalidAuth
+            raise CannotConnect
 
         title = getattr(device, "name", None) or config[CONF_NAME]
         if config[CONF_TRANSPORT] == TRANSPORT_BGCP_UDP:

@@ -86,6 +86,7 @@ class _Hass:
 
 
 class _Coordinator:
+    _failed_polls = 0
     last_update_success = True
     silent_mode_enabled = False
     silent_preset_mode = None

@@ -166,7 +166,7 @@ class FanSpeedPropertiesMixin:
         val = int(input, 16)
         if self.device_profile.speed_percent_scale == "percent":
             if self.profile_key == "breezy":
-                self._validate_range(val, 10, 100, "man_speed")
+                self._validate_range(val, 0, 100, "man_speed")
             self._man_speed = val
             return
         if val >= 0 and val <= 255:

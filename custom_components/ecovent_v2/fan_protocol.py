@@ -891,7 +891,9 @@ class FanProtocolMixin:
                 self._last_invalid_response_param_ids = None
                 individual_retry_params.add(param_id)
                 param_complete = self.send_command(
-                    self.func["read"], param, retries=1
+                    self.func["read"],
+                    param,
+                    retries=3 if param_id in required_param_ids else 1,
                 )
                 response_ids = self._last_response_param_ids
                 unsupported_ids = set(self._last_unsupported_param_ids or ())

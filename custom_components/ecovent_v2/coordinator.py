@@ -47,6 +47,8 @@ from .protocol_diagnostics import (
 _LOGGER = logging.getLogger(__name__)
 CLOCK_SYNC_DRIFT = timedelta(minutes=1)
 CLOCK_SYNC_INTERVAL = timedelta(minutes=5)
+# Consecutive incomplete polls tolerated before the device becomes unavailable.
+MAX_FAILED_POLLS = 3
 
 
 def hardware_profile_mismatch_issue_id(entry_id: str) -> str:
@@ -97,6 +99,7 @@ class EcoVentCoordinator(DataUpdateCoordinator):
         # self._fan.init_device()  is a blocking call cannot be done in constructur ...
         self.fan_initialized = False  # flag to indicate if the fan has been initialized
         self.updateCounter = 0
+        self._failed_polls = 0
         self._schedule_day = 1
         self._weekly_schedule: dict[int, dict[int, WeeklyScheduleRecord]] = {}
         self._auto_clock_sync = config.data.get(CONF_AUTO_CLOCK_SYNC, True)
@@ -156,9 +159,19 @@ class EcoVentCoordinator(DataUpdateCoordinator):
             )
 
         if not update_complete:
+            self._failed_polls += 1
+            if self._failed_polls < MAX_FAILED_POLLS:
+                _LOGGER.debug(
+                    "EcoVent %s: incomplete poll %d/%d, keeping last values",
+                    self._fan.name,
+                    self._failed_polls,
+                    MAX_FAILED_POLLS,
+                )
+                return
             raise UpdateFailed(
                 f"Incomplete protocol response from EcoVent device {self._fan.name}"
             )
+        self._failed_polls = 0
 
         self._update_hardware_profile_mismatch_repair_issue()
         self._update_rejected_device_value_repair_issue()

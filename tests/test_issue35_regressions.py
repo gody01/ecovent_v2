@@ -502,6 +502,7 @@ class Issue35RegressionTest(unittest.TestCase):
             def __init__(self):
                 self._fan = Fan()
                 self.last_update_success = True
+                self._failed_polls = 0
                 self.listener = None
 
             def async_add_listener(self, listener):

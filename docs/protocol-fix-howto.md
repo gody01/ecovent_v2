@@ -137,3 +137,17 @@ writes, or hardware/profile mismatch Repairs.
 - `tests/test_issues129_131_regressions.py` exercises initialization retries,
   real command/response correlation for these rows, and malformed-width and
   threshold negative controls without requiring fan hardware.
+
+## Lost single replies and empty identity reads (#133)
+
+- On lossy Wi-Fi one dropped UDP reply for a required availability parameter
+  (`0x0001`, `0x0002`, `0x0044`) made the poll incomplete and every entity
+  unavailable. The individual fallback now retries required parameters three
+  times, and the coordinator keeps the last values for up to two consecutive
+  incomplete polls (`MAX_FAILED_POLLS = 3`); the third raises `UpdateFailed`,
+  so a real outage still shows as unavailable after about 90 s.
+- `_async_sync_entity_registry` treats an identity field that reads back as
+  `None` (for example `device_search`) as unknown and uses the loaded value, and
+  skips the check after a tolerated incomplete poll, so it no longer reloads the
+  config entry.
+- `tests/test_issue133_regressions.py` covers both with Home Assistant stubbed.

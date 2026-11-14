@@ -117,6 +117,9 @@ silent-mode, airflow, and clock-sync caveats; capabilities depend on the device 
 
 # Changelog
 
+## Version 1.2.37
+* Recognize the VENTS Breezy Eco 160 reporting `0x1100` on firmware `0.7 2023-10-02`: its ten known optional sensor/screen rejections no longer open a hardware/profile mismatch Repair ([gody01/ecovent_v2#139](https://github.com/gody01/ecovent_v2/issues/139)). Preserve working recovery efficiency and report any additional rejected rows.
+
 ## Unreleased
 * Retry previously available optional measurements after transient unsupported responses (#113); accept RPM measurements beyond PDF ranges without widening writable setpoint limits (#113).
 * Decode both Vento filter-countdown layouts and accept acknowledged write-only resets without an echo; keep transport failures and rejected writes as errors (#115).

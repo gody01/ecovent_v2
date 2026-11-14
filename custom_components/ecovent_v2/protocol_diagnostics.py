@@ -108,6 +108,13 @@ _KNOWN_VARIANT_FIRMWARE_UNSUPPORTED_OPTIONAL_PARAMS = {
         0x0500,
         "0.4 2021-05-17",
     ): _VENTO_EXPERT_A30_MINI_AIR_UNSUPPORTED_OPTIONAL_ROWS,
+    # Issue #139: firmware 0.7 rejects the same sensor/screen rows but supports
+    # recovery_efficiency (0x0129). Keep an unexpected rejection reportable.
+    (
+        "breezy",
+        0x1100,
+        "0.7 2023-10-02",
+    ): _FRESHPOINT_160E_STANDARD_UNSUPPORTED_OPTIONAL_ROWS - {0x0129},
     (
         "breezy",
         0x1100,
